@@ -7,5 +7,12 @@ export default {
   theme: {
     extend: {},
   },
-  plugins: [],
+  plugins: [
+    require('daisyui'),
+  ],
+  // --- NAPRAWA LIGHT/DARK MODE ---
+  daisyui: {
+    themes: ["light", "dark"],
+  },
+  darkMode: ['class', '[data-theme="dark"]']
 }

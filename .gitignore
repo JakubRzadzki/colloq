@@ -25,3 +25,4 @@ postgres_data/
 
 # --- Docker ---
 .docker/
+.env
