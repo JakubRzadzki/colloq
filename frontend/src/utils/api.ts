@@ -1,6 +1,6 @@
 import { jwtDecode } from "jwt-decode";
 import axios from 'axios';
-import { University } from '../types';  // Upewnij się, że ścieżka jest poprawna
+import { University } from '../types';
 
 export const API_URL = 'http://localhost:8000';
 
@@ -47,10 +47,64 @@ export const login = async (username: string, password: string) => {
   return response.data;
 };
 
-export const register = async (userData: any, captchaToken: string) => {
+export const register = async (userData: any) => {
   const response = await axios.post(`${API_URL}/register`, {
-    user: userData,
-    captcha_token: captchaToken
+    user: userData
   });
+  return response.data;
+};
+
+export const createUniversity = async (universityData: { name: string; city: string; region: string }) => {
+  const response = await axios.post(`${API_URL}/universities`, universityData, {
+    headers: getAuthHeader()
+  });
+  return response.data;
+};
+
+export const createFieldOfStudy = async (fieldData: { name: string; degree_level: string; university_id: number }) => {
+  const response = await axios.post(`${API_URL}/fields`, fieldData, {
+    headers: getAuthHeader()
+  });
+  return response.data;
+};
+
+export const createSubject = async (subjectData: { name: string; semester: number; field_of_study_id: number }) => {
+  const response = await axios.post(`${API_URL}/subjects`, subjectData, {
+    headers: getAuthHeader()
+  });
+  return response.data;
+};
+
+export const getPendingItems = async () => {
+  const response = await axios.get(`${API_URL}/admin/pending_items`, {
+    headers: getAuthHeader()
+  });
+  return response.data;
+};
+
+export const approveUniversity = async (universityId: number) => {
+  const response = await axios.post(
+    `${API_URL}/admin/approve/university/${universityId}`,
+    {},
+    { headers: getAuthHeader() }
+  );
+  return response.data;
+};
+
+export const approveField = async (fieldId: number) => {
+  const response = await axios.post(
+    `${API_URL}/admin/approve/field/${fieldId}`,
+    {},
+    { headers: getAuthHeader() }
+  );
+  return response.data;
+};
+
+export const approveSubject = async (subjectId: number) => {
+  const response = await axios.post(
+    `${API_URL}/admin/approve/subject/${subjectId}`,
+    {},
+    { headers: getAuthHeader() }
+  );
   return response.data;
 };

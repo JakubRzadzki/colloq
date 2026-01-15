@@ -2,13 +2,11 @@ import { useState, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { useQuery } from '@tanstack/react-query';
-import { Turnstile } from '@marsidev/react-turnstile';
 import { UserPlus, Mail, Lock, GraduationCap, MapPin, Search, AlertCircle, CheckCircle } from 'lucide-react';
 import { API_URL } from '../utils/api';
 
 export function RegisterPage({ t, lang }: { t: any; lang: string }) {
   const navigate = useNavigate();
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [selectedRegion, setSelectedRegion] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -43,11 +41,6 @@ export function RegisterPage({ t, lang }: { t: any; lang: string }) {
     e.preventDefault();
     setError('');
 
-    if (!captchaToken) {
-      setError(lang === 'pl' ? 'Proszę rozwiązać Captcha!' : 'Please solve the Captcha!');
-      return;
-    }
-
     setLoading(true);
 
     try {
@@ -57,8 +50,7 @@ export function RegisterPage({ t, lang }: { t: any; lang: string }) {
           email: (form.elements.namedItem('email') as HTMLInputElement).value,
           password: (form.elements.namedItem('password') as HTMLInputElement).value,
           university_id: parseInt((form.elements.namedItem('university_id') as HTMLSelectElement).value)
-        },
-        captcha_token: captchaToken
+        }
       });
 
       setSuccess(true);
@@ -67,7 +59,6 @@ export function RegisterPage({ t, lang }: { t: any; lang: string }) {
       }, 2000);
     } catch (err: any) {
       setError(err.response?.data?.detail || t.errorReg);
-      setCaptchaToken(null);
     } finally {
       setLoading(false);
     }
@@ -100,7 +91,6 @@ export function RegisterPage({ t, lang }: { t: any; lang: string }) {
       <div className="w-full max-w-2xl">
         <div className="card bg-base-100 shadow-2xl border border-base-300">
           <div className="card-body p-8 space-y-6">
-            {/* Header */}
             <div className="text-center space-y-2">
               <div className="inline-block p-3 bg-primary/10 rounded-2xl mb-2">
                 <UserPlus size={32} className="text-primary" />
@@ -113,7 +103,6 @@ export function RegisterPage({ t, lang }: { t: any; lang: string }) {
               </p>
             </div>
 
-            {/* Error Alert */}
             {error && (
               <div className="alert alert-error">
                 <AlertCircle size={20} />
@@ -121,10 +110,8 @@ export function RegisterPage({ t, lang }: { t: any; lang: string }) {
               </div>
             )}
 
-            {/* Registration Form */}
             <form onSubmit={handleRegister} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Email */}
                 <div className="form-control md:col-span-2">
                   <label className="label">
                     <span className="label-text font-semibold flex items-center gap-2">
@@ -142,7 +129,6 @@ export function RegisterPage({ t, lang }: { t: any; lang: string }) {
                   />
                 </div>
 
-                {/* Password */}
                 <div className="form-control md:col-span-2">
                   <label className="label">
                     <span className="label-text font-semibold flex items-center gap-2">
@@ -165,7 +151,6 @@ export function RegisterPage({ t, lang }: { t: any; lang: string }) {
                   </label>
                 </div>
 
-                {/* Region */}
                 <div className="form-control">
                   <label className="label">
                     <span className="label-text font-semibold flex items-center gap-2">
@@ -193,7 +178,6 @@ export function RegisterPage({ t, lang }: { t: any; lang: string }) {
                   </select>
                 </div>
 
-                {/* University */}
                 <div className="form-control">
                   <label className="label">
                     <span className="label-text font-semibold flex items-center gap-2">
@@ -218,7 +202,6 @@ export function RegisterPage({ t, lang }: { t: any; lang: string }) {
                   </select>
                 </div>
 
-                {/* Search Filter */}
                 {selectedRegion && filteredUnis.length > 5 && (
                   <div className="form-control md:col-span-2">
                     <div className="relative">
@@ -235,21 +218,10 @@ export function RegisterPage({ t, lang }: { t: any; lang: string }) {
                 )}
               </div>
 
-              {/* Captcha */}
-              <div className="flex justify-center p-4 bg-base-200 rounded-xl">
-                <Turnstile
-                  siteKey="1x00000000000000000000AB"
-                  onSuccess={(token) => setCaptchaToken(token)}
-                  onExpire={() => setCaptchaToken(null)}
-                  onError={() => setCaptchaToken(null)}
-                />
-              </div>
-
-              {/* Submit Button */}
               <button
                 type="submit"
                 className={`btn btn-primary w-full text-white ${loading ? 'loading' : ''}`}
-                disabled={!captchaToken || loading}
+                disabled={loading}
               >
                 {!loading && <UserPlus size={18} />}
                 {loading
@@ -258,7 +230,6 @@ export function RegisterPage({ t, lang }: { t: any; lang: string }) {
               </button>
             </form>
 
-            {/* Login Link */}
             <div className="text-center pt-4 border-t border-base-300">
               <p className="text-sm opacity-70">
                 {lang === 'pl' ? 'Masz już konto?' : 'Already have an account?'}{' '}

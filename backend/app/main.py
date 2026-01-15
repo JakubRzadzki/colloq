@@ -171,7 +171,7 @@ client_ai = genai.Client(api_key=Config.GEMINI_API_KEY) if Config.GEMINI_API_KEY
 # Initialize FastAPI application
 app = FastAPI(
     title="Colloq PRO - Educational Platform API",
-    version="3.1.0",
+    version="3.2.0",
     description="REST API for managing university hierarchies, notes, and AI-powered study assistance"
 )
 
@@ -222,7 +222,8 @@ def seed_database(db: Session) -> None:
                 city=city,
                 region=item["reg"],
                 type="Publiczna",
-                image_url="https://images.unsplash.com/photo-1523050853064-8bf1952e690b?w=800"
+                image_url="https://images.unsplash.com/photo-1523050853064-8bf1952e690b?w=800",
+                is_approved=True  # Domyślne uczelnie są od razu zatwierdzone
             )
             db.add(uni)
             db.commit()  # Commit to get university ID
@@ -231,7 +232,8 @@ def seed_database(db: Session) -> None:
             field = models.FieldOfStudy(
                 name="Informatyka",
                 degree_level="Inżynierskie",
-                university_id=uni.id
+                university_id=uni.id,
+                is_approved=True  # Domyślne kierunki są od razu zatwierdzone
             )
             db.add(field)
             db.commit()  # Commit to get field ID
@@ -240,7 +242,8 @@ def seed_database(db: Session) -> None:
             subject = models.Subject(
                 name="Podstawy Programowania",
                 semester=1,
-                field_of_study_id=field.id
+                field_of_study_id=field.id,
+                is_approved=True  # Domyślne przedmioty są od razu zatwierdzone
             )
             db.add(subject)
 
@@ -412,7 +415,7 @@ def get_universities(
     db: Session = Depends(database.get_db)
 ) -> List[dict]:
     """
-    Retrieve list of universities with optional search filter.
+    Retrieve list of approved universities with optional search filter.
 
     Search is case-insensitive and matches across:
     - University name (Polish/English)
@@ -424,9 +427,10 @@ def get_universities(
         db: Database session
 
     Returns:
-        List of university objects with all fields
+        List of approved university objects with all fields
     """
-    query = db.query(models.University)
+    # Dodajemy filtr is_approved == True
+    query = db.query(models.University).filter(models.University.is_approved == True)
 
     # Apply search filter if provided
     if search:
@@ -457,13 +461,54 @@ def get_universities(
     return result
 
 
+@app.post("/universities", status_code=status.HTTP_201_CREATED)
+def create_university(
+    uni: schemas.UniversityCreate,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+) -> dict:
+    """
+    Create a new university (requires approval).
+
+    Args:
+        uni: University creation data
+        db: Database session
+        current_user: Authenticated user
+
+    Returns:
+        Success message
+    """
+    # Check if university with this name already exists
+    existing = db.query(models.University).filter(
+        models.University.name.ilike(uni.name)
+    ).first()
+
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="University with this name already exists."
+        )
+
+    new_uni = models.University(
+        name=uni.name,
+        name_pl=uni.name,  # Uproszczenie: używamy tej samej nazwy
+        city=uni.city,
+        region=uni.region,
+        is_approved=False  # Wymaga akceptacji admina
+    )
+    db.add(new_uni)
+    db.commit()
+
+    return {"msg": "Uczelnia dodana i oczekuje na weryfikację."}
+
+
 @app.get("/universities/{uni_id}/fields", response_model=List[schemas.FieldOfStudyOut])
 def get_fields(
     uni_id: int,
     db: Session = Depends(database.get_db)
 ) -> List[models.FieldOfStudy]:
     """
-    Retrieve all fields of study for a specific university.
+    Retrieve all approved fields of study for a specific university.
 
     Part of the hierarchical drill-down: University → Fields → Subjects
 
@@ -474,9 +519,64 @@ def get_fields(
     Returns:
         List of fields of study (e.g., Computer Science, Medicine)
     """
+    # Tylko zatwierdzone kierunki
     return db.query(models.FieldOfStudy).filter(
-        models.FieldOfStudy.university_id == uni_id
+        models.FieldOfStudy.university_id == uni_id,
+        models.FieldOfStudy.is_approved == True
     ).all()
+
+
+@app.post("/fields", status_code=status.HTTP_201_CREATED)
+def create_field(
+    field: schemas.FieldOfStudyCreate,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+) -> dict:
+    """
+    Create a new field of study (requires approval).
+
+    Args:
+        field: Field of study creation data
+        db: Database session
+        current_user: Authenticated user
+
+    Returns:
+        Success message
+    """
+    # Check if field already exists for this university
+    existing = db.query(models.FieldOfStudy).filter(
+        models.FieldOfStudy.name.ilike(field.name),
+        models.FieldOfStudy.university_id == field.university_id
+    ).first()
+
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Field of study already exists for this university."
+        )
+
+    # Check if university exists and is approved
+    university = db.query(models.University).filter(
+        models.University.id == field.university_id,
+        models.University.is_approved == True
+    ).first()
+
+    if not university:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="University not found or not approved."
+        )
+
+    new_field = models.FieldOfStudy(
+        name=field.name,
+        degree_level=field.degree_level,
+        university_id=field.university_id,
+        is_approved=False  # Wymaga akceptacji admina
+    )
+    db.add(new_field)
+    db.commit()
+
+    return {"msg": "Kierunek dodany i oczekuje na weryfikację."}
 
 
 @app.get("/fields/{field_id}/subjects", response_model=List[schemas.SubjectOut])
@@ -485,7 +585,7 @@ def get_subjects(
     db: Session = Depends(database.get_db)
 ) -> List[models.Subject]:
     """
-    Retrieve all subjects for a specific field of study.
+    Retrieve all approved subjects for a specific field of study.
 
     Final level of hierarchical drill-down: University → Fields → Subjects
 
@@ -497,8 +597,62 @@ def get_subjects(
         List of subjects (e.g., Programming Basics, Data Structures)
     """
     return db.query(models.Subject).filter(
-        models.Subject.field_of_study_id == field_id
+        models.Subject.field_of_study_id == field_id,
+        models.Subject.is_approved == True
     ).all()
+
+
+@app.post("/subjects", status_code=status.HTTP_201_CREATED)
+def create_subject(
+    subject: schemas.SubjectCreate,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+) -> dict:
+    """
+    Create a new subject (requires approval).
+
+    Args:
+        subject: Subject creation data
+        db: Database session
+        current_user: Authenticated user
+
+    Returns:
+        Success message
+    """
+    # Check if subject already exists for this field
+    existing = db.query(models.Subject).filter(
+        models.Subject.name.ilike(subject.name),
+        models.Subject.field_of_study_id == subject.field_of_study_id
+    ).first()
+
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Subject already exists for this field of study."
+        )
+
+    # Check if field exists and is approved
+    field = db.query(models.FieldOfStudy).filter(
+        models.FieldOfStudy.id == subject.field_of_study_id,
+        models.FieldOfStudy.is_approved == True
+    ).first()
+
+    if not field:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Field of study not found or not approved."
+        )
+
+    new_subject = models.Subject(
+        name=subject.name,
+        semester=subject.semester,
+        field_of_study_id=subject.field_of_study_id,
+        is_approved=False  # Wymaga akceptacji admina
+    )
+    db.add(new_subject)
+    db.commit()
+
+    return {"msg": "Przedmiot dodany i oczekuje na weryfikację."}
 
 
 # ===========================
@@ -511,28 +665,24 @@ async def register(
     db: Session = Depends(database.get_db)
 ) -> dict:
     """
-    Register a new user account with CAPTCHA verification.
+    Register a new user account (without CAPTCHA verification).
 
     Flow:
-    1. Verify Turnstile CAPTCHA token
-    2. Check if email already exists
-    3. Hash password with bcrypt
-    4. Create new user in database
-    5. Auto-generate nickname from email
+    1. Check if email already exists
+    2. Hash password with bcrypt
+    3. Create new user in database
+    4. Auto-generate nickname from email
 
     Args:
-        request: Registration request containing user data and CAPTCHA token
+        request: Registration request containing user data
         db: Database session
 
     Returns:
         Success message
 
     Raises:
-        HTTPException 400: If CAPTCHA fails or email already taken
+        HTTPException 400: If email already taken
     """
-    # Verify anti-bot CAPTCHA
-    await AuthService.verify_turnstile(request.captcha_token)
-
     # Check for duplicate email
     existing_user = db.query(models.User).filter(
         models.User.email == request.user.email
@@ -660,10 +810,10 @@ def update_profile(
 
 @app.post("/notes", status_code=status.HTTP_201_CREATED)
 async def create_note(
-    title: str = Form(...),
-    content: str = Form(...),
     university_id: int = Form(...),
     subject_id: int = Form(...),
+    title: Optional[str] = Form(None),
+    content: Optional[str] = Form(None),
     video_url: Optional[str] = Form(None),
     link_url: Optional[str] = Form(None),
     image: UploadFile = File(None),
@@ -671,10 +821,10 @@ async def create_note(
     db: Session = Depends(database.get_db)
 ) -> dict:
     """
-    Create a new note with multimedia support.
+    Create a new note with multimedia support (optional title/content).
 
     Supports:
-    - Text content (required)
+    - Text content (optional, but required with image or video)
     - Image upload (optional, saved to /uploads)
     - Video URL (optional, embedded link)
     - Reference link (optional, external resource)
@@ -686,10 +836,10 @@ async def create_note(
     4. Auto-verify user on first note submission
 
     Args:
-        title: Note title
-        content: Note text content (markdown supported)
-        university_id: University ID
-        subject_id: Subject ID (hierarchical link)
+        university_id: University ID (required)
+        subject_id: Subject ID (required)
+        title: Note title (optional)
+        content: Note text content (optional, markdown supported)
         video_url: Optional YouTube/Vimeo URL
         link_url: Optional external reference link
         image: Optional image file upload
@@ -698,7 +848,17 @@ async def create_note(
 
     Returns:
         Success message
+
+    Raises:
+        HTTPException 400: If neither content nor image is provided
     """
+    # Walidacja: Musi być ALBO treść ALBO zdjęcie
+    if not content and not image:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Musisz dodać treść lub zdjęcie."
+        )
+
     image_path = None
 
     # Handle image upload if provided
@@ -710,8 +870,8 @@ async def create_note(
 
     # Create note entry (pending approval by default)
     new_note = models.Note(
-        title=title,
-        content=content,
+        title=title or "Bez tytułu",
+        content=content or "",
         university_id=university_id,
         subject_id=subject_id,
         video_url=video_url,
@@ -783,6 +943,30 @@ def get_pending_notes(
     return db.query(models.Note).filter(models.Note.is_approved == False).all()
 
 
+@app.get("/admin/pending_items")
+def get_pending_items(
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(auth.get_current_active_admin)
+) -> dict:
+    """
+    Retrieve all items pending approval (admin only).
+
+    Returns:
+        Dictionary with pending notes, universities, fields of study, and subjects
+    """
+    notes = db.query(models.Note).filter(models.Note.is_approved == False).all()
+    universities = db.query(models.University).filter(models.University.is_approved == False).all()
+    fields = db.query(models.FieldOfStudy).filter(models.FieldOfStudy.is_approved == False).all()
+    subjects = db.query(models.Subject).filter(models.Subject.is_approved == False).all()
+
+    return {
+        "notes": notes,
+        "universities": universities,
+        "fields": fields,
+        "subjects": subjects
+    }
+
+
 @app.post("/admin/approve/{note_id}")
 def approve_note(
     note_id: int,
@@ -816,6 +1000,99 @@ def approve_note(
     db.commit()
 
     return {"msg": "Note approved successfully."}
+
+
+@app.post("/admin/approve/university/{uni_id}")
+def approve_university(
+    uni_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(auth.get_current_active_admin)
+) -> dict:
+    """
+    Approve a pending university (admin only).
+
+    Args:
+        uni_id: University ID to approve
+        db: Database session
+        current_user: Admin user from JWT
+
+    Returns:
+        Success message
+    """
+    university = db.query(models.University).filter(models.University.id == uni_id).first()
+
+    if not university:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="University not found."
+        )
+
+    university.is_approved = True
+    db.commit()
+
+    return {"msg": "University approved successfully."}
+
+
+@app.post("/admin/approve/field/{field_id}")
+def approve_field(
+    field_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(auth.get_current_active_admin)
+) -> dict:
+    """
+    Approve a pending field of study (admin only).
+
+    Args:
+        field_id: Field of Study ID to approve
+        db: Database session
+        current_user: Admin user from JWT
+
+    Returns:
+        Success message
+    """
+    field = db.query(models.FieldOfStudy).filter(models.FieldOfStudy.id == field_id).first()
+
+    if not field:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Field of study not found."
+        )
+
+    field.is_approved = True
+    db.commit()
+
+    return {"msg": "Field of study approved successfully."}
+
+
+@app.post("/admin/approve/subject/{subject_id}")
+def approve_subject(
+    subject_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(auth.get_current_active_admin)
+) -> dict:
+    """
+    Approve a pending subject (admin only).
+
+    Args:
+        subject_id: Subject ID to approve
+        db: Database session
+        current_user: Admin user from JWT
+
+    Returns:
+        Success message
+    """
+    subject = db.query(models.Subject).filter(models.Subject.id == subject_id).first()
+
+    if not subject:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Subject not found."
+        )
+
+    subject.is_approved = True
+    db.commit()
+
+    return {"msg": "Subject approved successfully."}
 
 
 # ===========================
@@ -913,7 +1190,7 @@ def health_check(db: Session = Depends(database.get_db)) -> dict:
     """
     return {
         "status": "healthy",
-        "version": "3.1.0",
+        "version": "3.2.0",
         "database": {
             "universities": db.query(models.University).count(),
             "users": db.query(models.User).count(),
