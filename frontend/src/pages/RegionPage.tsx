@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { API_URL } from '../utils/api';
 import { ArrowLeft, GraduationCap } from 'lucide-react';
-
+// ???
 interface RegionPageProps {
   t: any;
   lang: string;

@@ -463,7 +463,7 @@ def get_leaderboard(db: Session = Depends(database.get_db)):
 
 @app.get("/health")
 def health_check(db: Session = Depends(database.get_db)):
-	"""Health check endpoint"""
+	"""Health check endpoint."""
 	uni_count = db.query(models.University).count()
 	user_count = db.query(models.User).count()
 	note_count = db.query(models.Note).count()

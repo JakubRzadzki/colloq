@@ -4,7 +4,7 @@ import { isAdmin } from '../utils/api';
 
 export function Navbar({ token, t, lang, theme, toggleTheme, toggleLang, logout }: any) {
   const userIsAdmin = isAdmin();
-
+//
   return (
     <div className="navbar bg-base-100 shadow-md px-4 sticky top-0 z-50">
       <div className="flex-1">

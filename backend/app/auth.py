@@ -76,7 +76,7 @@ async def get_current_user(
 		db: Session = Depends(database.get_db)
 ) -> models.User:
 	"""
-	Get current authenticated user from JWT token
+	Get current authenticated user from JWT token.
 
 	Args:
 		token: JWT token from Authorization header

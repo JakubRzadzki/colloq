@@ -129,7 +129,7 @@ class ChatRequest(BaseModel):
 
 
 class ChatResponse(BaseModel):
-	"""Schema for AI chat response"""
+	"""Schema for AI chat response."""
 	response: str
 
 

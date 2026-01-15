@@ -43,7 +43,7 @@ class User(Base):
 
 
 class Note(Base):
-	"""Database model for student notes"""
+	"""Database model for student notes."""
 	__tablename__ = "notes"
 
 	id = Column(Integer, primary_key=True, index=True)

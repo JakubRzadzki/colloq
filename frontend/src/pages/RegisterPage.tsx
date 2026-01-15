@@ -120,3 +120,5 @@ export function RegisterPage({ t, lang }: { t: any, lang: string }) {
     </div>
   );
 }
+
+// ???

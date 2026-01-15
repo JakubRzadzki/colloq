@@ -66,7 +66,7 @@ export function UniversityPage({ token, t, lang }: { token: string | null, t: an
         </div>
       </dialog>
 
-      {/* Notes Grid */}
+      {/* Notes Grid. */}
       {isLoading ? <span className="loading loading-dots loading-lg"></span> : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {notes?.length === 0 && <div className="col-span-2 text-center py-10 opacity-50 bg-base-100 rounded-xl border border-dashed border-base-300">Brak notatek. Bądź pierwszy!</div>}

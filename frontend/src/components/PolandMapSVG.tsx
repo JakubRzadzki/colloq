@@ -1,49 +1,94 @@
-// @ts-ignore
 import React from 'react';
 
-interface PolandMapProps {
-  onRegionClick: (regionName: string) => void;
+interface MapProps {
+  onRegionClick: (region: string) => void;
+  regionCounts: Record<string, number>;
+  selectedRegion: string | null;
+  setSelectedRegion: (region: string | null) => void;
+  getRegionDisplayName: (region: string) => string;
+  regionCenters: Record<string, { x: number, y: number, color: string }>;
 }
 
-export function PolandMapSVG({ onRegionClick }: PolandMapProps) {
-  const regions = [
-    { id: 'Zachodniopomorskie', d: "M50,50 L180,50 L180,180 L50,180 Z" },
-    { id: 'Pomorskie', d: "M190,30 L320,30 L340,150 L190,150 Z" },
-    { id: 'Warmińsko-Mazurskie', d: "M330,50 L480,50 L480,180 L330,180 Z" },
-    { id: 'Podlaskie', d: "M490,80 L620,80 L620,250 L490,250 Z" },
-    { id: 'Lubuskie', d: "M40,190 L140,190 L140,350 L40,350 Z" },
-    { id: 'Wielkopolskie', d: "M150,190 L300,190 L300,350 L150,350 Z" },
-    { id: 'Kujawsko-Pomorskie', d: "M280,160 L400,160 L400,260 L280,260 Z" },
-    { id: 'Mazowieckie', d: "M410,190 L580,240 L550,420 L380,420 L350,280 Z" },
-    { id: 'Lubelskie', d: "M520,400 L650,400 L650,580 L520,580 Z" },
-    { id: 'Łódzkie', d: "M280,360 L380,360 L380,470 L280,470 Z" },
-    { id: 'Dolnośląskie', d: "M100,360 L240,360 L240,500 L100,500 Z" },
-    { id: 'Opolskie', d: "M210,510 L300,510 L300,600 L210,600 Z" },
-    { id: 'Śląskie', d: "M310,480 L410,480 L410,620 L310,620 Z" },
-    { id: 'Świętokrzyskie', d: "M420,430 L510,430 L510,540 L420,540 Z" },
-    { id: 'Małopolskie', d: "M370,630 L500,630 L500,750 L370,750 Z" },
-    { id: 'Podkarpackie', d: "M510,590 L640,590 L640,750 L510,750 Z" }
-  ];
-
+export function PolandMapSVG({
+  onRegionClick,
+  regionCounts,
+  selectedRegion,
+  setSelectedRegion,
+  getRegionDisplayName,
+  regionCenters
+}: MapProps) {
   return (
-    <div className="bg-base-200 p-6 rounded-3xl shadow-inner flex flex-col items-center">
-      <svg viewBox="0 0 700 800" className="w-full h-auto max-w-[500px]">
-        <g className="cursor-pointer">
-          {regions.map((reg) => (
-            <path
-              key={reg.id}
-              d={reg.d}
-              className="fill-slate-700 hover:fill-primary transition-all duration-300 stroke-base-100 stroke-2"
-              onClick={() => onRegionClick(reg.id)}
+    // USUNIĘTO WSZYSTKIE OBRAMOWANIA (border-none)
+    <div className="relative w-full h-[520px] rounded-[2.5rem] overflow-hidden bg-transparent">
+      <svg
+        width="100%"
+        height="100%"
+        viewBox="0 0 300 350"
+        preserveAspectRatio="xMidYMid meet"
+        className="drop-shadow-sm"
+      >
+        <image
+          href="/poland_map.jpg"
+          x="0" y="0" width="300" height="350"
+          style={{ opacity: 1 }}
+        />
+
+        {Object.keys(regionCenters).map((region) => {
+          const center = regionCenters[region];
+          const count = regionCounts[region] || 0;
+          if (count === 0) return null;
+
+          const isSelected = selectedRegion === region;
+          const radius = 9 + Math.min(count, 12) * 1.2;
+
+          return (
+            <g
+              key={region}
+              className="cursor-pointer group"
+              onMouseEnter={() => setSelectedRegion(region)}
+              onMouseLeave={() => setSelectedRegion(null)}
+              onClick={() => onRegionClick(region)}
             >
-              <title>{reg.id}</title>
-            </path>
-          ))}
-        </g>
+              {/* Efekt poświaty bez ostrej krawędzi */}
+              <circle
+                cx={center.x} cy={center.y} r={radius + 6}
+                fill={center.color}
+                className={`transition-all duration-700 ${isSelected ? 'opacity-20 animate-pulse' : 'opacity-0'}`}
+              />
+
+              {/* Punkt główny - USUNIĘTO STROKE (białą obwódkę) */}
+              <circle
+                cx={center.x} cy={center.y} r={radius}
+                fill={center.color}
+                fillOpacity={isSelected ? 1 : 0.8}
+                className="transition-all duration-300 shadow-lg"
+              />
+
+              <text
+                x={center.x} y={center.y}
+                textAnchor="middle" dy="0.35em"
+                className="text-[9px] font-black fill-white pointer-events-none drop-shadow-sm"
+              >
+                {count}
+              </text>
+
+              {/* Minimalistyczny tooltip */}
+              {isSelected && (
+                <foreignObject
+                  x={center.x - 50} y={center.y - radius - 28}
+                  width="100" height="25"
+                >
+                  <div className="flex justify-center animate-in fade-in zoom-in duration-200">
+                    <div className="bg-black/80 text-white text-[10px] font-bold px-2 py-1 rounded-md whitespace-nowrap backdrop-blur-md">
+                      {getRegionDisplayName(region)}
+                    </div>
+                  </div>
+                </foreignObject>
+              )}
+            </g>
+          );
+        })}
       </svg>
-      <div className="mt-4 badge badge-outline p-4 opacity-70 italic text-xs">
-        * Kliknij w region, aby zobaczyć uczelnie
-      </div>
     </div>
   );
 }

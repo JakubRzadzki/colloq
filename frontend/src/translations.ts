@@ -107,7 +107,7 @@ export const translations = {
     approveBtn: "Zatwierdź",
     viewImage: "Zobacz zdjęcie",
 
-    // Alerts
+    // Alerts.
     noteAdded: "Notatka dodana! Czeka na weryfikację admina.",
     uploadError: "Błąd! Zaloguj się najpierw.",
   }

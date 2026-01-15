@@ -26,7 +26,6 @@ export const isAdmin = () => {
   }
 };
 
-// Dodaj brakujące funkcje API
 export const getUniversities = async (): Promise<University[]> => {
   const response = await axios.get(`${API_URL}/universities`);
   return response.data;

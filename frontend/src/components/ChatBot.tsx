@@ -3,7 +3,7 @@ import axios from 'axios';
 import { MessageCircle, X, Send, Bot, User } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
 import { API_URL, getAuthHeader } from '../utils/api';
-
+// ???
 export function ChatBot({ currentNoteContent }: { currentNoteContent?: string }) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<{role: 'user' | 'bot', text: string}[]>([
