@@ -11,7 +11,7 @@
   "dependencies": {
     "@marsidev/react-turnstile": "^1.4.1",
     "@tanstack/react-query": "^5.0.0",
-    "axios": "^1.6.0",
+    "axios": "^1.13.2",
     "clsx": "^2.0.0",
     "jwt-decode": "^4.0.0",
     "lucide-react": "^0.290.0",
@@ -21,6 +21,7 @@
     "tailwind-merge": "^2.0.0"
   },
   "devDependencies": {
+    "@types/jwt-decode": "^2.2.1",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@vitejs/plugin-react": "^4.0.0",

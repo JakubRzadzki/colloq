@@ -1,19 +1,32 @@
 version: '3.8'
 
 services:
+  db:
+    image: postgres:15
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d colloq_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   backend:
     build: ./backend
+    ports:
+      - "8000:8000"
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-    restart: on-failure
+    restart: always
     volumes:
       - ./backend:/code
       - ./uploads:/code/uploads
-    # --- TO JEST NOWOŚĆ: ---
     env_file:
       - .env
-    # -----------------------
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
   frontend:
     build: ./frontend
@@ -24,15 +37,6 @@ services:
       - /app/node_modules
     depends_on:
       - backend
-
-  db:
-    image: postgres:15
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=colloq_db
 
 volumes:
   postgres_data:

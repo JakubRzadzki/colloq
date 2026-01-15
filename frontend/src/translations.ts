@@ -1,4 +1,3 @@
-// Dictionary for English and Polish translations
 export const translations = {
   en: {
     // Nav & Auth
@@ -19,6 +18,20 @@ export const translations = {
     noNotes: "No notes yet. Be the first!",
     author: "Author",
     score: "Score",
+
+    // Home Page - Map & Statistics (SPŁASZCZONE)
+    homeTitle: "Colloq PRO - Student Notes System",
+    homeSubtitle: "Discover universities, share knowledge, grow together",
+    homeSearchPlaceholder: "Search for universities, cities or regions...",
+    homeMapTitle: "Poland Map with Universities",
+    homeUniversitiesList: "Universities List",
+    homeUniversities: "universities",
+    homeNoResults: "No universities found matching criteria",
+    homeLegend: "Regions Legend",
+    homeTotalRegions: "Regions",
+    homeTotalUniversities: "Universities",
+    homeMostUniversities: "Most Universities",
+    homePublicUniversities: "Public Universities",
 
     // Sidebar
     topPosters: "Top Posters",
@@ -61,6 +74,20 @@ export const translations = {
     noNotes: "Brak notatek. Bądź pierwszy!",
     author: "Autor",
     score: "Ocena",
+
+    // Home Page - Map & Statistics (SPŁASZCZONE)
+    homeTitle: "Colloq PRO - System Notatek Studenckich",
+    homeSubtitle: "Odkryj uczelnie, dziel się wiedzą, rozwijaj się",
+    homeSearchPlaceholder: "Szukaj uczelni, miast lub regionów...",
+    homeMapTitle: "Mapa Polski z uczelniami",
+    homeUniversitiesList: "Lista uczelni",
+    homeUniversities: "uczelni",
+    homeNoResults: "Nie znaleziono uczelni spełniających kryteria",
+    homeLegend: "Legenda regionów",
+    homeTotalRegions: "Regionów",
+    homeTotalUniversities: "Uczelni",
+    homeMostUniversities: "Najwięcej uczelni",
+    homePublicUniversities: "Uczelnie publiczne",
 
     // Sidebar
     topPosters: "Najlepsi Autorzy",

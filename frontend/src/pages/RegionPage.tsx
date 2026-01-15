@@ -1,54 +1,49 @@
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
-import { GraduationCap, ArrowLeft } from 'lucide-react';
 import { API_URL } from '../utils/api';
+import { ArrowLeft, GraduationCap } from 'lucide-react';
 
-export function RegionPage({ t, lang }: { t: any, lang: string }) {
+interface RegionPageProps {
+  t: any;
+  lang: string;
+}
+
+export function RegionPage({ t, lang }: RegionPageProps) {
   const { regionName } = useParams();
-
   const { data: unis, isLoading } = useQuery({
     queryKey: ['unis'],
-    queryFn: async () => axios.get(`${API_URL}/universities`).then(r => r.data)
+    queryFn: () => axios.get(`${API_URL}/universities`).then(r => r.data)
   });
 
-  // Filtrujemy uczelnie z tego regionu
-  // @ts-ignore
-  const regionUnis = unis?.filter((u: any) => u.region === regionName);
+  const filtered = unis?.filter((u: any) => u.region === regionName);
 
-  if (isLoading) return <div className="text-center mt-10"><span className="loading loading-spinner loading-lg"></span></div>;
+  if (isLoading) return <div className="p-20 text-center"><span className="loading loading-spinner loading-lg"></span></div>;
 
   return (
-    <div className="py-8">
-      <Link to="/" className="btn btn-ghost gap-2 mb-6"><ArrowLeft size={18}/> Wróć do mapy</Link>
+    <div className="p-6 max-w-7xl mx-auto">
+      <Link to="/" className="btn btn-ghost mb-8 gap-2"><ArrowLeft size={18}/> {t.home}</Link>
+      <h1 className="text-4xl font-black mb-10">
+        {lang === 'pl' ? 'Województwo' : 'Region'}: <span className="text-primary">{regionName}</span>
+      </h1>
 
-      <h1 className="text-3xl font-bold mb-8 text-center">Uczelnie w: <span className="text-primary">{regionName}</span></h1>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {regionUnis?.map((u: any) => (
-          <Link
-            key={u.id}
-            to={`/university/${u.id}`}
-            className="card bg-base-100 shadow-lg hover:shadow-xl hover:border-primary border border-base-200 transition-all"
-          >
-            <div className="card-body">
-              <div className="flex items-start gap-4">
-                <div className="bg-secondary/10 p-3 rounded-lg text-secondary">
-                  <GraduationCap size={24} />
-                </div>
-                <div>
-                  <h3 className="font-bold text-lg">{lang === 'pl' ? u.name_pl : u.name_en}</h3>
-                  <div className="badge badge-ghost badge-sm mt-2">{regionName}</div>
-                </div>
-              </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {filtered?.map((u: any) => (
+          <Link key={u.id} to={`/university/${u.id}`} className="card bg-base-100 shadow-xl border border-base-300 hover:border-primary transition-all overflow-hidden group">
+            <figure className="h-48 relative">
+              <img src={u.image_url} alt={u.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent"></div>
+              <h2 className="absolute bottom-4 left-4 text-white font-bold text-xl px-2">
+                {lang === 'pl' ? (u.name_pl || u.name) : (u.name_en || u.name)}
+              </h2>
+            </figure>
+            <div className="card-body p-5 flex-row items-center gap-3">
+               <GraduationCap size={20} className="text-primary" />
+               <p className="text-sm opacity-70 font-bold uppercase tracking-widest">{u.city}</p>
             </div>
           </Link>
         ))}
       </div>
-
-      {regionUnis?.length === 0 && (
-        <div className="text-center opacity-50">Brak uczelni w tym regionie w naszej bazie.</div>
-      )}
     </div>
   );
 }
