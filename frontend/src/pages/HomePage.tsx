@@ -1,142 +1,225 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { University } from '../types';
-import { API_URL } from '../utils/api';
-import { PolandMapSVG } from '../components/PolandMapSVG';
 import axios from 'axios';
-import { Search, GraduationCap, MapPin } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { Search, MapPin, GraduationCap, TrendingUp } from 'lucide-react';
+import { API_URL } from '../utils/api';
 
-interface HomePageProps {
-  t: any;
-  lang: 'pl' | 'en';
+interface University {
+  id: number;
+  name: string;
+  name_pl: string;
+  name_en: string;
+  city: string;
+  region: string;
+  image_url: string;
 }
 
-/** * PRECYZYJNE ROZMIESZCZENIE PUNKTÓW NA MAPIE
- * Dostosowane do standardowego rzutu mapy Polski 300x350
- */
-const REGION_CENTERS: Record<string, { x: number, y: number, color: string }> = {
-  "Zachodniopomorskie": { x: 55, y: 90, color: "#EAB308" },
-  "Pomorskie": { x: 140, y: 65, color: "#84CC16" },
-  "Warmińsko-Mazurskie": { x: 220, y: 85, color: "#0EA5E9" },
-  "Podlaskie": { x: 265, y: 145, color: "#06B6D4" },
-  "Lubuskie": { x: 50, y: 185, color: "#F59E0B" },
-  "Wielkopolskie": { x: 110, y: 195, color: "#22C55E" },
-  "Kujawsko-Pomorskie": { x: 165, y: 150, color: "#10B981" },
-  "Mazowieckie": { x: 220, y: 205, color: "#14B8A6" },
-  "Łódzkie": { x: 165, y: 235, color: "#EF4444" },
-  "Lubelskie": { x: 260, y: 265, color: "#8B5CF6" },
-  "Dolnośląskie": { x: 85, y: 275, color: "#3B82F6" },
-  "Opolskie": { x: 140, y: 290, color: "#F97316" },
-  "Śląskie": { x: 175, y: 310, color: "#6366F1" },
-  "Świętokrzyskie": { x: 215, y: 270, color: "#D946EF" },
-  "Małopolskie": { x: 210, y: 325, color: "#EC4899" },
-  "Podkarpackie": { x: 265, y: 325, color: "#8B5CF6" }
-};
-
-export default function HomePage({ t, lang }: HomePageProps) {
+export default function HomePage({ t, lang }: { t: any; lang: string }) {
+  const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
-  const [unis, setUnis] = useState<University[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchUnis = async () => {
-      try {
-        const resp = await axios.get(`${API_URL}/universities`, {
-          params: { search: searchTerm }
-        });
-        setUnis(resp.data);
-      } catch (e) { console.error(e); }
-      finally { setLoading(false); }
-    };
-    fetchUnis();
-  }, [searchTerm]);
+  const { data: universities } = useQuery({
+    queryKey: ['universities'],
+    queryFn: async () => {
+      const res = await axios.get(`${API_URL}/universities`);
+      return res.data as University[];
+    }
+  });
 
-  const regionCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    unis.forEach(uni => {
-      if (uni.region) {
-        counts[uni.region] = (counts[uni.region] || 0) + 1;
-      }
-    });
-    return counts;
-  }, [unis]);
+  const { data: leaderboard } = useQuery({
+    queryKey: ['leaderboard'],
+    queryFn: async () => axios.get(`${API_URL}/leaderboard`).then(r => r.data)
+  });
 
-  const getRegionDisplayName = (region: string) => {
-    if (lang === 'pl') return region;
-    const regionTranslations: Record<string, string> = {
-      'Mazowieckie': 'Mazovia', 'Małopolskie': 'Lesser Poland', 'Śląskie': 'Silesia',
-      'Wielkopolskie': 'Greater Poland', 'Dolnośląskie': 'Lower Silesia', 'Pomorskie': 'Pomerania',
-      'Kujawsko-Pomorskie': 'Kuyavia-Pomerania', 'Łódzkie': 'Lodz Region', 'Lubelskie': 'Lublin Region',
-      'Podkarpackie': 'Subcarpathia', 'Podlaskie': 'Podlaskie', 'Świętokrzyskie': 'Holy Cross',
-      'Warmińsko-Mazurskie': 'Warmia-Masuria', 'Lubuskie': 'Lubusz', 'Opolskie': 'Opole Region',
-      'Zachodniopomorskie': 'West Pomerania'
-    };
-    return regionTranslations[region] || region;
-  };
+  // Group universities by region
+  const regions = universities?.reduce((acc: any, uni: University) => {
+    if (!acc[uni.region]) {
+      acc[uni.region] = [];
+    }
+    acc[uni.region].push(uni);
+    return acc;
+  }, {});
+
+  // Filter universities based on search
+  const filteredUniversities = universities?.filter((uni: University) => {
+    const q = searchQuery.toLowerCase();
+    return (
+      uni.name_pl?.toLowerCase().includes(q) ||
+      uni.name_en?.toLowerCase().includes(q) ||
+      uni.city?.toLowerCase().includes(q) ||
+      uni.region?.toLowerCase().includes(q)
+    );
+  });
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-10 animate-in fade-in duration-500">
-      <div className="text-center space-y-6">
-        <h1 className="text-6xl font-black bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent italic tracking-tighter">
-          Colloq
-        </h1>
-        <div className="max-w-xl mx-auto relative group">
-          <Search className="absolute left-5 top-1/2 -translate-y-1/2 opacity-30 group-focus-within:text-primary transition-colors" size={24} />
+    <div className="space-y-12">
+      {/* Hero Section */}
+      <div className="text-center space-y-6 pt-12 pb-8">
+        <div className="inline-block">
+          <h1 className="text-7xl font-black bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+            Colloq
+          </h1>
+          <div className="h-1 bg-gradient-to-r from-primary to-secondary rounded-full mt-2"></div>
+        </div>
+        <p className="text-xl opacity-70 max-w-2xl mx-auto">
+          {lang === 'pl'
+            ? 'Platforma współdzielenia wiedzy dla studentów. Znajdź materiały, dziel się notatkami, rozwijaj się razem.'
+            : 'Knowledge sharing platform for students. Find materials, share notes, grow together.'}
+        </p>
+      </div>
+
+      {/* Search Bar */}
+      <div className="max-w-3xl mx-auto">
+        <div className="relative group">
+          <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-base-content/40 group-focus-within:text-primary transition-colors" size={24} />
           <input
-            className="input input-bordered input-lg w-full pl-14 rounded-full shadow-2xl focus:border-primary transition-all border-none bg-base-100"
-            placeholder={t.homeSearchPlaceholder}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            type="text"
+            placeholder={lang === 'pl' ? 'Szukaj uczelni, miast lub województw...' : 'Search universities, cities or regions...'}
+            className="input input-bordered w-full pl-16 pr-6 h-16 text-lg rounded-2xl shadow-lg focus:shadow-xl focus:border-primary transition-all"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-        {/* MAPA BEZ OBWÓDEK */}
-        <div className="space-y-4">
-          <h2 className="text-2xl font-bold flex items-center gap-2 px-4">
-            <MapPin className="text-primary" /> {t.homeMapTitle}
-          </h2>
-          <PolandMapSVG
-            onRegionClick={(region) => navigate(`/region/${region}`)}
-            regionCounts={regionCounts}
-            selectedRegion={selectedRegion}
-            setSelectedRegion={setSelectedRegion}
-            getRegionDisplayName={getRegionDisplayName}
-            regionCenters={REGION_CENTERS}
-          />
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="stat bg-base-100 rounded-2xl shadow-lg border border-base-300">
+          <div className="stat-figure text-primary">
+            <MapPin size={40} />
+          </div>
+          <div className="stat-title">{lang === 'pl' ? 'Województwa' : 'Regions'}</div>
+          <div className="stat-value text-primary">{Object.keys(regions || {}).length}</div>
         </div>
 
-        {/* LISTA WYNIKÓW */}
-        <div className="space-y-6">
-          <div className="stats shadow bg-base-100 w-full border-none">
-            <div className="stat">
-              <div className="stat-title font-bold uppercase text-xs opacity-60">{t.filters}</div>
-              <div className="stat-value text-primary">{unis.length}</div>
-            </div>
+        <div className="stat bg-base-100 rounded-2xl shadow-lg border border-base-300">
+          <div className="stat-figure text-secondary">
+            <GraduationCap size={40} />
           </div>
+          <div className="stat-title">{lang === 'pl' ? 'Uczelnie' : 'Universities'}</div>
+          <div className="stat-value text-secondary">{universities?.length || 0}</div>
+        </div>
 
-          <div className="max-h-[520px] overflow-y-auto divide-y divide-base-200 bg-base-100 rounded-3xl shadow-2xl custom-scrollbar">
-            {loading ? (
-              <div className="p-20 text-center"><span className="loading loading-spinner loading-lg text-primary"></span></div>
-            ) : unis.map(u => (
-              <div key={u.id} onClick={() => navigate(`/university/${u.id}`)}
-                className="p-5 hover:bg-primary/5 transition-all cursor-pointer flex items-center gap-6 group"
+        <div className="stat bg-base-100 rounded-2xl shadow-lg border border-base-300">
+          <div className="stat-figure text-accent">
+            <TrendingUp size={40} />
+          </div>
+          <div className="stat-title">{lang === 'pl' ? 'Aktywni użytkownicy' : 'Active users'}</div>
+          <div className="stat-value text-accent">{leaderboard?.length || 0}</div>
+        </div>
+      </div>
+
+      {/* Universities Grid or Regions */}
+      {searchQuery ? (
+        // Filtered Results
+        <div>
+          <h2 className="text-2xl font-bold mb-6">
+            {lang === 'pl' ? 'Wyniki wyszukiwania' : 'Search Results'} ({filteredUniversities?.length || 0})
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredUniversities?.map((uni) => (
+              <div
+                key={uni.id}
+                onClick={() => navigate(`/university/${uni.id}`)}
+                className="card bg-base-100 shadow-lg hover:shadow-2xl transition-all cursor-pointer border border-base-300 hover:border-primary overflow-hidden group"
               >
-                <div className="p-3 bg-primary/10 rounded-2xl text-primary group-hover:scale-105 transition-transform">
-                  <GraduationCap size={28} />
-                </div>
-                <div>
-                  <h3 className="font-bold text-lg">{lang === 'pl' ? u.name_pl : (u.name_en || u.name)}</h3>
-                  <p className="text-xs font-bold opacity-50 uppercase tracking-widest">{u.city} • {getRegionDisplayName(u.region)}</p>
+                <figure className="h-48 relative overflow-hidden">
+                  <img
+                    src={uni.image_url}
+                    alt={uni.name}
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent"></div>
+                  <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
+                    <h3 className="font-bold text-lg line-clamp-2">
+                      {lang === 'pl' ? uni.name_pl : uni.name_en}
+                    </h3>
+                  </div>
+                </figure>
+                <div className="card-body p-4">
+                  <div className="flex items-center gap-2 text-sm">
+                    <MapPin size={16} className="text-primary" />
+                    <span className="font-semibold">{uni.city}</span>
+                    <span className="opacity-50">•</span>
+                    <span className="opacity-70">{uni.region}</span>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         </div>
-      </div>
+      ) : (
+        // Browse by Region
+        <div>
+          <h2 className="text-3xl font-bold mb-6">
+            {lang === 'pl' ? 'Przeglądaj według województw' : 'Browse by Region'}
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {Object.entries(regions || {}).map(([regionName, unis]: [string, any]) => (
+              <div
+                key={regionName}
+                onClick={() => navigate(`/region/${regionName}`)}
+                className="card bg-gradient-to-br from-base-100 to-base-200 shadow-lg hover:shadow-2xl transition-all cursor-pointer border border-base-300 hover:border-primary group"
+              >
+                <div className="card-body">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <h3 className="card-title text-xl mb-2 group-hover:text-primary transition-colors">
+                        {regionName}
+                      </h3>
+                      <p className="text-sm opacity-70">
+                        {unis.length} {lang === 'pl' ? 'uczelni' : 'universities'}
+                      </p>
+                    </div>
+                    <div className="badge badge-primary badge-lg">{unis.length}</div>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {unis.slice(0, 3).map((uni: University) => (
+                      <div key={uni.id} className="badge badge-outline badge-sm">
+                        {uni.city}
+                      </div>
+                    ))}
+                    {unis.length > 3 && (
+                      <div className="badge badge-outline badge-sm opacity-50">
+                        +{unis.length - 3}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Leaderboard */}
+      {leaderboard && leaderboard.length > 0 && (
+        <div className="card bg-base-100 shadow-xl border border-base-300">
+          <div className="card-body">
+            <h2 className="card-title text-2xl mb-4">
+              <TrendingUp className="text-primary" />
+              {lang === 'pl' ? 'Najbardziej aktywni' : 'Top Contributors'}
+            </h2>
+            <div className="space-y-3">
+              {leaderboard.map((user: any, index: number) => (
+                <div key={index} className="flex items-center gap-4 p-3 bg-base-200 rounded-lg">
+                  <div className={`badge ${index === 0 ? 'badge-warning' : index === 1 ? 'badge-info' : index === 2 ? 'badge-accent' : 'badge-ghost'} font-bold text-lg`}>
+                    #{index + 1}
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-semibold">{user.name}</div>
+                    {user.is_verified && (
+                      <div className="badge badge-primary badge-xs">Zweryfikowany</div>
+                    )}
+                  </div>
+                  <div className="badge badge-lg">{user.count} {lang === 'pl' ? 'notatek' : 'notes'}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
