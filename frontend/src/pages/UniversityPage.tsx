@@ -9,7 +9,6 @@ export function UniversityPage({ token, t, lang }: { token: string | null, t: an
   const { uniId } = useParams();
   const queryClient = useQueryClient();
 
-  // Pobierz dane o uczelni (nazwę) i notatki
   const { data: unis } = useQuery({ queryKey: ['unis'], queryFn: async () => axios.get(`${API_URL}/universities`).then(r => r.data) });
   const { data: notes, isLoading } = useQuery({
     queryKey: ['notes', uniId],
@@ -29,7 +28,6 @@ export function UniversityPage({ token, t, lang }: { token: string | null, t: an
     e.preventDefault();
     const form = e.target as HTMLFormElement;
     const formData = new FormData(form);
-    // Wymuszamy ID uczelni z URL
     formData.append('university_id', uniId!);
     uploadMutation.mutate(formData);
     form.reset();
@@ -85,15 +83,19 @@ export function UniversityPage({ token, t, lang }: { token: string | null, t: an
                   <img src={`${API_URL}${note.image_url}`} className="rounded-lg h-48 w-full object-cover mt-2 bg-base-200" alt="Note" />
                 )}
                 <div className="divider my-2"></div>
-                <div className="flex justify-between text-xs opacity-60 items-center">
-                   <div className="flex items-center gap-1">
-                      <UserIcon size={14}/>
-                      <span className={note.author.is_verified ? "text-primary font-bold" : ""}>
+                <div className="flex justify-between text-xs opacity-70 items-center">
+                   <div className="flex items-center gap-2">
+                      <UserIcon size={14} className="text-base-content/50" />
+                      <span className={`font-medium ${note.author.is_verified ? "text-primary" : "text-base-content"}`}>
                         {note.author.nickname || note.author.email}
                       </span>
-                      {note.author.is_verified && <CheckCircle size={12} className="text-blue-500" />}
+                      {note.author.is_verified && (
+                        <div className="tooltip tooltip-right" data-tip="Zweryfikowany Student">
+                          <CheckCircle size={14} className="text-blue-500 fill-blue-500/10" />
+                        </div>
+                      )}
                    </div>
-                   <span>{new Date(note.created_at).toLocaleDateString()}</span>
+                   <span className="text-base-content/50">{new Date(note.created_at).toLocaleDateString()}</span>
                 </div>
               </div>
             </div>

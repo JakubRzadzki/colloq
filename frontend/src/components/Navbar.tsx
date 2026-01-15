@@ -11,9 +11,9 @@ export function Navbar({ token, t, lang, theme, toggleTheme, toggleLang, logout 
         <Link to="/" className="btn btn-ghost normal-case text-2xl text-primary font-bold">Colloq</Link>
       </div>
       <div className="flex-none gap-2">
-        <button onClick={toggleTheme} className="btn btn-ghost btn-circle btn-sm">
-          {theme === 'light' ? <Moon size={18}/> : <Sun size={18}/>}
-        </button>
+            <button onClick={toggleTheme} className="btn btn-ghost btn-circle btn-sm text-base-content">
+                {theme === 'light' ? <Moon size={18}/> : <Sun size={18}/>}
+            </button>
         <button onClick={toggleLang} className="btn btn-ghost btn-sm font-bold">
           {lang.toUpperCase()}
         </button>

@@ -1,43 +1,45 @@
+// src/pages/HomePage.tsx
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
-import { Link } from 'react-router-dom';
-import { MapPin } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../utils/api';
+import { PolandMapSVG } from '../components/PolandMapSVG';
 
-export function HomePage({ t }: { t: any }) {
-  // Pobieramy uczelnie, żeby wyciągnąć unikalne województwa
+export function HomePage() {
+  const navigate = useNavigate();
+
   const { data: unis, isLoading } = useQuery({
     queryKey: ['unis'],
-    queryFn: async () => axios.get(`${API_URL}/universities`).then(r => r.data)
+    queryFn: () => axios.get(`${API_URL}/universities`).then(r => r.data)
   });
 
-  // Tworzymy listę unikalnych regionów
-  // @ts-ignore
-    const regions = [...new Set(unis?.map((u: any) => u.region))].filter(Boolean).sort() as string[];
+  const handleRegionClick = (regionName: string) => {
+    navigate(`/region/${regionName}`);
+  };
 
-  if (isLoading) return <div className="text-center mt-10"><span className="loading loading-spinner loading-lg text-primary"></span></div>;
+  if (isLoading) return <div className="flex justify-center p-20"><span className="loading loading-lg"></span></div>;
 
   return (
-    <div className="py-10">
-      <h1 className="text-4xl font-bold text-center mb-2">Wybierz Region</h1>
-      <p className="text-center text-gray-500 mb-10">Znajdź swoją uczelnię przeglądając województwa</p>
+    <div className="max-w-6xl mx-auto p-6 text-center">
+      <h1 className="text-5xl font-black mb-12 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+        Wybierz Województwo
+      </h1>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-        {regions.map((region) => (
-          <Link
-            key={region}
-            to={`/region/${region}`}
-            className="card bg-base-100 shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 border border-base-200 cursor-pointer group"
-          >
-            <div className="card-body items-center text-center">
-              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-2 group-hover:bg-primary group-hover:text-white transition-colors">
-                <MapPin size={32} />
-              </div>
-              <h2 className="card-title text-xl">{region}</h2>
-              <p className="text-xs text-gray-400">Zobacz uczelnie &rarr;</p>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+        <PolandMapSVG onRegionClick={handleRegionClick} />
+
+        <div className="text-left space-y-6">
+          <div className="stats stats-vertical shadow bg-base-200 w-full border border-base-300">
+            <div className="stat">
+              <div className="stat-title font-bold">Zindeksowane uczelnie</div>
+              <div className="stat-value text-primary">{unis?.length || 0}</div>
+              <div className="stat-desc opacity-60 italic">Dane pobrane lokalnie z Wikipedii</div>
             </div>
-          </Link>
-        ))}
+          </div>
+          <div className="alert alert-info">
+            <span>Kliknij w region na mapie, aby zobaczyć kafelki uczelni ze zdjęciami.</span>
+          </div>
+        </div>
       </div>
     </div>
   );
