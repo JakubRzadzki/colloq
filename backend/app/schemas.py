@@ -1,28 +1,29 @@
+"""
+Pydantic schemas for request/response validation.
+
+Updated to support:
+- Registration without CAPTCHA
+- Community-submitted universities, faculties, fields, and subjects
+- Optional note content (image-only notes)
+- Faculty hierarchy
+"""
+
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional
 
 
 # ===========================
-# USER & AUTH SCHEMAS
+# USER SCHEMAS
 # ===========================
 
 class UserCreate(BaseModel):
-    """Schema for user creation data"""
     email: EmailStr
     password: str
     university_id: int
 
 
-class RegisterRequest(BaseModel):
-    """
-    Wrapper schema for registration request.
-    """
-    user: UserCreate
-
-
 class UserOut(BaseModel):
-    """Public user profile schema"""
     id: int
     email: str
     nickname: Optional[str] = None
@@ -34,87 +35,91 @@ class UserOut(BaseModel):
         from_attributes = True
 
 
-class Token(BaseModel):
-    """JWT Token schema"""
-    access_token: str
-    token_type: str
-
-
-class TokenData(BaseModel):
-    """Data embedded in JWT token"""
-    email: Optional[str] = None
-    is_admin: bool = False
-    nickname: Optional[str] = None
+# Registration without CAPTCHA
+class RegisterRequest(BaseModel):
+    user: UserCreate
 
 
 # ===========================
 # HIERARCHY SCHEMAS
 # ===========================
 
-class SubjectOut(BaseModel):
-    """Subject schema for responses"""
-    id: int
+# University
+class UniversityCreate(BaseModel):
     name: str
-    semester: Optional[int] = None
-    field_of_study_id: int
-    is_approved: Optional[bool] = None
-
-    class Config:
-        from_attributes = True
-
-
-class FieldOfStudyOut(BaseModel):
-    """Field of Study schema for responses"""
-    id: int
-    name: str
-    degree_level: Optional[str] = None
-    university_id: int
-
-    class Config:
-        from_attributes = True
+    city: str
+    region: str
 
 
 class UniversityOut(BaseModel):
-    """University schema for responses"""
     id: int
     name: str
     name_en: Optional[str] = None
     name_pl: Optional[str] = None
-    city: Optional[str] = None
-    region: Optional[str] = None
+    city: str
+    region: str
     type: Optional[str] = None
     image_url: Optional[str] = None
+    is_approved: bool = True
 
     class Config:
         from_attributes = True
 
 
-# ===========================
-# AI & FLASHCARDS SCHEMAS
-# ===========================
-
-class FlashcardBase(BaseModel):
-    """Base schema for flashcard data"""
-    question: str
-    answer: str
+# Faculty
+class FacultyCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    university_id: int
 
 
-class FlashcardOut(FlashcardBase):
-    """Flashcard schema with ID"""
+class FacultyOut(BaseModel):
     id: int
+    name: str
+    description: Optional[str] = None
+    image_url: Optional[str] = None
+    university_id: int
+    is_approved: bool = True
 
     class Config:
         from_attributes = True
 
 
-class AISummaryRequest(BaseModel):
-    """Request schema for generating a summary"""
-    note_content: str
+# Field of Study
+class FieldOfStudyCreate(BaseModel):
+    name: str
+    degree_level: str
+    faculty_id: int  # UPDATED: Now references faculty instead of university
 
 
-class AIFlashcardsRequest(BaseModel):
-    """Request schema for generating flashcards"""
-    note_content: str
+class FieldOfStudyOut(BaseModel):
+    id: int
+    name: str
+    degree_level: Optional[str] = None
+    faculty_id: int  # UPDATED
+    university_id: Optional[int] = None  # For backward compatibility
+    is_approved: bool = True
+
+    class Config:
+        from_attributes = True
+
+
+# Subject
+class SubjectCreate(BaseModel):
+    name: str
+    semester: int
+    field_of_study_id: int
+
+
+class SubjectOut(BaseModel):
+    id: int
+    name: str
+    semester: Optional[int] = None
+    field_of_study_id: int
+    is_approved: bool = True
+
+    class Config:
+        from_attributes = True
 
 
 # ===========================
@@ -122,7 +127,7 @@ class AIFlashcardsRequest(BaseModel):
 # ===========================
 
 class NoteCreate(BaseModel):
-    """Schema for creating a new note"""
+    """Note creation - title and content are now optional."""
     title: Optional[str] = None
     content: Optional[str] = None
     university_id: int
@@ -132,64 +137,45 @@ class NoteCreate(BaseModel):
 
 
 class NoteOut(BaseModel):
-    """Detailed note response schema"""
     id: int
-    title: str
-    content: str
+    title: Optional[str] = None
+    content: Optional[str] = None
     score: float
     image_url: Optional[str] = None
     video_url: Optional[str] = None
     link_url: Optional[str] = None
-    tags: Optional[str] = None
-    is_approved: bool
     created_at: datetime
-
     university_id: int
     subject_id: Optional[int] = None
-
     author: UserOut
     subject: Optional[SubjectOut] = None
-    flashcards: List[FlashcardOut] = []
 
     class Config:
         from_attributes = True
 
 
 # ===========================
-# CHAT SCHEMAS
+# ADMIN SCHEMAS
 # ===========================
+
+class PendingItemsResponse(BaseModel):
+    """Response containing all pending items for admin review."""
+    notes: list
+    universities: list
+    faculties: list  # NEW
+    fields: list
+    subjects: list
+
+
+# ===========================
+# AUTH SCHEMAS
+# ===========================
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
 
 class ChatRequest(BaseModel):
-    """Schema for AI Chat interactions"""
     message: str
     note_content: Optional[str] = ""
-
-
-class ChatResponse(BaseModel):
-    """Schema for AI Chat response"""
-    response: str
-
-
-# ===========================
-# NEW SCHEMAS FOR CREATING UNIVERSITIES, FIELDS AND SUBJECTS
-# ===========================
-
-class UniversityCreate(BaseModel):
-    """Schema for creating a new university"""
-    name: str
-    city: str
-    region: str
-
-
-class FieldOfStudyCreate(BaseModel):
-    """Schema for creating a new field of study"""
-    name: str
-    degree_level: str
-    university_id: int
-
-
-class SubjectCreate(BaseModel):
-    """Schema for creating a new subject"""
-    name: str
-    semester: int
-    field_of_study_id: int

@@ -1,36 +1,20 @@
 """
 Colloq PRO - FastAPI Backend Core Module
 
-This is the main application file that orchestrates:
-- FastAPI app initialization and middleware
-- Database seeding (universities, fields, subjects)
-- RESTful API endpoints for authentication, notes, hierarchy, and AI chat
-- Admin moderation endpoints
-- Gamification (leaderboard)
-
-Architecture:
-    Request → Middleware → Auth Dependency → Business Logic → Database → Response
+UPDATED: Added Faculty hierarchy between University and FieldOfStudy
+AI CHATBOT REMOVED - HOTFIX VERSION
 """
 
 import os
 import shutil
 from typing import List, Optional
 
-import httpx
 from fastapi import (
-    Body,
-    Depends,
-    FastAPI,
-    File,
-    Form,
-    HTTPException,
-    UploadFile,
-    status,
+    Body, Depends, FastAPI, File, Form, HTTPException, UploadFile, status,
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
-from google import genai
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
@@ -42,118 +26,127 @@ from . import auth, database, models, schemas
 # ===========================
 
 class Config:
-    """Application configuration loaded from environment variables."""
-
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-    TURNSTILE_SECRET_KEY = os.getenv(
-        "TURNSTILE_SECRET_KEY",
-        "1x0000000000000000000000000000000AA"  # Dummy key for local dev
-    )
     ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@colloq.pl")
     ADMIN_PASS = os.getenv("ADMIN_PASS", "admin123")
     UPLOAD_DIR = "uploads"
     UNI_IMG_DIR = os.path.join(UPLOAD_DIR, "universities")
+    FACULTY_IMG_DIR = os.path.join(UPLOAD_DIR, "faculties")  # NEW
     LEADERBOARD_LIMIT = 5
 
 
-# Seed data: Polish universities mapped to regions and cities
-# Format: {region: [cities], primary_university_pl, primary_university_en}
+# Update SEED_DATA to include faculties
 SEED_DATA = [
     {
         "reg": "Dolnośląskie",
         "cities": ["Wrocław", "Legnica", "Jelenia Góra", "Wałbrzych"],
         "pl": "Politechnika Wrocławska",
-        "en": "Wroclaw University of Science and Technology"
+        "en": "Wroclaw University of Science and Technology",
+        "faculties": ["Wydział Elektroniki", "Wydział Informatyki", "Wydział Budownictwa"]
     },
     {
         "reg": "Kujawsko-Pomorskie",
         "cities": ["Bydgoszcz", "Toruń", "Włocławek", "Grudziądz"],
         "pl": "Uniwersytet Mikołaja Kopernika",
-        "en": "Nicolaus Copernicus University"
+        "en": "Nicolaus Copernicus University",
+        "faculties": ["Wydział Matematyki i Informatyki", "Wydział Fizyki"]
     },
     {
         "reg": "Lubelskie",
         "cities": ["Lublin", "Zamość", "Biała Podlaska", "Chełm"],
         "pl": "Uniwersytet Marii Curie-Skłodowskiej",
-        "en": "Maria Curie-Sklodowska University"
-    },
-    {
-        "reg": "Lubuskie",
-        "cities": ["Zielona Góra", "Gorzów Wielkopolski"],
-        "pl": "Uniwersytet Zielonogórski",
-        "en": "University of Zielona Gora"
-    },
-    {
-        "reg": "Łódzkie",
-        "cities": ["Łódź", "Piotrków Trybunalski", "Skierniewice"],
-        "pl": "Politechnika Łódzka",
-        "en": "Lodz University of Technology"
-    },
-    {
-        "reg": "Małopolskie",
-        "cities": ["Kraków", "Tarnów", "Nowy Sącz", "Nowy Targ"],
-        "pl": "Uniwersytet Jagielloński",
-        "en": "Jagiellonian University"
+        "en": "Maria Curie-Sklodowska University",
+        "faculties": ["Wydział Informatyki", "Wydział Elektroniki"]
     },
     {
         "reg": "Mazowieckie",
         "cities": ["Warszawa", "Radom", "Płock", "Siedlce", "Ciechanów"],
         "pl": "Uniwersytet Warszawski",
-        "en": "University of Warsaw"
+        "en": "University of Warsaw",
+        "faculties": ["Wydział Matematyki", "Wydział Fizyki", "Wydział Chemii"]
+    },
+    {
+        "reg": "Małopolskie",
+        "cities": ["Kraków", "Tarnów", "Nowy Sącz", "Nowy Targ"],
+        "pl": "Uniwersytet Jagielloński",
+        "en": "Jagiellonian University",
+        "faculties": ["Wydział Fizyki", "Wydział Matematyki i Informatyki"]
+    },
+    {
+        "reg": "Lubuskie",
+        "cities": ["Zielona Góra", "Gorzów Wielkopolski"],
+        "pl": "Uniwersytet Zielonogórski",
+        "en": "University of Zielona Gora",
+        "faculties": ["Wydział Informatyki"]
+    },
+    {
+        "reg": "Łódzkie",
+        "cities": ["Łódź", "Piotrków Trybunalski", "Skierniewice"],
+        "pl": "Politechnika Łódzka",
+        "en": "Lodz University of Technology",
+        "faculties": ["Wydział Elektrotechniki", "Wydział Informatyki"]
     },
     {
         "reg": "Opolskie",
         "cities": ["Opole", "Kędzierzyn-Koźle"],
         "pl": "Uniwersytet Opolski",
-        "en": "University of Opole"
+        "en": "University of Opole",
+        "faculties": ["Wydział Matematyki i Informatyki"]
     },
     {
         "reg": "Podkarpackie",
         "cities": ["Rzeszów", "Przemyśl", "Krosno", "Tarnobrzeg"],
         "pl": "Politechnika Rzeszowska",
-        "en": "Rzeszow University of Technology"
+        "en": "Rzeszow University of Technology",
+        "faculties": ["Wydział Elektrotechniki i Informatyki"]
     },
     {
         "reg": "Podlaskie",
         "cities": ["Białystok", "Łomża", "Suwałki"],
         "pl": "Uniwersytet w Białymstoku",
-        "en": "University of Bialystok"
+        "en": "University of Bialystok",
+        "faculties": ["Wydział Informatyki"]
     },
     {
         "reg": "Pomorskie",
         "cities": ["Gdańsk", "Gdynia", "Słupsk"],
         "pl": "Politechnika Gdańska",
-        "en": "Gdansk University of Technology"
+        "en": "Gdansk University of Technology",
+        "faculties": ["Wydział Elektroniki", "Wydział Informatyki"]
     },
     {
         "reg": "Śląskie",
         "cities": ["Katowice", "Gliwice", "Częstochowa", "Sosnowiec", "Bielsko-Biała"],
         "pl": "Uniwersytet Śląski",
-        "en": "University of Silesia"
+        "en": "University of Silesia",
+        "faculties": ["Wydział Informatyki i Nauki o Materiałach"]
     },
     {
         "reg": "Świętokrzyskie",
         "cities": ["Kielce"],
         "pl": "Politechnika Świętokrzyska",
-        "en": "Kielce University of Technology"
+        "en": "Kielce University of Technology",
+        "faculties": ["Wydział Elektrotechniki i Informatyki"]
     },
     {
         "reg": "Warmińsko-Mazurskie",
         "cities": ["Olsztyn", "Elbląg"],
         "pl": "Uniwersytet Warmińsko-Mazurski",
-        "en": "University of Warmia and Mazury"
+        "en": "University of Warmia and Mazury",
+        "faculties": ["Wydział Matematyki i Informatyki"]
     },
     {
         "reg": "Wielkopolskie",
         "cities": ["Poznań", "Kalisz", "Konin", "Leszno", "Gniezno"],
         "pl": "Uniwersytet im. Adama Mickiewicza",
-        "en": "Adam Mickiewicz University"
+        "en": "Adam Mickiewicz University",
+        "faculties": ["Wydział Matematyki i Informatyki"]
     },
     {
         "reg": "Zachodniopomorskie",
         "cities": ["Szczecin", "Koszalin"],
         "pl": "Zachodniopomorski Uniwersytet Technologiczny",
-        "en": "West Pomeranian University of Technology"
+        "en": "West Pomeranian University of Technology",
+        "faculties": ["Wydział Informatyki", "Wydział Elektryczny"]
     }
 ]
 
@@ -162,59 +155,38 @@ SEED_DATA = [
 # INITIALIZATION
 # ===========================
 
-# Ensure upload directories exist
 os.makedirs(Config.UNI_IMG_DIR, exist_ok=True)
+os.makedirs(Config.FACULTY_IMG_DIR, exist_ok=True)  # NEW
 
-# Initialize Google Gemini AI client (if API key provided)
-client_ai = genai.Client(api_key=Config.GEMINI_API_KEY) if Config.GEMINI_API_KEY else None
-
-# Initialize FastAPI application
 app = FastAPI(
     title="Colloq PRO - Educational Platform API",
-    version="3.2.0",
-    description="REST API for managing university hierarchies, notes, and AI-powered study assistance"
+    version="4.0.0",  # Updated version
+    description="REST API with Faculty hierarchy for managing university structures"
 )
 
-# Configure CORS for frontend access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify exact frontend domain
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Serve uploaded files (images, scans) as static content
 app.mount("/uploads", StaticFiles(directory=Config.UPLOAD_DIR), name="uploads")
 
 
-# ===========================
-# DATABASE SEEDING
-# ===========================
-
 def seed_database(db: Session) -> None:
-    """
-    Populate empty database with initial data.
-
-    Creates:
-    - Universities for each region/city combination
-    - Sample field of study (Computer Science)
-    - Sample subject (Programming Basics) for each university
-
-    This ensures the app isn't empty on first launch.
-
-    Args:
-        db: SQLAlchemy database session
-    """
+    """Updated seed function with faculties."""
     if db.query(models.University).count() > 0:
         print("⏭️  Database already seeded, skipping...")
         return
 
-    print("🌱 Seeding database with Polish universities...")
+    print("🌱 Seeding database with Polish universities and faculties...")
+    admin_user = db.query(models.User).filter(models.User.email == Config.ADMIN_EMAIL).first()
 
     for item in SEED_DATA:
         for city in item["cities"]:
-            # Create university entry
+            # Create university
             uni = models.University(
                 name=f"{item['pl']} ({city})",
                 name_pl=f"{item['pl']} w {city}",
@@ -223,55 +195,61 @@ def seed_database(db: Session) -> None:
                 region=item["reg"],
                 type="Publiczna",
                 image_url="https://images.unsplash.com/photo-1523050853064-8bf1952e690b?w=800",
-                is_approved=True  # Domyślne uczelnie są od razu zatwierdzone
+                is_approved=True
             )
             db.add(uni)
-            db.commit()  # Commit to get university ID
+            db.commit()
 
-            # Create sample field of study
-            field = models.FieldOfStudy(
-                name="Informatyka",
-                degree_level="Inżynierskie",
-                university_id=uni.id,
-                is_approved=True  # Domyślne kierunki są od razu zatwierdzone
-            )
-            db.add(field)
-            db.commit()  # Commit to get field ID
+            # Create faculties for this university
+            for faculty_name in item.get("faculties", ["Wydział Informatyki"]):
+                faculty = models.Faculty(
+                    name=f"{faculty_name}",
+                    description=f"{faculty_name} {item['pl']} w {city}",
+                    university_id=uni.id,
+                    is_approved=True,
+                    submitted_by_id=admin_user.id if admin_user else None
+                )
+                db.add(faculty)
+                db.commit()
 
-            # Create sample subject
-            subject = models.Subject(
-                name="Podstawy Programowania",
-                semester=1,
-                field_of_study_id=field.id,
-                is_approved=True  # Domyślne przedmioty są od razu zatwierdzone
-            )
-            db.add(subject)
+                # Create field of study in this faculty
+                field = models.FieldOfStudy(
+                    name="Informatyka",
+                    degree_level="Inżynierskie",
+                    faculty_id=faculty.id,
+                    university_id=uni.id,  # For backward compatibility
+                    is_approved=True,
+                    submitted_by_id=admin_user.id if admin_user else None
+                )
+                db.add(field)
+                db.commit()
+
+                # Create subject
+                subject = models.Subject(
+                    name="Podstawy Programowania",
+                    semester=1,
+                    field_of_study_id=field.id,
+                    is_approved=True,
+                    submitted_by_id=admin_user.id if admin_user else None
+                )
+                db.add(subject)
 
     db.commit()
-    print("✅ Database seeded successfully with universities, fields, and subjects.")
+    print("✅ Database with faculties seeded successfully.")
 
 
 def create_admin_user(db: Session) -> None:
-    """
-    Create default admin account if it doesn't exist.
-
-    The admin user:
-    - Has full moderation privileges (is_admin=True)
-    - Is pre-verified (is_verified=True)
-    - Is assigned to the first university in database
-
-    Args:
-        db: SQLAlchemy database session
-    """
+    """Create default admin account if it doesn't exist."""
     if db.query(models.User).filter(models.User.email == Config.ADMIN_EMAIL).first():
         print("⏭️  Admin account already exists, skipping...")
         return
 
-    # Assign admin to first university
     uni = db.query(models.University).first()
     if not uni:
-        print("❌ Cannot create admin: no universities in database")
-        return
+        # Create a placeholder university for the admin
+        uni = models.University(name="System", city="System", region="System", is_approved=True)
+        db.add(uni)
+        db.commit()
 
     admin = models.User(
         email=Config.ADMIN_EMAIL,
@@ -289,19 +267,9 @@ def create_admin_user(db: Session) -> None:
 
 @app.on_event("startup")
 def startup_event() -> None:
-    """
-    Application startup hook.
-
-    Executed once when FastAPI starts. Performs:
-    1. Database table creation (if not exist)
-    2. Initial data seeding
-    3. Admin account creation
-    """
-    print("🔧 Initializing Colloq PRO...")
-
-    # Create database tables (idempotent - won't recreate existing tables)
+    """Application startup hook."""
+    print("🔧 Initializing Colloq PRO with Faculty hierarchy...")
     models.Base.metadata.create_all(bind=database.engine)
-
     db = database.SessionLocal()
     try:
         seed_database(db)
@@ -314,125 +282,17 @@ def startup_event() -> None:
 
 
 # ===========================
-# SERVICES
-# ===========================
-
-class AuthService:
-    """Service layer for authentication operations."""
-
-    @staticmethod
-    async def verify_turnstile(token: str) -> None:
-        """
-        Verify Cloudflare Turnstile CAPTCHA token.
-
-        In development mode (secret key starts with '1x0000'), verification is skipped.
-        In production, makes API call to Cloudflare to validate token.
-
-        Args:
-            token: Turnstile response token from frontend
-
-        Raises:
-            HTTPException 400: If CAPTCHA verification fails
-        """
-        # Skip verification in development mode
-        if Config.TURNSTILE_SECRET_KEY.startswith("1x0000"):
-            print("⚠️  Using dummy Turnstile verification (development mode)")
-            return
-
-        # Verify with Cloudflare API
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "https://challenges.cloudflare.com/turnstile/v0/siteverify",
-                data={
-                    "secret": Config.TURNSTILE_SECRET_KEY,
-                    "response": token
-                },
-                timeout=5.0
-            )
-            result = response.json()
-
-            if not result.get("success"):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="CAPTCHA verification failed. Please try again."
-                )
-
-
-class AIService:
-    """Service layer for Google Gemini AI integration."""
-
-    @staticmethod
-    async def generate_response(message: str, context: Optional[str] = None) -> str:
-        """
-        Generate AI response using Google Gemini with optional note context.
-
-        The AI acts as a study assistant that can answer questions about
-        specific notes or general study topics.
-
-        Args:
-            message: User's question or prompt
-            context: Optional note content to provide as context
-
-        Returns:
-            AI-generated response text
-
-        Raises:
-            HTTPException 500: If AI service is not configured or fails
-        """
-        if not client_ai:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="AI service is not configured. Please contact administrator."
-            )
-
-        # Build contextual prompt
-        prompt = f"""Jesteś asystentem AI pomagającym studentom w nauce.
-Kontekst notatki: {context or 'Brak kontekstu'}
-Pytanie studenta: {message}
-
-Udziel pomocnej, zwięzłej i merytorycznej odpowiedzi."""
-
-        try:
-            response = client_ai.models.generate_content(
-                model="gemini-1.5-flash",
-                contents=prompt
-            )
-            return response.text
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"AI communication error: {str(e)}"
-            )
-
-
-# ===========================
-# ENDPOINTS - UNIVERSITIES & HIERARCHY
+# ENDPOINTS - UNIVERSITIES
 # ===========================
 
 @app.get("/universities", response_model=List[schemas.UniversityOut])
 def get_universities(
     search: Optional[str] = None,
     db: Session = Depends(database.get_db)
-) -> List[dict]:
-    """
-    Retrieve list of approved universities with optional search filter.
-
-    Search is case-insensitive and matches across:
-    - University name (Polish/English)
-    - City
-    - Region
-
-    Args:
-        search: Optional search query string
-        db: Database session
-
-    Returns:
-        List of approved university objects with all fields
-    """
-    # Dodajemy filtr is_approved == True
+):
+    """Retrieve list of APPROVED universities."""
     query = db.query(models.University).filter(models.University.is_approved == True)
 
-    # Apply search filter if provided
     if search:
         search_pattern = f"%{search}%"
         query = query.filter(or_(
@@ -443,121 +303,86 @@ def get_universities(
             models.University.region.ilike(search_pattern)
         ))
 
-    # Map to ensure optional fields are handled correctly
-    universities = query.all()
-    result = []
-    for uni in universities:
-        result.append({
-            "id": uni.id,
-            "name": uni.name,
-            "name_en": uni.name_en or uni.name,
-            "name_pl": uni.name_pl or uni.name,
-            "city": uni.city,
-            "region": uni.region,
-            "type": uni.type,
-            "image_url": uni.image_url
-        })
-
-    return result
+    return query.all()
 
 
 @app.post("/universities", status_code=status.HTTP_201_CREATED)
-def create_university(
-    uni: schemas.UniversityCreate,
+async def create_university(
+    name: str = Form(...),
+    city: str = Form(...),
+    region: str = Form(...),
+    image: UploadFile = File(None),  # NEW: Image upload support
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(auth.get_current_user)
-) -> dict:
-    """
-    Create a new university (requires approval).
+):
+    """Propose a new university with optional image."""
+    # Check duplicate
+    if db.query(models.University).filter(models.University.name.ilike(name)).first():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "University already exists.")
 
-    Args:
-        uni: University creation data
-        db: Database session
-        current_user: Authenticated user
+    image_url = None
+    if image:
+        # Save uploaded image
+        file_extension = os.path.splitext(image.filename)[1]
+        unique_filename = f"uni_{name.replace(' ', '_')}_{current_user.id}{file_extension}"
+        file_location = os.path.join(Config.UNI_IMG_DIR, unique_filename)
 
-    Returns:
-        Success message
-    """
-    # Check if university with this name already exists
-    existing = db.query(models.University).filter(
-        models.University.name.ilike(uni.name)
-    ).first()
-
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="University with this name already exists."
-        )
+        with open(file_location, "wb+") as file_object:
+            shutil.copyfileobj(image.file, file_object)
+        image_url = f"/uploads/universities/{unique_filename}"
 
     new_uni = models.University(
-        name=uni.name,
-        name_pl=uni.name,  # Uproszczenie: używamy tej samej nazwy
-        city=uni.city,
-        region=uni.region,
-        is_approved=False  # Wymaga akceptacji admina
+        name=name,
+        name_pl=name,
+        city=city,
+        region=region,
+        image_url=image_url,
+        is_approved=False,
+        submitted_by_id=current_user.id
     )
     db.add(new_uni)
     db.commit()
+    return {"msg": "Uczelnia ze zdjęciem dodana do weryfikacji."}
 
-    return {"msg": "Uczelnia dodana i oczekuje na weryfikację."}
 
+# ===========================
+# ENDPOINTS - FACULTIES (NEW)
+# ===========================
 
-@app.get("/universities/{uni_id}/fields", response_model=List[schemas.FieldOfStudyOut])
-def get_fields(
-    uni_id: int,
-    db: Session = Depends(database.get_db)
-) -> List[models.FieldOfStudy]:
-    """
-    Retrieve all approved fields of study for a specific university.
-
-    Part of the hierarchical drill-down: University → Fields → Subjects
-
-    Args:
-        uni_id: University ID
-        db: Database session
-
-    Returns:
-        List of fields of study (e.g., Computer Science, Medicine)
-    """
-    # Tylko zatwierdzone kierunki
-    return db.query(models.FieldOfStudy).filter(
-        models.FieldOfStudy.university_id == uni_id,
-        models.FieldOfStudy.is_approved == True
+@app.get("/universities/{uni_id}/faculties", response_model=List[schemas.FacultyOut])
+def get_faculties(uni_id: int, db: Session = Depends(database.get_db)):
+    """Retrieve approved faculties for a university."""
+    return db.query(models.Faculty).filter(
+        models.Faculty.university_id == uni_id,
+        models.Faculty.is_approved == True
     ).all()
 
 
-@app.post("/fields", status_code=status.HTTP_201_CREATED)
-def create_field(
-    field: schemas.FieldOfStudyCreate,
+@app.post("/faculties", status_code=status.HTTP_201_CREATED)
+async def create_faculty(
+    name: str = Form(...),
+    description: Optional[str] = Form(None),
+    university_id: int = Form(...),
+    image: UploadFile = File(None),
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(auth.get_current_user)
-) -> dict:
-    """
-    Create a new field of study (requires approval).
-
-    Args:
-        field: Field of study creation data
-        db: Database session
-        current_user: Authenticated user
-
-    Returns:
-        Success message
-    """
-    # Check if field already exists for this university
-    existing = db.query(models.FieldOfStudy).filter(
-        models.FieldOfStudy.name.ilike(field.name),
-        models.FieldOfStudy.university_id == field.university_id
+):
+    """Propose a new faculty (requires admin approval)."""
+    # Check if faculty already exists for this university
+    existing = db.query(models.Faculty).filter(
+        models.Faculty.name.ilike(name),
+        models.Faculty.university_id == university_id
     ).first()
 
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Field of study already exists for this university."
+            detail="Faculty already exists for this university."
         )
 
     # Check if university exists and is approved
     university = db.query(models.University).filter(
-        models.University.id == field.university_id,
+        models.University.id == university_id,
         models.University.is_approved == True
     ).first()
 
@@ -567,35 +392,94 @@ def create_field(
             detail="University not found or not approved."
         )
 
+    # Save image if provided
+    image_url = None
+    if image:
+        file_extension = os.path.splitext(image.filename)[1]
+        unique_filename = f"fac_{name.replace(' ', '_')}_{current_user.id}{file_extension}"
+        file_location = os.path.join(Config.FACULTY_IMG_DIR, unique_filename)
+
+        with open(file_location, "wb+") as file_object:
+            shutil.copyfileobj(image.file, file_object)
+        image_url = f"/uploads/faculties/{unique_filename}"
+
+    new_faculty = models.Faculty(
+        name=name,
+        description=description,
+        image_url=image_url,
+        university_id=university_id,
+        is_approved=False,
+        submitted_by_id=current_user.id
+    )
+    db.add(new_faculty)
+    db.commit()
+    return {"msg": "Wydział dodany i oczekuje na weryfikację."}
+
+
+# ===========================
+# ENDPOINTS - FIELDS OF STUDY (UPDATED)
+# ===========================
+
+@app.get("/faculties/{faculty_id}/fields", response_model=List[schemas.FieldOfStudyOut])
+def get_fields_by_faculty(faculty_id: int, db: Session = Depends(database.get_db)):
+    """Retrieve approved fields for a faculty."""
+    return db.query(models.FieldOfStudy).filter(
+        models.FieldOfStudy.faculty_id == faculty_id,
+        models.FieldOfStudy.is_approved == True
+    ).all()
+
+
+@app.post("/fields", status_code=status.HTTP_201_CREATED)
+def create_field(
+    field: schemas.FieldOfStudyCreate,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    """Propose a new field of study (requires admin approval)."""
+    # Check if field already exists for this faculty
+    existing = db.query(models.FieldOfStudy).filter(
+        models.FieldOfStudy.name.ilike(field.name),
+        models.FieldOfStudy.faculty_id == field.faculty_id
+    ).first()
+
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Field of study already exists for this faculty."
+        )
+
+    # Get faculty to get university_id for backward compatibility
+    faculty = db.query(models.Faculty).filter(
+        models.Faculty.id == field.faculty_id,
+        models.Faculty.is_approved == True
+    ).first()
+
+    if not faculty:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Faculty not found or not approved."
+        )
+
     new_field = models.FieldOfStudy(
         name=field.name,
         degree_level=field.degree_level,
-        university_id=field.university_id,
-        is_approved=False  # Wymaga akceptacji admina
+        faculty_id=field.faculty_id,
+        university_id=faculty.university_id,  # For backward compatibility
+        is_approved=False,
+        submitted_by_id=current_user.id
     )
     db.add(new_field)
     db.commit()
-
     return {"msg": "Kierunek dodany i oczekuje na weryfikację."}
 
 
+# ===========================
+# ENDPOINTS - SUBJECTS
+# ===========================
+
 @app.get("/fields/{field_id}/subjects", response_model=List[schemas.SubjectOut])
-def get_subjects(
-    field_id: int,
-    db: Session = Depends(database.get_db)
-) -> List[models.Subject]:
-    """
-    Retrieve all approved subjects for a specific field of study.
-
-    Final level of hierarchical drill-down: University → Fields → Subjects
-
-    Args:
-        field_id: Field of study ID
-        db: Database session
-
-    Returns:
-        List of subjects (e.g., Programming Basics, Data Structures)
-    """
+def get_subjects(field_id: int, db: Session = Depends(database.get_db)):
+    """Retrieve approved subjects for a field."""
     return db.query(models.Subject).filter(
         models.Subject.field_of_study_id == field_id,
         models.Subject.is_approved == True
@@ -607,18 +491,8 @@ def create_subject(
     subject: schemas.SubjectCreate,
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(auth.get_current_user)
-) -> dict:
-    """
-    Create a new subject (requires approval).
-
-    Args:
-        subject: Subject creation data
-        db: Database session
-        current_user: Authenticated user
-
-    Returns:
-        Success message
-    """
+):
+    """Propose a new subject (requires admin approval)."""
     # Check if subject already exists for this field
     existing = db.query(models.Subject).filter(
         models.Subject.name.ilike(subject.name),
@@ -647,11 +521,11 @@ def create_subject(
         name=subject.name,
         semester=subject.semester,
         field_of_study_id=subject.field_of_study_id,
-        is_approved=False  # Wymaga akceptacji admina
+        is_approved=False,
+        submitted_by_id=current_user.id
     )
     db.add(new_subject)
     db.commit()
-
     return {"msg": "Przedmiot dodany i oczekuje na weryfikację."}
 
 
@@ -660,41 +534,11 @@ def create_subject(
 # ===========================
 
 @app.post("/register", status_code=status.HTTP_201_CREATED)
-async def register(
-    request: schemas.RegisterRequest,
-    db: Session = Depends(database.get_db)
-) -> dict:
-    """
-    Register a new user account (without CAPTCHA verification).
+async def register(request: schemas.RegisterRequest, db: Session = Depends(database.get_db)):
+    """Register user without CAPTCHA."""
+    if db.query(models.User).filter(models.User.email == request.user.email).first():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Email already exists.")
 
-    Flow:
-    1. Check if email already exists
-    2. Hash password with bcrypt
-    3. Create new user in database
-    4. Auto-generate nickname from email
-
-    Args:
-        request: Registration request containing user data
-        db: Database session
-
-    Returns:
-        Success message
-
-    Raises:
-        HTTPException 400: If email already taken
-    """
-    # Check for duplicate email
-    existing_user = db.query(models.User).filter(
-        models.User.email == request.user.email
-    ).first()
-
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="An account with this email already exists."
-        )
-
-    # Create new user with hashed password
     new_user = models.User(
         email=request.user.email,
         hashed_password=auth.get_password_hash(request.user.password),
@@ -702,106 +546,27 @@ async def register(
         is_active=True,
         is_admin=False,
         is_verified=False,
-        nickname=request.user.email.split('@')[0]  # Default nickname from email
+        nickname=request.user.email.split('@')[0]
     )
-
     db.add(new_user)
     db.commit()
-
-    return {"msg": "Account created successfully. You can now log in."}
+    return {"msg": "Account created successfully."}
 
 
 @app.post("/token", response_model=schemas.Token)
-def login(
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(database.get_db)
-) -> dict:
-    """
-    Authenticate user and issue JWT access token.
-
-    Uses OAuth2 password flow (username/password exchange for token).
-    Note: 'username' field contains email address.
-
-    Flow:
-    1. Look up user by email
-    2. Verify password hash
-    3. Generate JWT with user claims (email, admin status, nickname)
-    4. Return token for Authorization header
-
-    Args:
-        form_data: OAuth2 form containing username (email) and password
-        db: Database session
-
-    Returns:
-        JWT access token and token type
-
-    Raises:
-        HTTPException 400: If credentials are invalid
-        HTTPException 403: If account is inactive
-    """
-    # Find user by email (form_data.username contains email)
-    user = db.query(models.User).filter(
-        models.User.email == form_data.username
-    ).first()
-
-    # Verify user exists and password is correct
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(database.get_db)):
+    """Authenticate and issue JWT."""
+    user = db.query(models.User).filter(models.User.email == form_data.username).first()
     if not user or not auth.verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Incorrect email or password."
-        )
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Incorrect email or password.")
 
-    # Check if account is active
     if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Your account has been deactivated. Contact support."
-        )
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Account inactive.")
 
-    # Generate JWT with user claims
     access_token = auth.create_access_token(
-        data={
-            "sub": user.email,  # Subject: unique user identifier
-            "is_admin": user.is_admin,
-            "nick": user.nickname
-        }
+        data={"sub": user.email, "is_admin": user.is_admin, "nick": user.nickname}
     )
-
-    return {
-        "access_token": access_token,
-        "token_type": "bearer"
-    }
-
-
-# ===========================
-# ENDPOINTS - USER PROFILE
-# ===========================
-
-@app.put("/users/me")
-def update_profile(
-    nickname: str = Body(None, embed=True),
-    current_user: models.User = Depends(auth.get_current_user),
-    db: Session = Depends(database.get_db)
-) -> dict:
-    """
-    Update current user's profile information.
-
-    Currently supports updating nickname only.
-    Can be extended to support other fields (avatar, bio, etc.).
-
-    Args:
-        nickname: New nickname (optional)
-        current_user: Authenticated user from JWT
-        db: Database session
-
-    Returns:
-        Success message
-    """
-    if nickname:
-        current_user.nickname = nickname
-
-    db.commit()
-    return {"msg": "Profile updated successfully."}
+    return {"access_token": access_token, "token_type": "bearer"}
 
 
 # ===========================
@@ -819,40 +584,8 @@ async def create_note(
     image: UploadFile = File(None),
     current_user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(database.get_db)
-) -> dict:
-    """
-    Create a new note with multimedia support (optional title/content).
-
-    Supports:
-    - Text content (optional, but required with image or video)
-    - Image upload (optional, saved to /uploads)
-    - Video URL (optional, embedded link)
-    - Reference link (optional, external resource)
-
-    Flow:
-    1. Accept multipart form data
-    2. Save uploaded image to disk (if provided)
-    3. Create note in database (status: pending approval)
-    4. Auto-verify user on first note submission
-
-    Args:
-        university_id: University ID (required)
-        subject_id: Subject ID (required)
-        title: Note title (optional)
-        content: Note text content (optional, markdown supported)
-        video_url: Optional YouTube/Vimeo URL
-        link_url: Optional external reference link
-        image: Optional image file upload
-        current_user: Authenticated user from JWT
-        db: Database session
-
-    Returns:
-        Success message
-
-    Raises:
-        HTTPException 400: If neither content nor image is provided
-    """
-    # Walidacja: Musi być ALBO treść ALBO zdjęcie
+):
+    """Submit a note (Image OR Content required)."""
     if not content and not image:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -860,17 +593,14 @@ async def create_note(
         )
 
     image_path = None
-
-    # Handle image upload if provided
     if image:
         file_location = os.path.join(Config.UPLOAD_DIR, image.filename)
         with open(file_location, "wb+") as file_object:
             shutil.copyfileobj(image.file, file_object)
         image_path = f"/uploads/{image.filename}"
 
-    # Create note entry (pending approval by default)
     new_note = models.Note(
-        title=title or "Bez tytułu",
+        title=title or "Materiały bez tytułu",
         content=content or "",
         university_id=university_id,
         subject_id=subject_id,
@@ -878,43 +608,23 @@ async def create_note(
         link_url=link_url,
         author_id=current_user.id,
         image_url=image_path,
-        is_approved=False  # Requires admin approval
+        is_approved=False
     )
     db.add(new_note)
 
-    # Auto-verify user on first note submission
     if not current_user.is_verified:
         current_user.is_verified = True
 
     db.commit()
-
-    return {"msg": "Note submitted successfully and is awaiting moderation."}
+    return {"msg": "Materiały wysłane do akceptacji."}
 
 
 @app.get("/notes", response_model=List[schemas.NoteOut])
-def get_notes(
-    university_id: Optional[int] = None,
-    db: Session = Depends(database.get_db)
-) -> List[models.Note]:
-    """
-    Retrieve approved notes with optional university filter.
-
-    Only returns notes that have been approved by admin.
-    Can be filtered by university to show campus-specific content.
-
-    Args:
-        university_id: Optional university ID filter
-        db: Database session
-
-    Returns:
-        List of approved notes, ordered by newest first
-    """
+def get_notes(university_id: Optional[int] = None, db: Session = Depends(database.get_db)):
+    """Get approved notes."""
     query = db.query(models.Note).filter(models.Note.is_approved == True)
-
-    # Filter by university if specified
     if university_id:
         query = query.filter(models.Note.university_id == university_id)
-
     return query.order_by(models.Note.created_at.desc()).all()
 
 
@@ -922,230 +632,76 @@ def get_notes(
 # ENDPOINTS - ADMIN MODERATION
 # ===========================
 
-@app.get("/admin/pending_notes", response_model=List[schemas.NoteOut])
-def get_pending_notes(
-    current_user: models.User = Depends(auth.get_current_active_admin),
-    db: Session = Depends(database.get_db)
-) -> List[models.Note]:
-    """
-    Retrieve all notes pending approval (admin only).
-
-    Args:
-        current_user: Admin user from JWT
-        db: Database session
-
-    Returns:
-        List of unapproved notes
-
-    Raises:
-        HTTPException 403: If user is not admin
-    """
-    return db.query(models.Note).filter(models.Note.is_approved == False).all()
-
-
-@app.get("/admin/pending_items")
+@app.get("/admin/pending_items", response_model=schemas.PendingItemsResponse)
 def get_pending_items(
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(auth.get_current_active_admin)
-) -> dict:
+):
     """
-    Retrieve all items pending approval (admin only).
-
-    Returns:
-        Dictionary with pending notes, universities, fields of study, and subjects
+    Aggregation endpoint for Admin Dashboard.
+    Shows EVERYTHING that needs approval.
     """
-    notes = db.query(models.Note).filter(models.Note.is_approved == False).all()
-    universities = db.query(models.University).filter(models.University.is_approved == False).all()
-    fields = db.query(models.FieldOfStudy).filter(models.FieldOfStudy.is_approved == False).all()
-    subjects = db.query(models.Subject).filter(models.Subject.is_approved == False).all()
-
     return {
-        "notes": notes,
-        "universities": universities,
-        "fields": fields,
-        "subjects": subjects
+        "notes": db.query(models.Note).filter(models.Note.is_approved == False).all(),
+        "universities": db.query(models.University).filter(models.University.is_approved == False).all(),
+        "faculties": db.query(models.Faculty).filter(models.Faculty.is_approved == False).all(),  # NEW
+        "fields": db.query(models.FieldOfStudy).filter(models.FieldOfStudy.is_approved == False).all(),
+        "subjects": db.query(models.Subject).filter(models.Subject.is_approved == False).all()
     }
 
 
-@app.post("/admin/approve/{note_id}")
-def approve_note(
-    note_id: int,
-    current_user: models.User = Depends(auth.get_current_active_admin),
-    db: Session = Depends(database.get_db)
-) -> dict:
-    """
-    Approve a pending note (admin only).
-
-    Args:
-        note_id: Note ID to approve
-        current_user: Admin user from JWT
-        db: Database session
-
-    Returns:
-        Success message
-
-    Raises:
-        HTTPException 403: If user is not admin
-        HTTPException 404: If note not found
-    """
-    note = db.query(models.Note).filter(models.Note.id == note_id).first()
-
-    if not note:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Note not found."
-        )
-
-    note.is_approved = True
+# Approve Endpoints (with faculty support)
+@app.post("/admin/approve/note/{note_id}")
+def approve_note(note_id: int, db: Session = Depends(database.get_db), _: models.User = Depends(auth.get_current_active_admin)):
+    item = db.query(models.Note).filter(models.Note.id == note_id).first()
+    if not item: raise HTTPException(404, "Note not found")
+    item.is_approved = True
     db.commit()
-
     return {"msg": "Note approved successfully."}
 
 
 @app.post("/admin/approve/university/{uni_id}")
-def approve_university(
-    uni_id: int,
-    db: Session = Depends(database.get_db),
-    current_user: models.User = Depends(auth.get_current_active_admin)
-) -> dict:
-    """
-    Approve a pending university (admin only).
-
-    Args:
-        uni_id: University ID to approve
-        db: Database session
-        current_user: Admin user from JWT
-
-    Returns:
-        Success message
-    """
-    university = db.query(models.University).filter(models.University.id == uni_id).first()
-
-    if not university:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="University not found."
-        )
-
-    university.is_approved = True
+def approve_university(uni_id: int, db: Session = Depends(database.get_db), _: models.User = Depends(auth.get_current_active_admin)):
+    item = db.query(models.University).filter(models.University.id == uni_id).first()
+    if not item: raise HTTPException(404, "University not found")
+    item.is_approved = True
     db.commit()
-
     return {"msg": "University approved successfully."}
 
 
-@app.post("/admin/approve/field/{field_id}")
-def approve_field(
-    field_id: int,
-    db: Session = Depends(database.get_db),
-    current_user: models.User = Depends(auth.get_current_active_admin)
-) -> dict:
-    """
-    Approve a pending field of study (admin only).
-
-    Args:
-        field_id: Field of Study ID to approve
-        db: Database session
-        current_user: Admin user from JWT
-
-    Returns:
-        Success message
-    """
-    field = db.query(models.FieldOfStudy).filter(models.FieldOfStudy.id == field_id).first()
-
-    if not field:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Field of study not found."
-        )
-
-    field.is_approved = True
+@app.post("/admin/approve/faculty/{faculty_id}")  # NEW
+def approve_faculty(faculty_id: int, db: Session = Depends(database.get_db), _: models.User = Depends(auth.get_current_active_admin)):
+    item = db.query(models.Faculty).filter(models.Faculty.id == faculty_id).first()
+    if not item: raise HTTPException(404, "Faculty not found")
+    item.is_approved = True
     db.commit()
+    return {"msg": "Faculty approved successfully."}
 
+
+@app.post("/admin/approve/field/{field_id}")
+def approve_field(field_id: int, db: Session = Depends(database.get_db), _: models.User = Depends(auth.get_current_active_admin)):
+    item = db.query(models.FieldOfStudy).filter(models.FieldOfStudy.id == field_id).first()
+    if not item: raise HTTPException(404, "Field not found")
+    item.is_approved = True
+    db.commit()
     return {"msg": "Field of study approved successfully."}
 
 
 @app.post("/admin/approve/subject/{subject_id}")
-def approve_subject(
-    subject_id: int,
-    db: Session = Depends(database.get_db),
-    current_user: models.User = Depends(auth.get_current_active_admin)
-) -> dict:
-    """
-    Approve a pending subject (admin only).
-
-    Args:
-        subject_id: Subject ID to approve
-        db: Database session
-        current_user: Admin user from JWT
-
-    Returns:
-        Success message
-    """
-    subject = db.query(models.Subject).filter(models.Subject.id == subject_id).first()
-
-    if not subject:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Subject not found."
-        )
-
-    subject.is_approved = True
+def approve_subject(subject_id: int, db: Session = Depends(database.get_db), _: models.User = Depends(auth.get_current_active_admin)):
+    item = db.query(models.Subject).filter(models.Subject.id == subject_id).first()
+    if not item: raise HTTPException(404, "Subject not found")
+    item.is_approved = True
     db.commit()
-
     return {"msg": "Subject approved successfully."}
 
 
 # ===========================
-# ENDPOINTS - AI CHAT
-# ===========================
-
-@app.post("/chat")
-async def chat_with_ai(
-    request: schemas.ChatRequest,
-    current_user: models.User = Depends(auth.get_current_user)
-) -> dict:
-    """
-    Context-aware AI chat for study assistance.
-
-    The AI receives both the user's question and the content of the note
-    they're currently viewing, enabling precise, contextual answers.
-
-    Args:
-        request: Chat request containing message and optional note content
-        current_user: Authenticated user from JWT
-
-    Returns:
-        AI-generated response
-
-    Raises:
-        HTTPException 500: If AI service fails
-    """
-    response_text = await AIService.generate_response(
-        message=request.message,
-        context=request.note_content
-    )
-
-    return {"response": response_text}
-
-
-# ===========================
-# ENDPOINTS - GAMIFICATION
+# OTHER ENDPOINTS
 # ===========================
 
 @app.get("/leaderboard")
-def get_leaderboard(db: Session = Depends(database.get_db)) -> List[dict]:
-    """
-    Retrieve top contributors leaderboard.
-
-    Ranks users by number of approved notes (contributions).
-    Encourages participation through gamification.
-
-    Args:
-        db: Database session
-
-    Returns:
-        Top 5 contributors with their stats
-    """
+def get_leaderboard(db: Session = Depends(database.get_db)):
     results = (
         db.query(models.User, func.count(models.Note.id).label("count"))
         .join(models.Note)
@@ -1155,46 +711,28 @@ def get_leaderboard(db: Session = Depends(database.get_db)) -> List[dict]:
         .limit(Config.LEADERBOARD_LIMIT)
         .all()
     )
+    return [{"name": u.nickname or u.email, "count": c, "is_verified": u.is_verified} for u, c in results]
 
-    return [
-        {
-            "name": user.nickname or user.email,
-            "count": count,
-            "is_verified": user.is_verified
-        }
-        for user, count in results
-    ]
-
-
-# ===========================
-# HEALTH CHECK
-# ===========================
 
 @app.get("/health")
-def health_check(db: Session = Depends(database.get_db)) -> dict:
-    """
-    System health and status endpoint.
-
-    Provides:
-    - Application version
-    - Database connectivity and record counts
-    - AI service availability
-
-    Used for monitoring and debugging.
-
-    Args:
-        db: Database session
-
-    Returns:
-        Health status information
-    """
+def health_check(db: Session = Depends(database.get_db)):
     return {
         "status": "healthy",
-        "version": "3.2.0",
+        "version": "4.0.0",
         "database": {
             "universities": db.query(models.University).count(),
+            "faculties": db.query(models.Faculty).count(),  # NEW
             "users": db.query(models.User).count(),
-            "notes": db.query(models.Note).count()
+            "notes": db.query(models.Note).count(),
+            "fields": db.query(models.FieldOfStudy).count(),
+            "subjects": db.query(models.Subject).count()
         },
-        "ai_available": client_ai is not None
+        "pending_reviews": {
+            "notes": db.query(models.Note).filter(models.Note.is_approved == False).count(),
+            "universities": db.query(models.University).filter(models.University.is_approved == False).count(),
+            "faculties": db.query(models.Faculty).filter(models.Faculty.is_approved == False).count(),  # NEW
+            "fields": db.query(models.FieldOfStudy).filter(models.FieldOfStudy.is_approved == False).count(),
+            "subjects": db.query(models.Subject).filter(models.Subject.is_approved == False).count()
+        },
+        "ai_available": False  # AI removed in hotfix
     }

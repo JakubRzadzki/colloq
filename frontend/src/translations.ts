@@ -1,115 +1,220 @@
 export const translations = {
   en: {
-    // Nav & Auth
+    // Navigation
     login: "Login",
     register: "Register",
     logout: "Logout",
-    adminPanel: "Admin Panel",
+    admin: "Admin",
     home: "Home",
 
-    // Home Page
-    filters: "All Universities",
+    // Homepage
+    heroTitle: "Colloq",
+    heroSubtitle: "Knowledge sharing platform for students. Find materials, share notes, grow together.",
+    searchPlaceholder: "Search universities, cities or regions...",
+    browseByRegion: "Browse by Region",
+    searchResults: "Search Results",
+
+    // Statistics
+    regions: "Regions",
+    universities: "Universities",
+    activeUsers: "Active users",
+    materials: "materials",
+
+    // University Page
+    backToRegion: "Back to region",
+    uploadMaterials: "Share Materials",
+    noMaterials: "No materials yet",
+    beFirst: "Be the first to add a note!",
+
+    // Add Note
     addNote: "Add Note",
-    uploadTitle: "Share Materials",
-    titlePlaceholder: "Title (e.g. Calculus Formulas)",
-    descPlaceholder: "Description (Markdown supported)...",
-    submitBtn: "Submit for Approval",
-    latestMaterials: "Latest Materials",
-    noNotes: "No notes yet. Be the first!",
-    author: "Author",
-    score: "Score",
+    selectField: "Select field",
+    selectSubject: "Select subject",
+    title: "Title",
+    titleOptional: "Title (optional)",
+    content: "Content",
+    contentOptional: "Description (optional)",
+    multimedia: "Multimedia",
+    linkUrl: "Link",
+    videoUrl: "Video URL",
+    imageFile: "Image/Scan File",
+    submit: "Submit",
+    cancel: "Cancel",
 
-    // Home Page - Map & Statistics (SPŁASZCZONE)
-    homeTitle: "Colloq PRO - Student Notes System",
-    homeSubtitle: "Discover universities, share knowledge, grow together",
-    homeSearchPlaceholder: "Search for universities, cities or regions...",
-    homeMapTitle: "Poland Map with Universities",
-    homeUniversitiesList: "Universities List",
-    homeUniversities: "universities",
-    homeNoResults: "No universities found matching criteria",
-    homeLegend: "Regions Legend",
-    homeTotalRegions: "Regions",
-    homeTotalUniversities: "Universities",
-    homeMostUniversities: "Most Universities",
-    homePublicUniversities: "Public Universities",
+    // Add Hierarchy
+    addUniversity: "Add University",
+    dontSeeUniversity: "Don't see your university?",
+    addItNow: "Add it now",
+    universityName: "University name",
+    city: "City",
+    region: "Region / Province",
+    universityImage: "University photo (building/logo)",
 
-    // Sidebar
-    topPosters: "Top Posters",
+    addField: "Add Field",
+    addNewField: "Add new field of study",
+    fieldName: "Field name",
+    degreeLevel: "Degree level",
 
-    // Auth Pages
-    emailPlaceholder: "Email Address",
+    addSubject: "Add Subject",
+    addNewSubject: "Add new subject",
+    subjectName: "Subject name",
+    semester: "Semester",
+
+    submittedForReview: "Submitted for admin review",
+    willBeAvailableAfterApproval: "Will be available after approval",
+
+    // Auth
+    emailPlaceholder: "Email address",
     passPlaceholder: "Password",
-    loginBtn: "Sign In",
-    registerBtn: "Sign Up",
-    successReg: "Account created! You can now login.",
+    loginBtn: "Sign in",
+    registerBtn: "Sign up",
+    alreadyHaveAccount: "Already have an account?",
+    dontHaveAccount: "Don't have an account?",
+    minChars: "Minimum 6 characters",
+
+    // Messages
+    successReg: "Account created! You can now log in.",
     errorReg: "Registration failed.",
     errorLogin: "Invalid credentials.",
+    noteSubmitted: "Note submitted for approval!",
+    universitySubmitted: "University submitted for approval!",
+    fieldSubmitted: "Field submitted for approval!",
+    subjectSubmitted: "Subject submitted for approval!",
 
-    // Admin
-    adminTitle: "Moderation Panel",
-    noPending: "No pending notes to review.",
-    approveBtn: "Approve",
-    viewImage: "View Image",
+    // Admin Panel
+    adminPanel: "Admin Panel",
+    pendingNotes: "Pending Notes",
+    pendingUniversities: "Pending Universities",
+    pendingFields: "Pending Fields",
+    pendingSubjects: "Pending Subjects",
+    approve: "Approve",
+    reject: "Reject",
+    noPending: "No pending items",
+    viewImage: "View image",
+    submittedBy: "Submitted by",
 
-    // Alerts
-    noteAdded: "Note submitted! Waiting for admin approval.",
-    uploadError: "Error! Please login first.",
+    // Leaderboard
+    topContributors: "Top Contributors",
+    verified: "Verified",
+    notes: "notes",
+
+    // Misc
+    score: "Score",
+    author: "Author",
+    image: "Image",
+    video: "Video",
+    link: "Link",
+    openVideo: "Open video",
+    openLink: "Open link"
   },
+
   pl: {
-    // Nav & Auth
+    // Nawigacja
     login: "Logowanie",
     register: "Rejestracja",
     logout: "Wyloguj",
-    adminPanel: "Panel Admina",
-    home: "Strona Główna",
+    admin: "Admin",
+    home: "Strona główna",
 
-    // Home Page
-    filters: "Wszystkie Uczelnie",
-    addNote: "Dodaj Notatkę",
-    uploadTitle: "Udostępnij Materiały",
-    titlePlaceholder: "Tytuł (np. Wzory na Całki)",
-    descPlaceholder: "Opis (Markdown wspierany)...",
-    submitBtn: "Wyślij do akceptacji",
-    latestMaterials: "Ostatnie Materiały",
-    noNotes: "Brak notatek. Bądź pierwszy!",
-    author: "Autor",
-    score: "Ocena",
+    // Strona główna
+    heroTitle: "Colloq",
+    heroSubtitle: "Platforma współdzielenia wiedzy dla studentów. Znajdź materiały, dziel się notatkami, rozwijaj się razem.",
+    searchPlaceholder: "Szukaj uczelni, miast lub województw...",
+    browseByRegion: "Przeglądaj według województw",
+    searchResults: "Wyniki wyszukiwania",
 
-    // Home Page - Map & Statistics (SPŁASZCZONE)
-    homeTitle: "Colloq PRO - System Notatek Studenckich",
-    homeSubtitle: "Odkryj uczelnie, dziel się wiedzą, rozwijaj się",
-    homeSearchPlaceholder: "Szukaj uczelni, miast lub regionów...",
-    homeMapTitle: "Mapa Polski z uczelniami",
-    homeUniversitiesList: "Lista uczelni",
-    homeUniversities: "uczelni",
-    homeNoResults: "Nie znaleziono uczelni spełniających kryteria",
-    homeLegend: "Legenda regionów",
-    homeTotalRegions: "Regionów",
-    homeTotalUniversities: "Uczelni",
-    homeMostUniversities: "Najwięcej uczelni",
-    homePublicUniversities: "Uczelnie publiczne",
+    // Statystyki
+    regions: "Województwa",
+    universities: "Uczelnie",
+    activeUsers: "Aktywni użytkownicy",
+    materials: "materiałów",
 
-    // Sidebar
-    topPosters: "Najlepsi Autorzy",
+    // Strona uczelni
+    backToRegion: "Wróć do regionu",
+    uploadMaterials: "Udostępnij materiały",
+    noMaterials: "Brak materiałów",
+    beFirst: "Bądź pierwszy i dodaj notatkę!",
 
-    // Auth Pages
-    emailPlaceholder: "Adres Email",
+    // Dodawanie notatki
+    addNote: "Dodaj notatkę",
+    selectField: "Wybierz kierunek",
+    selectSubject: "Wybierz przedmiot",
+    title: "Tytuł",
+    titleOptional: "Tytuł (opcjonalnie)",
+    content: "Treść",
+    contentOptional: "Opis (opcjonalnie)",
+    multimedia: "Multimedia",
+    linkUrl: "Link",
+    videoUrl: "URL wideo",
+    imageFile: "Plik zdjęcia/skanu",
+    submit: "Wyślij",
+    cancel: "Anuluj",
+
+    // Dodawanie hierarchii
+    addUniversity: "Dodaj uczelnię",
+    dontSeeUniversity: "Nie widzisz swojej uczelni?",
+    addItNow: "Dodaj ją teraz",
+    universityName: "Nazwa uczelni",
+    city: "Miasto",
+    region: "Województwo",
+    universityImage: "Zdjęcie uczelni (budynek/logo)",
+
+    addField: "Dodaj kierunek",
+    addNewField: "Dodaj nowy kierunek studiów",
+    fieldName: "Nazwa kierunku",
+    degreeLevel: "Stopień studiów",
+
+    addSubject: "Dodaj przedmiot",
+    addNewSubject: "Dodaj nowy przedmiot",
+    subjectName: "Nazwa przedmiotu",
+    semester: "Semestr",
+
+    submittedForReview: "Wysłano do weryfikacji admina",
+    willBeAvailableAfterApproval: "Będzie dostępne po zatwierdzeniu",
+
+    // Autoryzacja
+    emailPlaceholder: "Adres email",
     passPlaceholder: "Hasło",
     loginBtn: "Zaloguj się",
     registerBtn: "Zarejestruj się",
-    successReg: "Konto założone! Możesz się zalogować.",
+    alreadyHaveAccount: "Masz już konto?",
+    dontHaveAccount: "Nie masz konta?",
+    minChars: "Minimum 6 znaków",
+
+    // Komunikaty
+    successReg: "Konto utworzone! Możesz się zalogować.",
     errorReg: "Błąd rejestracji.",
-    errorLogin: "Błędne dane.",
+    errorLogin: "Nieprawidłowe dane logowania.",
+    noteSubmitted: "Notatka wysłana do weryfikacji!",
+    universitySubmitted: "Uczelnia wysłana do weryfikacji!",
+    fieldSubmitted: "Kierunek wysłany do weryfikacji!",
+    subjectSubmitted: "Przedmiot wysłany do weryfikacji!",
 
-    // Admin
-    adminTitle: "Panel Moderatora",
-    noPending: "Brak notatek do sprawdzenia.",
-    approveBtn: "Zatwierdź",
+    // Panel admina
+    adminPanel: "Panel administratora",
+    pendingNotes: "Notatki do zatwierdzenia",
+    pendingUniversities: "Uczelnie do zatwierdzenia",
+    pendingFields: "Kierunki do zatwierdzenia",
+    pendingSubjects: "Przedmioty do zatwierdzenia",
+    approve: "Zatwierdź",
+    reject: "Odrzuć",
+    noPending: "Brak elementów do zatwierdzenia",
     viewImage: "Zobacz zdjęcie",
+    submittedBy: "Dodane przez",
 
-    // Alerts.
-    noteAdded: "Notatka dodana! Czeka na weryfikację admina.",
-    uploadError: "Błąd! Zaloguj się najpierw.",
+    // Ranking
+    topContributors: "Najbardziej aktywni",
+    verified: "Zweryfikowany",
+    notes: "notatek",
+
+    // Różne
+    score: "Ocena",
+    author: "Autor",
+    image: "Obraz",
+    video: "Wideo",
+    link: "Link",
+    openVideo: "Otwórz wideo",
+    openLink: "Otwórz link"
   }
 };
 

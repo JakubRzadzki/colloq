@@ -52,7 +52,7 @@ export function UniversityPage({ token, t, lang }: { token: string | null; t: an
             className="btn btn-ghost btn-sm gap-2 mb-4 self-start"
           >
             <ArrowLeft size={16} />
-            {lang === 'pl' ? 'Wróć do regionu' : 'Back to region'}
+            {t.backToRegion || 'Wróć do regionu'}
           </Link>
 
           <div className="flex flex-col md:flex-row gap-6 items-start md:items-center">
@@ -75,7 +75,7 @@ export function UniversityPage({ token, t, lang }: { token: string | null; t: an
                   {currentUni.region}
                 </div>
                 <div className="badge badge-lg badge-outline">
-                  {notes?.length || 0} {lang === 'pl' ? 'materiałów' : 'materials'}
+                  {notes?.length || 0} {t.materials || 'materiałów'}
                 </div>
               </div>
             </div>
@@ -86,7 +86,7 @@ export function UniversityPage({ token, t, lang }: { token: string | null; t: an
                 className="btn btn-primary gap-2 shadow-lg hover:shadow-xl transition-all"
               >
                 <Upload size={18} />
-                {t.uploadTitle}
+                {t.uploadMaterials || 'Dodaj materiały'}
               </button>
             )}
           </div>
@@ -99,6 +99,8 @@ export function UniversityPage({ token, t, lang }: { token: string | null; t: an
           universityId={Number(uniId)}
           isOpen={isModalOpen}
           onClose={() => setModalOpen(false)}
+          t={t}
+          lang={lang}
         />
       )}
 
@@ -111,10 +113,10 @@ export function UniversityPage({ token, t, lang }: { token: string | null; t: an
         <div className="text-center py-20 bg-base-100 rounded-3xl border-2 border-dashed border-base-300">
           <Upload size={64} className="mx-auto mb-6 opacity-20" />
           <h3 className="text-2xl font-bold mb-2 opacity-50">
-            {lang === 'pl' ? 'Brak materiałów' : 'No materials yet'}
+            {t.noMaterials || 'Brak materiałów'}
           </h3>
           <p className="opacity-50">
-            {lang === 'pl' ? 'Bądź pierwszy i dodaj notatkę!' : 'Be the first to add a note!'}
+            {t.beFirst || 'Bądź pierwszy i dodaj notatkę!'}
           </p>
         </div>
       ) : (
@@ -146,7 +148,9 @@ export function UniversityPage({ token, t, lang }: { token: string | null; t: an
                 </div>
 
                 {/* Content Preview */}
-                <p className="text-sm opacity-80 line-clamp-3">{note.content}</p>
+                {note.content && (
+                  <p className="text-sm opacity-80 line-clamp-3">{note.content}</p>
+                )}
 
                 {/* Image Preview */}
                 {note.image_url && (
@@ -159,7 +163,7 @@ export function UniversityPage({ token, t, lang }: { token: string | null; t: an
                     <div className="absolute top-2 right-2">
                       <div className="badge badge-neutral gap-1">
                         <ImageIcon size={12} />
-                        {lang === 'pl' ? 'Obraz' : 'Image'}
+                        {t.image || 'Obraz'}
                       </div>
                     </div>
                   </div>
@@ -177,7 +181,7 @@ export function UniversityPage({ token, t, lang }: { token: string | null; t: an
                         className="btn btn-sm btn-error btn-outline gap-1"
                       >
                         <Video size={14} />
-                        {lang === 'pl' ? 'Wideo' : 'Video'}
+                        {t.video || 'Wideo'}
                       </a>
                     )}
                     {note.link_url && (
@@ -189,7 +193,7 @@ export function UniversityPage({ token, t, lang }: { token: string | null; t: an
                         className="btn btn-sm btn-info btn-outline gap-1"
                       >
                         <LinkIcon size={14} />
-                        Link
+                        {t.link || 'Link'}
                       </a>
                     )}
                   </div>
@@ -247,9 +251,11 @@ export function UniversityPage({ token, t, lang }: { token: string | null; t: an
               </div>
             )}
 
-            <div className="prose max-w-none mb-6">
-              <p className="whitespace-pre-wrap">{selectedNote.content}</p>
-            </div>
+            {selectedNote.content && (
+              <div className="prose max-w-none mb-6">
+                <p className="whitespace-pre-wrap">{selectedNote.content}</p>
+              </div>
+            )}
 
             {selectedNote.image_url && (
               <img
@@ -268,7 +274,7 @@ export function UniversityPage({ token, t, lang }: { token: string | null; t: an
                   className="btn btn-error btn-outline gap-2"
                 >
                   <Video size={16} />
-                  {lang === 'pl' ? 'Otwórz wideo' : 'Open video'}
+                  {t.openVideo || 'Otwórz wideo'}
                 </a>
               )}
               {selectedNote.link_url && (
@@ -279,7 +285,7 @@ export function UniversityPage({ token, t, lang }: { token: string | null; t: an
                   className="btn btn-info btn-outline gap-2"
                 >
                   <LinkIcon size={16} />
-                  {lang === 'pl' ? 'Otwórz link' : 'Open link'}
+                  {t.openLink || 'Otwórz link'}
                 </a>
               )}
             </div>

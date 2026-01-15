@@ -40,7 +40,6 @@ export function RegisterPage({ t, lang }: { t: any; lang: string }) {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-
     setLoading(true);
 
     try {
@@ -72,9 +71,7 @@ export function RegisterPage({ t, lang }: { t: any; lang: string }) {
             <div className="inline-block mx-auto p-4 bg-success/10 rounded-full">
               <CheckCircle size={64} className="text-success" />
             </div>
-            <h2 className="text-2xl font-bold">
-              {lang === 'pl' ? 'Konto utworzone!' : 'Account created!'}
-            </h2>
+            <h2 className="text-2xl font-bold">{t.successReg}</h2>
             <p className="opacity-70">
               {lang === 'pl'
                 ? 'Za chwilę zostaniesz przekierowany do logowania...'
@@ -145,9 +142,7 @@ export function RegisterPage({ t, lang }: { t: any; lang: string }) {
                     minLength={6}
                   />
                   <label className="label">
-                    <span className="label-text-alt opacity-70">
-                      {lang === 'pl' ? 'Minimum 6 znaków' : 'Minimum 6 characters'}
-                    </span>
+                    <span className="label-text-alt opacity-70">{t.minChars}</span>
                   </label>
                 </div>
 
@@ -171,9 +166,7 @@ export function RegisterPage({ t, lang }: { t: any; lang: string }) {
                       {lang === 'pl' ? '-- Wybierz województwo --' : '-- Select region --'}
                     </option>
                     {regions.map((r: any) => (
-                      <option key={r} value={r}>
-                        {r}
-                      </option>
+                      <option key={r} value={r}>{r}</option>
                     ))}
                   </select>
                 </div>
@@ -232,7 +225,7 @@ export function RegisterPage({ t, lang }: { t: any; lang: string }) {
 
             <div className="text-center pt-4 border-t border-base-300">
               <p className="text-sm opacity-70">
-                {lang === 'pl' ? 'Masz już konto?' : 'Already have an account?'}{' '}
+                {t.alreadyHaveAccount}{' '}
                 <Link to="/login" className="link link-primary font-semibold">
                   {t.login}
                 </Link>
