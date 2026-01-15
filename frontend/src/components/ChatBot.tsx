@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
-import { MessageCircle, X, Send, Bot, User, Loader2 } from 'lucide-react';
+import { MessageCircle, X, Send, Bot, User, Loader2, Trash2 } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
 import { API_URL, getAuthHeader } from '../utils/api';
 
@@ -8,6 +8,7 @@ interface Message {
   role: 'user' | 'bot';
   text: string;
   id: string;
+  timestamp: Date;
 }
 
 export function ChatBot({ currentNoteContent }: { currentNoteContent?: string }) {
@@ -16,14 +17,15 @@ export function ChatBot({ currentNoteContent }: { currentNoteContent?: string })
     {
       role: 'bot',
       text: 'Cześć! Jestem Twoim asystentem AI. W czym mogę pomóc?',
-      id: '1'
+      id: '1',
+      timestamp: new Date()
     }
   ]);
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-scroll to bottom when messages change
+  // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -31,45 +33,85 @@ export function ChatBot({ currentNoteContent }: { currentNoteContent?: string })
   // Focus input when chat opens
   useEffect(() => {
     if (isOpen && inputRef.current) {
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 100);
+      setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [isOpen]);
 
+  // Load chat history from localStorage
+  useEffect(() => {
+    const savedChat = localStorage.getItem('chat_history');
+    if (savedChat) {
+      try {
+        const parsed = JSON.parse(savedChat);
+        const messagesWithDates = parsed.map((msg: any) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp)
+        }));
+        setMessages(messagesWithDates);
+      } catch (error) {
+        console.error('Failed to load chat history:', error);
+      }
+    }
+  }, []);
+
+  // Save chat history to localStorage
+  useEffect(() => {
+    if (messages.length > 1) {
+      localStorage.setItem('chat_history', JSON.stringify(messages));
+    }
+  }, [messages]);
+
   const mutation = useMutation({
     mutationFn: async (msg: string) => {
-      const res = await axios.post(
+      const response = await axios.post(
         `${API_URL}/chat`,
         {
           message: msg,
           note_content: currentNoteContent || '',
-          conversation_history: messages.slice(-10).map(m => ({
+          conversation_history: messages.slice(-5).map(m => ({
             role: m.role,
             content: m.text
           }))
         },
-        { headers: getAuthHeader() }
+        {
+          headers: getAuthHeader(),
+          timeout: 30000 // 30 seconds timeout
+        }
       );
-      return res.data;
+      return response.data;
     },
     onSuccess: (response) => {
       setMessages(prev => [...prev, {
         role: 'bot',
-        text: response.response || response.message,
-        id: Date.now().toString()
+        text: response.response || response.message || response.data,
+        id: Date.now().toString(),
+        timestamp: new Date()
       }]);
     },
     onError: (err: any) => {
-      const errMsg = err.response?.data?.detail ||
-                    err.response?.data?.error ||
-                    err.message ||
-                    'Błąd połączenia z AI. Sprawdź klucz API w ustawieniach.';
+      let errorMessage = 'Błąd połączenia z AI. Spróbuj ponownie.';
+
+      if (axios.isAxiosError(err)) {
+        if (err.response?.status === 401) {
+          errorMessage = 'Nie jesteś zalogowany. Zaloguj się aby używać AI.';
+        } else if (err.response?.status === 403) {
+          errorMessage = 'Brak dostępu. Sprawdź swoje uprawnienia.';
+        } else if (err.response?.status === 429) {
+          errorMessage = 'Zbyt wiele żądań. Poczekaj chwilę.';
+        } else if (err.response?.data?.detail) {
+          errorMessage = err.response.data.detail;
+        } else if (err.response?.data?.error) {
+          errorMessage = err.response.data.error;
+        } else if (err.code === 'ECONNABORTED') {
+          errorMessage = 'Przekroczono czas oczekiwania. Spróbuj ponownie.';
+        }
+      }
 
       setMessages(prev => [...prev, {
         role: 'bot',
-        text: `❌ ${errMsg}`,
-        id: Date.now().toString()
+        text: `❌ ${errorMessage}`,
+        id: Date.now().toString(),
+        timestamp: new Date()
       }]);
     }
   });
@@ -81,7 +123,8 @@ export function ChatBot({ currentNoteContent }: { currentNoteContent?: string })
     const userMessage: Message = {
       role: 'user',
       text: input,
-      id: Date.now().toString()
+      id: Date.now().toString(),
+      timestamp: new Date()
     };
     setMessages(prev => [...prev, userMessage]);
     mutation.mutate(input);
@@ -100,9 +143,18 @@ export function ChatBot({ currentNoteContent }: { currentNoteContent?: string })
       {
         role: 'bot',
         text: 'Cześć! Jestem Twoim asystentem AI. W czym mogę pomóc?',
-        id: '1'
+        id: '1',
+        timestamp: new Date()
       }
     ]);
+    localStorage.removeItem('chat_history');
+  };
+
+  const formatTime = (date: Date) => {
+    return date.toLocaleTimeString('pl-PL', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   return (
@@ -125,14 +177,15 @@ export function ChatBot({ currentNoteContent }: { currentNoteContent?: string })
             <div className="flex items-center gap-2">
               <button
                 onClick={clearChat}
-                className="btn btn-xs btn-ghost text-primary-content hover:text-white"
+                className="btn btn-xs btn-ghost text-primary-content hover:text-white transition-colors"
                 title="Wyczyść czat"
+                disabled={messages.length <= 1}
               >
-                Wyczyść
+                <Trash2 size={16} />
               </button>
               <button
                 onClick={() => setIsOpen(false)}
-                className="btn btn-xs btn-circle btn-ghost text-primary-content hover:bg-primary-content/20"
+                className="btn btn-xs btn-circle btn-ghost text-primary-content hover:bg-primary-content/20 transition-colors"
                 aria-label="Zamknij czat"
               >
                 <X size={18} />
@@ -143,23 +196,25 @@ export function ChatBot({ currentNoteContent }: { currentNoteContent?: string })
           {/* Messages Container */}
           <div className="flex-1 overflow-y-auto p-4 bg-base-200">
             <div className="space-y-4">
-              {messages.map((m) => (
+              {messages.map((msg) => (
                 <div
-                  key={m.id}
-                  className={`chat ${m.role === 'user' ? 'chat-end' : 'chat-start'}`}
+                  key={msg.id}
+                  className={`chat ${msg.role === 'user' ? 'chat-end' : 'chat-start'}`}
                 >
                   <div className="chat-image avatar">
-                    <div className={`w-8 rounded-full ${m.role === 'user' ? 'bg-primary' : 'bg-secondary'}`}>
+                    <div className={`w-8 rounded-full ${msg.role === 'user' ? 'bg-primary' : 'bg-secondary'}`}>
                       <div className="w-full h-full flex items-center justify-center text-white">
-                        {m.role === 'user' ? <User size={16} /> : <Bot size={16} />}
+                        {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
                       </div>
                     </div>
                   </div>
-                  <div className={`chat-bubble ${m.role === 'user' ? 'chat-bubble-primary' : 'chat-bubble-secondary'} whitespace-pre-wrap max-w-xs lg:max-w-sm`}>
-                    {m.text}
-                  </div>
-                  <div className="chat-footer text-xs opacity-50 mt-1">
-                    {m.role === 'user' ? 'Ty' : 'Colloq AI'}
+                  <div className="flex flex-col">
+                    <div className={`chat-bubble ${msg.role === 'user' ? 'chat-bubble-primary' : 'chat-bubble-secondary'} whitespace-pre-wrap max-w-xs break-words`}>
+                      {msg.text}
+                    </div>
+                    <div className="chat-footer text-xs opacity-50 mt-1">
+                      {formatTime(msg.timestamp)}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -175,7 +230,7 @@ export function ChatBot({ currentNoteContent }: { currentNoteContent?: string })
                   <div className="chat-bubble chat-bubble-secondary">
                     <div className="flex items-center gap-2">
                       <Loader2 size={16} className="animate-spin" />
-                      <span>Pisanie...</span>
+                      <span className="text-sm">Pisanie odpowiedzi...</span>
                     </div>
                   </div>
                 </div>
@@ -187,15 +242,15 @@ export function ChatBot({ currentNoteContent }: { currentNoteContent?: string })
           {/* Input Form */}
           <form onSubmit={handleSend} className="p-3 bg-base-100 border-t border-base-300">
             <div className="join w-full">
-              <input
-                ref={inputRef}
-                className="input input-bordered join-item flex-1 input-sm"
+              <textarea
+                ref={inputRef as any}
+                className="textarea textarea-bordered join-item flex-1 textarea-sm resize-none min-h-[40px] max-h-24"
                 value={input}
-                onChange={e => setInput(e.target.value)}
+                onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Zadaj pytanie..."
                 disabled={mutation.isPending}
-                maxLength={500}
+                rows={1}
               />
               <button
                 type="submit"
@@ -210,9 +265,13 @@ export function ChatBot({ currentNoteContent }: { currentNoteContent?: string })
                 )}
               </button>
             </div>
-            <div className="text-xs text-gray-500 mt-2 flex justify-between">
-              <span>Enter = wyślij • Shift+Enter = nowa linia</span>
-              <span>{input.length}/500</span>
+            <div className="flex justify-between items-center mt-2">
+              <span className="text-xs text-gray-500">
+                Enter = wyślij • Shift+Enter = nowa linia
+              </span>
+              <span className={`text-xs ${input.length > 400 ? 'text-warning' : 'text-gray-500'}`}>
+                {input.length}/500
+              </span>
             </div>
           </form>
         </div>
@@ -221,7 +280,7 @@ export function ChatBot({ currentNoteContent }: { currentNoteContent?: string })
       {/* Toggle Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="btn btn-circle btn-primary btn-lg shadow-2xl hover:scale-110 transition-transform relative group"
+        className="btn btn-circle btn-primary btn-lg shadow-2xl hover:scale-110 transition-transform duration-200 relative group"
         aria-label={isOpen ? "Zamknij czat" : "Otwórz czat"}
       >
         {isOpen ? <X size={28} /> : <MessageCircle size={28} />}
@@ -234,8 +293,8 @@ export function ChatBot({ currentNoteContent }: { currentNoteContent?: string })
         )}
 
         {/* Tooltip */}
-        <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block">
-          <div className="bg-gray-900 text-white text-xs rounded py-1 px-2 whitespace-nowrap">
+        <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block animate-in fade-in duration-200">
+          <div className="bg-gray-900 text-white text-xs rounded py-1 px-2 whitespace-nowrap shadow-lg">
             {isOpen ? 'Zamknij czat' : 'Otwórz czat AI'}
           </div>
         </div>

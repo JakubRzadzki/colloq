@@ -2,107 +2,170 @@ from pydantic import BaseModel, EmailStr
 from datetime import datetime
 from typing import Optional, List
 
+
 # ===========================
-# USER SCHEMAS
+# USER & AUTH SCHEMAS
 # ===========================
 
 class UserCreate(BaseModel):
-    email: EmailStr
-    password: str
-    university_id: int
+	"""Schema for user creation data"""
+	email: EmailStr
+	password: str
+	university_id: int
+
+
+class RegisterRequest(BaseModel):
+	"""
+	Wrapper schema for registration request.
+	Fixes the '422 Unprocessable Entity' error by correctly mapping the JSON body.
+	"""
+	user: UserCreate
+	captcha_token: str
+
 
 class UserOut(BaseModel):
-    id: int
-    email: str
-    nickname: Optional[str] = None
-    is_admin: bool
-    is_verified: bool
-    university_id: int
+	"""Public user profile schema"""
+	id: int
+	email: str
+	nickname: Optional[str] = None
+	is_admin: bool
+	is_verified: bool
+	university_id: int
 
-    class Config:
-        from_attributes = True
+	class Config:
+		from_attributes = True
 
-# === NOWE: Schemat do rejestracji (naprawia błąd Captcha) ===
-class RegisterRequest(BaseModel):
-    user: UserCreate
+
+class Token(BaseModel):
+	"""JWT Token schema"""
+	access_token: str
+	token_type: str
+
+
+class TokenData(BaseModel):
+	"""Data embedded in JWT token"""
+	email: Optional[str] = None
+	is_admin: bool = False
+	nickname: Optional[str] = None
+
 
 # ===========================
-# HIERARCHY SCHEMAS (NOWE)
+# HIERARCHY SCHEMAS
 # ===========================
 
-class SubjectBase(BaseModel):
-    name: str
-    semester: Optional[int] = None
+class SubjectOut(BaseModel):
+	"""Subject schema for responses"""
+	id: int
+	name: str
+	semester: Optional[int] = None
+	field_of_study_id: int
 
-class SubjectOut(SubjectBase):
-    id: int
-    field_of_study_id: int
-    class Config:
-        from_attributes = True
+	class Config:
+		from_attributes = True
+
 
 class FieldOfStudyOut(BaseModel):
-    id: int
-    name: str
-    degree_level: Optional[str] = None
-    university_id: int
-    class Config:
-        from_attributes = True
+	"""Field of Study schema for responses"""
+	id: int
+	name: str
+	degree_level: Optional[str] = None
+	university_id: int
+
+	class Config:
+		from_attributes = True
+
+
+class UniversityOut(BaseModel):
+	"""University schema for responses"""
+	id: int
+	name: str
+	name_en: Optional[str] = None
+	name_pl: Optional[str] = None
+	city: Optional[str] = None
+	region: Optional[str] = None
+	type: Optional[str] = None
+	image_url: Optional[str] = None
+
+	class Config:
+		from_attributes = True
+
 
 # ===========================
-# NOTE SCHEMAS (ZAKTUALIZOWANE)
+# AI & FLASHCARDS SCHEMAS
+# ===========================
+
+class FlashcardBase(BaseModel):
+	"""Base schema for flashcard data"""
+	question: str
+	answer: str
+
+
+class FlashcardOut(FlashcardBase):
+	"""Flashcard schema with ID"""
+	id: int
+
+	class Config:
+		from_attributes = True
+
+
+class AISummaryRequest(BaseModel):
+	"""Request schema for generating a summary"""
+	note_content: str
+
+
+class AIFlashcardsRequest(BaseModel):
+	"""Request schema for generating flashcards"""
+	note_content: str
+
+
+# ===========================
+# NOTE SCHEMAS
 # ===========================
 
 class NoteCreate(BaseModel):
-    title: str
-    content: str
-    university_id: int
-    subject_id: int
-    video_url: Optional[str] = None
-    link_url: Optional[str] = None
+	"""Schema for creating a new note"""
+	title: str
+	content: str
+	university_id: int
+	subject_id: int  # Required for hierarchy
+	video_url: Optional[str] = None
+	link_url: Optional[str] = None
+
 
 class NoteOut(BaseModel):
-    id: int
-    title: str
-    content: str
-    score: float
-    image_url: Optional[str] = None
-    video_url: Optional[str] = None
-    link_url: Optional[str] = None
-    created_at: datetime
-    university_id: int
-    subject_id: Optional[int] = None
-    author: UserOut
-    subject: Optional[SubjectOut] = None
+	"""Detailed note response schema"""
+	id: int
+	title: str
+	content: str
+	score: float
+	image_url: Optional[str] = None
+	video_url: Optional[str] = None
+	link_url: Optional[str] = None
+	tags: Optional[str] = None
+	is_approved: bool
+	created_at: datetime
 
-    class Config:
-        from_attributes = True
+	university_id: int
+	subject_id: Optional[int] = None
 
-# ===========================
-# UNIVERSITY SCHEMAS
-# ===========================
+	author: UserOut
+	subject: Optional[SubjectOut] = None
+	flashcards: List[FlashcardOut] = []
 
-class UniversityBase(BaseModel):
-    name: str
-    name_en: Optional[str] = None
-    name_pl: Optional[str] = None
-    city: Optional[str] = None
-    region: Optional[str] = None
-    type: Optional[str] = None
-    image_url: Optional[str] = None
+	class Config:
+		from_attributes = True
 
-class UniversityOut(UniversityBase):
-    id: int
-    class Config:
-        from_attributes = True
 
 # ===========================
-# AUTH & CHAT
+# CHAT SCHEMAS
 # ===========================
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
 
 class ChatRequest(BaseModel):
-    message: str
-    note_content: Optional[str] = ""
+	"""Schema for AI Chat interactions"""
+	message: str
+	note_content: Optional[str] = ""
+
+
+class ChatResponse(BaseModel):
+	"""Schema for AI Chat response"""
+	response: str

@@ -2,26 +2,22 @@ import { useState, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { useQuery } from '@tanstack/react-query';
+import { Turnstile } from '@marsidev/react-turnstile';
 import { UserPlus, Mail, Lock, GraduationCap, MapPin, Search, AlertCircle, CheckCircle } from 'lucide-react';
 import { API_URL } from '../utils/api';
 
 export function RegisterPage({ t, lang }: { t: any; lang: string }) {
   const navigate = useNavigate();
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [selectedRegion, setSelectedRegion] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    university_id: ''
-  });
 
   const { data: unis } = useQuery({
     queryKey: ['unis'],
-    queryFn: async () => axios.get(`${API_URL}/universities`).then(r => r.data),
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    queryFn: async () => axios.get(`${API_URL}/universities`).then(r => r.data)
   });
 
   const regions = useMemo(() => {
@@ -43,42 +39,26 @@ export function RegisterPage({ t, lang }: { t: any; lang: string }) {
     return list;
   }, [selectedRegion, searchQuery, unis]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    // Basic validation
-    if (!formData.email || !formData.password || !formData.university_id) {
-      setError(lang === 'pl'
-        ? 'Proszę wypełnić wszystkie wymagane pola'
-        : 'Please fill in all required fields');
-      return;
-    }
-
-    if (formData.password.length < 6) {
-      setError(lang === 'pl'
-        ? 'Hasło musi mieć co najmniej 6 znaków'
-        : 'Password must be at least 6 characters long');
+    if (!captchaToken) {
+      setError(lang === 'pl' ? 'Proszę rozwiązać Captcha!' : 'Please solve the Captcha!');
       return;
     }
 
     setLoading(true);
 
     try {
+      const form = e.target as HTMLFormElement;
       await axios.post(`${API_URL}/register`, {
         user: {
-          email: formData.email,
-          password: formData.password,
-          university_id: parseInt(formData.university_id)
-        }
+          email: (form.elements.namedItem('email') as HTMLInputElement).value,
+          password: (form.elements.namedItem('password') as HTMLInputElement).value,
+          university_id: parseInt((form.elements.namedItem('university_id') as HTMLSelectElement).value)
+        },
+        captcha_token: captchaToken
       });
 
       setSuccess(true);
@@ -86,23 +66,8 @@ export function RegisterPage({ t, lang }: { t: any; lang: string }) {
         navigate('/login');
       }, 2000);
     } catch (err: any) {
-      console.error('Registration error:', err);
-
-      let errorMessage = t.errorReg || 'Registration failed';
-
-      if (err.response?.data) {
-        if (err.response.data.detail) {
-          errorMessage = err.response.data.detail;
-        } else if (err.response.data.error) {
-          errorMessage = err.response.data.error;
-        } else if (typeof err.response.data === 'string') {
-          errorMessage = err.response.data;
-        }
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-
-      setError(errorMessage);
+      setError(err.response?.data?.detail || t.errorReg);
+      setCaptchaToken(null);
     } finally {
       setLoading(false);
     }
@@ -111,7 +76,7 @@ export function RegisterPage({ t, lang }: { t: any; lang: string }) {
   if (success) {
     return (
       <div className="flex justify-center items-center min-h-[80vh]">
-        <div className="card bg-base-100 shadow-xl border border-success w-full max-w-md animate-in slide-in-from-bottom-4 duration-300">
+        <div className="card bg-base-100 shadow-xl border border-success w-full max-w-md">
           <div className="card-body text-center space-y-4">
             <div className="inline-block mx-auto p-4 bg-success/10 rounded-full">
               <CheckCircle size={64} className="text-success" />
@@ -133,7 +98,7 @@ export function RegisterPage({ t, lang }: { t: any; lang: string }) {
   return (
     <div className="flex justify-center items-center min-h-[80vh] p-4">
       <div className="w-full max-w-2xl">
-        <div className="card bg-base-100 shadow-2xl border border-base-300 animate-in slide-in-from-bottom-4 duration-300">
+        <div className="card bg-base-100 shadow-2xl border border-base-300">
           <div className="card-body p-8 space-y-6">
             {/* Header */}
             <div className="text-center space-y-2">
@@ -143,22 +108,16 @@ export function RegisterPage({ t, lang }: { t: any; lang: string }) {
               <h2 className="text-3xl font-bold">{t.register}</h2>
               <p className="text-sm opacity-70">
                 {lang === 'pl'
-                  ? 'Stwórz konto i dołącz do społeczności studentów'
-                  : 'Create an account and join the student community'}
+                  ? 'Stwórz konto i dołącz do społeczności'
+                  : 'Create an account and join the community'}
               </p>
             </div>
 
             {/* Error Alert */}
             {error && (
-              <div className="alert alert-error animate-in slide-in-from-top-4 duration-300">
+              <div className="alert alert-error">
                 <AlertCircle size={20} />
                 <span>{error}</span>
-                <button
-                  className="btn btn-xs btn-ghost"
-                  onClick={() => setError('')}
-                >
-                  ✕
-                </button>
               </div>
             )}
 
@@ -171,7 +130,6 @@ export function RegisterPage({ t, lang }: { t: any; lang: string }) {
                     <span className="label-text font-semibold flex items-center gap-2">
                       <Mail size={16} />
                       {t.emailPlaceholder}
-                      <span className="text-error">*</span>
                     </span>
                   </label>
                   <input
@@ -180,15 +138,8 @@ export function RegisterPage({ t, lang }: { t: any; lang: string }) {
                     placeholder="student@edu.pl"
                     className="input input-bordered w-full"
                     required
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    disabled={loading}
+                    autoFocus
                   />
-                  <label className="label">
-                    <span className="label-text-alt opacity-70">
-                      {lang === 'pl' ? 'Użyj prawdziwego adresu email' : 'Use a valid email address'}
-                    </span>
-                  </label>
                 </div>
 
                 {/* Password */}
@@ -197,7 +148,6 @@ export function RegisterPage({ t, lang }: { t: any; lang: string }) {
                     <span className="label-text font-semibold flex items-center gap-2">
                       <Lock size={16} />
                       {t.passPlaceholder}
-                      <span className="text-error">*</span>
                     </span>
                   </label>
                   <input
@@ -207,9 +157,6 @@ export function RegisterPage({ t, lang }: { t: any; lang: string }) {
                     className="input input-bordered w-full"
                     required
                     minLength={6}
-                    value={formData.password}
-                    onChange={handleInputChange}
-                    disabled={loading}
                   />
                   <label className="label">
                     <span className="label-text-alt opacity-70">
@@ -224,7 +171,6 @@ export function RegisterPage({ t, lang }: { t: any; lang: string }) {
                     <span className="label-text font-semibold flex items-center gap-2">
                       <MapPin size={16} />
                       {lang === 'pl' ? 'Województwo' : 'Region'}
-                      <span className="text-error">*</span>
                     </span>
                   </label>
                   <select
@@ -233,10 +179,8 @@ export function RegisterPage({ t, lang }: { t: any; lang: string }) {
                     onChange={e => {
                       setSelectedRegion(e.target.value);
                       setSearchQuery('');
-                      setFormData(prev => ({ ...prev, university_id: '' }));
                     }}
                     required
-                    disabled={loading}
                   >
                     <option value="" disabled>
                       {lang === 'pl' ? '-- Wybierz województwo --' : '-- Select region --'}
@@ -255,15 +199,12 @@ export function RegisterPage({ t, lang }: { t: any; lang: string }) {
                     <span className="label-text font-semibold flex items-center gap-2">
                       <GraduationCap size={16} />
                       {lang === 'pl' ? 'Uczelnia' : 'University'}
-                      <span className="text-error">*</span>
                     </span>
                   </label>
                   <select
                     name="university_id"
                     className="select select-bordered w-full"
-                    value={formData.university_id}
-                    onChange={handleInputChange}
-                    disabled={!selectedRegion || loading}
+                    disabled={!selectedRegion}
                     required
                   >
                     <option value="" disabled>
@@ -271,7 +212,7 @@ export function RegisterPage({ t, lang }: { t: any; lang: string }) {
                     </option>
                     {filteredUnis.map((u: any) => (
                       <option key={u.id} value={u.id}>
-                        {lang === 'pl' ? u.name_pl || u.name : u.name_en || u.name} ({u.city})
+                        {lang === 'pl' ? u.name_pl : u.name_en} ({u.city})
                       </option>
                     ))}
                   </select>
@@ -288,45 +229,41 @@ export function RegisterPage({ t, lang }: { t: any; lang: string }) {
                         className="input input-bordered w-full pl-10"
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
-                        disabled={loading}
                       />
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Submit Button */}
-              <div className="pt-2">
-                <button
-                  type="submit"
-                  className={`btn btn-primary w-full text-white text-lg ${loading ? 'loading' : ''}`}
-                  disabled={loading}
-                >
-                  {!loading && <UserPlus size={20} />}
-                  {loading
-                    ? (lang === 'pl' ? 'Rejestracja...' : 'Signing up...')
-                    : t.registerBtn || 'Zarejestruj się'}
-                </button>
+              {/* Captcha */}
+              <div className="flex justify-center p-4 bg-base-200 rounded-xl">
+                <Turnstile
+                  siteKey="1x00000000000000000000AB"
+                  onSuccess={(token) => setCaptchaToken(token)}
+                  onExpire={() => setCaptchaToken(null)}
+                  onError={() => setCaptchaToken(null)}
+                />
               </div>
 
-              {/* Privacy Policy Note */}
-              <div className="text-center text-xs opacity-70">
-                {lang === 'pl'
-                  ? 'Rejestrując się, zgadzasz się na nasze Warunki Użytkowania i Politykę Prywatności'
-                  : 'By registering, you agree to our Terms of Service and Privacy Policy'}
-              </div>
+              {/* Submit Button */}
+              <button
+                type="submit"
+                className={`btn btn-primary w-full text-white ${loading ? 'loading' : ''}`}
+                disabled={!captchaToken || loading}
+              >
+                {!loading && <UserPlus size={18} />}
+                {loading
+                  ? (lang === 'pl' ? 'Rejestracja...' : 'Signing up...')
+                  : t.registerBtn}
+              </button>
             </form>
 
             {/* Login Link */}
             <div className="text-center pt-4 border-t border-base-300">
               <p className="text-sm opacity-70">
                 {lang === 'pl' ? 'Masz już konto?' : 'Already have an account?'}{' '}
-                <Link
-                  to="/login"
-                  className="link link-primary font-semibold"
-                  onClick={(e) => loading && e.preventDefault()}
-                >
-                  {t.login || 'Zaloguj się'}
+                <Link to="/login" className="link link-primary font-semibold">
+                  {t.login}
                 </Link>
               </p>
             </div>

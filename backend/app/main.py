@@ -530,6 +530,7 @@ async def register(
     Raises:
         HTTPException 400: If CAPTCHA fails or email already taken
     """
+    # Verify anti-bot CAPTCHA
     await AuthService.verify_turnstile(request.captcha_token)
 
     # Check for duplicate email
