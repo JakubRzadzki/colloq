@@ -202,7 +202,7 @@ export function AddNoteModal({ universityId, isOpen, onClose, t, lang }: Props) 
         <div className="p-5 border-b border-base-200 flex justify-between items-center bg-base-100 sticky top-0 z-10">
           <h3 className="font-bold text-2xl flex items-center gap-2">
             <Upload className="text-primary" />
-            {t.uploadMaterials || 'Dodaj materiały'}
+            {t.uploadMaterials || 'Upload materials'}
           </h3>
           <button onClick={onClose} className="btn btn-ghost btn-circle btn-sm hover:bg-base-200">
             <X size={20} />
@@ -217,7 +217,7 @@ export function AddNoteModal({ universityId, isOpen, onClose, t, lang }: Props) 
             <div className="form-control">
               <label className="label">
                 <span className="label-text flex gap-2 font-semibold text-base">
-                  <Building size={18} className="text-primary" /> {t.selectFaculty || 'Wydział'}
+                  <Building size={18} className="text-primary" /> {t.selectFaculty || 'Faculty'}
                 </span>
               </label>
               <div className="flex gap-2">
@@ -228,7 +228,7 @@ export function AddNoteModal({ universityId, isOpen, onClose, t, lang }: Props) 
                   disabled={showAddFaculty}
                   required={!showAddFaculty}
                 >
-                  <option value="" disabled>-- {t.selectFaculty || 'Wybierz wydział'} --</option>
+                  <option value="" disabled>-- {t.selectFaculty || 'Select faculty'} --</option>
                   {faculties?.map((f: any) => (
                     <option key={f.id} value={f.id}>{f.name}</option>
                   ))}
@@ -242,7 +242,7 @@ export function AddNoteModal({ universityId, isOpen, onClose, t, lang }: Props) 
                     setShowAddSubject(false);
                     if (!showAddFaculty) setSelectedFaculty(null);
                   }}
-                  title={showAddFaculty ? "Anuluj dodawanie" : "Dodaj nowy wydział"}
+                  title={showAddFaculty ? "Cancel adding" : "Add new faculty"}
                 >
                   {showAddFaculty ? <X size={20} /> : <Plus size={20} />}
                 </button>
@@ -259,7 +259,7 @@ export function AddNoteModal({ universityId, isOpen, onClose, t, lang }: Props) 
                   </div>
                   <div className="space-y-3">
                       <input
-                        placeholder={t.facultyName || 'Nazwa wydziału (np. Wydział Informatyki)'}
+                        placeholder={t.facultyName || 'Faculty name (e.g. Faculty of Informatics)'}
                         className="input input-bordered w-full"
                         value={newFacultyName}
                         onChange={e => setNewFacultyName(e.target.value)}
@@ -267,7 +267,7 @@ export function AddNoteModal({ universityId, isOpen, onClose, t, lang }: Props) 
                       />
                       <div className="form-control">
                         <label className="label">
-                            <span className="label-text text-xs opacity-70">Zdjęcie wydziału (opcjonalne)</span>
+                            <span className="label-text text-xs opacity-70">Faculty image (optional)</span>
                         </label>
                         <input
                             type="file"
@@ -286,7 +286,7 @@ export function AddNoteModal({ universityId, isOpen, onClose, t, lang }: Props) 
               <div className="form-control animate-in fade-in slide-in-from-top-1">
                 <label className="label">
                   <span className="label-text flex gap-2 font-semibold text-base">
-                    <Layers size={18} className="text-secondary" /> {t.selectField || 'Kierunek'}
+                    <Layers size={18} className="text-secondary" /> {t.selectField || 'Field'}
                   </span>
                 </label>
                 <div className="flex gap-2">
@@ -297,7 +297,7 @@ export function AddNoteModal({ universityId, isOpen, onClose, t, lang }: Props) 
                     disabled={showAddField}
                     required={!showAddField}
                   >
-                    <option value="" disabled>-- {t.selectField || 'Wybierz kierunek'} --</option>
+                    <option value="" disabled>-- {t.selectField || 'Select field'} --</option>
                     {fields?.map((f: any) => (
                       <option key={f.id} value={f.id}>
                         {f.name} ({f.degree_level})
@@ -327,7 +327,7 @@ export function AddNoteModal({ universityId, isOpen, onClose, t, lang }: Props) 
                     </div>
                     <div className="grid grid-cols-3 gap-3">
                         <input
-                          placeholder={t.fieldName || 'Nazwa kierunku'}
+                          placeholder={t.fieldName || 'Field name'}
                           className="input input-bordered col-span-2"
                           value={newFieldName}
                           onChange={e => setNewFieldName(e.target.value)}
@@ -338,9 +338,9 @@ export function AddNoteModal({ universityId, isOpen, onClose, t, lang }: Props) 
                           value={newFieldLevel}
                           onChange={e => setNewFieldLevel(e.target.value)}
                         >
-                          <option value="Inżynierskie">Inżynierskie</option>
-                          <option value="Licencjat">Licencjat</option>
-                          <option value="Magisterskie">Magisterskie</option>
+                          <option value="Inżynierskie">BSc (Inż.)</option>
+                          <option value="Licencjat">BA (Lic.)</option>
+                          <option value="Magisterskie">MSc (Mgr)</option>
                         </select>
                     </div>
                   </div>
@@ -353,7 +353,7 @@ export function AddNoteModal({ universityId, isOpen, onClose, t, lang }: Props) 
               <div className="form-control animate-in fade-in slide-in-from-top-1">
                 <label className="label">
                   <span className="label-text flex gap-2 font-semibold text-base">
-                    <BookOpen size={18} className="text-accent" /> {t.selectSubject || 'Przedmiot'}
+                    <BookOpen size={18} className="text-accent" /> {t.selectSubject || 'Subject'}
                   </span>
                 </label>
                 <div className="flex gap-2">
@@ -364,7 +364,7 @@ export function AddNoteModal({ universityId, isOpen, onClose, t, lang }: Props) 
                     disabled={showAddSubject}
                     required={!showAddSubject}
                   >
-                    <option value="" disabled>-- {t.selectSubject || 'Wybierz przedmiot'} --</option>
+                    <option value="" disabled>-- {t.selectSubject || 'Select subject'} --</option>
                     {subjects?.map((s: any) => (
                       <option key={s.id} value={s.id}>
                         {s.name} (Sem. {s.semester})
@@ -393,7 +393,7 @@ export function AddNoteModal({ universityId, isOpen, onClose, t, lang }: Props) 
                     </div>
                     <div className="flex gap-3">
                         <input
-                          placeholder={t.subjectName || 'Nazwa przedmiotu'}
+                          placeholder={t.subjectName || 'Subject name'}
                           className="input input-bordered w-full"
                           value={newSubjectName}
                           onChange={e => setNewSubjectName(e.target.value)}
@@ -425,13 +425,13 @@ export function AddNoteModal({ universityId, isOpen, onClose, t, lang }: Props) 
                 <div className="space-y-4">
                     <input
                       name="title"
-                      placeholder={t.titleOptional || 'Tytuł (opcjonalnie)'}
+                      placeholder={t.titleOptional || 'Title (optional)'}
                       className="input input-bordered w-full font-bold focus:border-primary"
                     />
 
                     <textarea
                       name="content"
-                      placeholder={t.contentOptional || 'Treść notatki / Opis...'}
+                      placeholder={t.contentOptional || 'Note content / Description...'}
                       className="textarea textarea-bordered h-32 w-full focus:border-primary"
                     />
 
@@ -454,7 +454,7 @@ export function AddNoteModal({ universityId, isOpen, onClose, t, lang }: Props) 
                       <div className="form-control">
                         <label className="label py-1">
                           <span className="label-text flex gap-2 items-center text-xs uppercase font-bold opacity-60">
-                            <Video size={12} /> {t.videoUrl || 'Wideo'}
+                            <Video size={12} /> {t.videoUrl || 'Video'}
                           </span>
                         </label>
                         <input
@@ -472,7 +472,7 @@ export function AddNoteModal({ universityId, isOpen, onClose, t, lang }: Props) 
                             <ImageIcon size={24} className="text-primary" />
                         </div>
                         <div className="flex-1">
-                             <span className="label-text font-semibold block">{t.imageFile || 'Zdjęcie / Skan'}</span>
+                             <span className="label-text font-semibold block">{t.imageFile || 'Image / Scan'}</span>
                              <span className="text-xs opacity-50 block">JPG, PNG, WEBP (Max 5MB)</span>
                         </div>
                         <input
@@ -492,7 +492,7 @@ export function AddNoteModal({ universityId, isOpen, onClose, t, lang }: Props) 
         {/* Footer Actions */}
         <div className="p-5 border-t border-base-200 flex justify-end gap-3 bg-base-100">
           <button type="button" className="btn btn-ghost" onClick={onClose} disabled={isSubmitting}>
-            {t.cancel || 'Anuluj'}
+            {t.cancel || 'Cancel'}
           </button>
           <button
             type="submit"
@@ -504,7 +504,7 @@ export function AddNoteModal({ universityId, isOpen, onClose, t, lang }: Props) 
             }
           >
             {isSubmitting && <span className="loading loading-spinner loading-xs"></span>}
-            {t.submit || 'Wyślij'}
+            {t.submit || 'Submit'}
           </button>
         </div>
       </div>

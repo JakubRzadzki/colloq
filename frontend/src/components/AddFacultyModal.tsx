@@ -12,43 +12,43 @@ interface Props {
 
 export function AddFacultyModal({ isOpen, onClose, universityId, universityName }: Props) {
   const queryClient = useQueryClient();
-  const formRef = useRef<HTMLFormElement>(null); // Używamy ref do formularza
+  const formRef = useRef<HTMLFormElement>(null);
 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
 
+  // Mutacja używa poprawionej funkcji z api.ts
   const mutation = useMutation({
-    mutationFn: createFaculty,
+    mutationFn: (data: FormData) => createFaculty(data),
     onSuccess: () => {
       setSuccess(true);
-      // Odświeżamy listę wydziałów dla danej uczelni
+      // Odświeżamy widok uczelni
       queryClient.invalidateQueries({ queryKey: ['faculties', universityId] });
+      // Odświeżamy panel admina (oczekujące)
+      queryClient.invalidateQueries({ queryKey: ['pending'] });
 
       setTimeout(() => {
         handleClose();
-      }, 2500);
+      }, 2000);
     },
     onError: (err: any) => {
-      setError(err.response?.data?.detail || "Wystąpił błąd podczas dodawania wydziału.");
+      // Wyświetlamy dokładny błąd z backendu (np. "Could not validate credentials")
+      setError(err.response?.data?.detail || "Wystąpił błąd autoryzacji.");
     }
   });
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Sprawdzenie rozmiaru (np. max 5MB)
       if (file.size > 5 * 1024 * 1024) {
         setError("Plik jest za duży (max 5MB).");
         return;
       }
-
       setImageFile(file);
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string);
-      };
+      reader.onloadend = () => setImagePreview(reader.result as string);
       reader.readAsDataURL(file);
     }
   };
@@ -58,14 +58,18 @@ export function AddFacultyModal({ isOpen, onClose, universityId, universityName 
     setError('');
 
     const form = e.target as HTMLFormElement;
-    const formData = new FormData(form);
+    const formDataNative = new FormData(form);
 
-    mutation.mutate({
-      name: formData.get('name') as string,
-      // Usunięto description, ponieważ backend go nie obsługuje
-      university_id: universityId,
-      image: imageFile || undefined
-    });
+    // Budujemy FormData ręcznie dla pewności
+    const submissionData = new FormData();
+    submissionData.append('name', formDataNative.get('name') as string);
+    submissionData.append('university_id', universityId.toString());
+
+    if (imageFile) {
+      submissionData.append('image', imageFile);
+    }
+
+    mutation.mutate(submissionData);
   };
 
   const handleClose = () => {
@@ -87,7 +91,7 @@ export function AddFacultyModal({ isOpen, onClose, universityId, universityName 
         <div className="bg-base-200 p-4 flex justify-between items-center border-b border-base-300">
           <div>
             <h3 className="font-bold text-lg flex items-center gap-2">
-              <BookOpen className="text-primary"/> Zgłoś nowy wydział
+              <BookOpen className="text-primary"/> Dodaj Wydział
             </h3>
             <p className="text-xs opacity-70 mt-1">Uczelnia: {universityName}</p>
           </div>
@@ -103,8 +107,7 @@ export function AddFacultyModal({ isOpen, onClose, universityId, universityName 
               <div>
                 <h3 className="text-xl font-bold text-success">Sukces!</h3>
                 <p className="opacity-70 mt-2">
-                  Wydział został zgłoszony.<br/>
-                  Oczekuje na weryfikację administratora.
+                  Wydział wysłany do weryfikacji.
                 </p>
               </div>
             </div>
@@ -112,23 +115,21 @@ export function AddFacultyModal({ isOpen, onClose, universityId, universityName 
             <form ref={formRef} onSubmit={handleSubmit} className="flex flex-col gap-4">
               {error && <div className="alert alert-error text-sm py-2 shadow-sm">{error}</div>}
 
-              {/* Nazwa Wydziału */}
               <div className="form-control">
                 <label className="label">
                   <span className="label-text font-semibold">Nazwa Wydziału</span>
                 </label>
                 <input
                   name="name"
-                  placeholder="np. Wydział Elektroniki i Informatyki"
+                  placeholder="np. Wydział Architektury"
                   className="input input-bordered w-full focus:input-primary"
                   required
                 />
               </div>
 
-              {/* Zdjęcie (Opcjonalne) */}
               <div className="form-control">
                 <label className="label">
-                  <span className="label-text font-semibold">Zdjęcie wydziału (opcjonalne)</span>
+                  <span className="label-text font-semibold">Zdjęcie (opcjonalne)</span>
                 </label>
 
                 <div className="space-y-3">
@@ -170,7 +171,6 @@ export function AddFacultyModal({ isOpen, onClose, universityId, universityName 
                 </div>
               </div>
 
-              {/* Przyciski Akcji */}
               <div className="mt-6 flex gap-3 justify-end">
                 <button
                   type="button"
@@ -184,7 +184,7 @@ export function AddFacultyModal({ isOpen, onClose, universityId, universityName 
                   className={`btn btn-primary px-6 ${mutation.isPending ? 'loading' : ''}`}
                   disabled={mutation.isPending}
                 >
-                  {mutation.isPending ? 'Wysyłanie...' : 'Wyślij zgłoszenie'}
+                  {mutation.isPending ? 'Wysyłanie...' : 'Wyślij'}
                 </button>
               </div>
             </form>

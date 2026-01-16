@@ -30,6 +30,25 @@ export const isAdmin = () => {
   }
 };
 
+// Helper function to check if user is authenticated (valid token)
+export const isAuthenticated = (): boolean => {
+  const token = localStorage.getItem('token');
+  if (!token) return false;
+
+  try {
+    const decoded = jwtDecode<DecodedToken>(token);
+    const currentTime = Date.now() / 1000;
+    return decoded.exp > currentTime;
+  } catch {
+    return false;
+  }
+};
+
+// Logout function
+export const logout = () => {
+  localStorage.removeItem('token');
+};
+
 // --- AUTH ---
 
 export const login = async (username: string, password: string) => {
@@ -54,13 +73,13 @@ export const getUniversities = async (): Promise<University[]> => {
   return response.data;
 };
 
-// NEW: Get faculties for a university
+// Get faculties for a university
 export const getFaculties = async (universityId: number) => {
   const response = await axios.get(`${API_URL}/universities/${universityId}/faculties`);
   return response.data;
 };
 
-// UPDATED: Get fields for a faculty (not university)
+// Get fields for a faculty
 export const getFields = async (facultyId: number) => {
   const response = await axios.get(`${API_URL}/faculties/${facultyId}/fields`);
   return response.data;
@@ -81,7 +100,6 @@ export const getNotes = async (university_id?: number) => {
 
 // --- COMMUNITY FEATURES (CREATE) ---
 
-// UPDATED: Create university with FormData (for image upload)
 export const createUniversity = async (data: {
   name: string;
   city: string;
@@ -106,25 +124,7 @@ export const createUniversity = async (data: {
   return response.data;
 };
 
-// NEW: Create faculty with FormData (for image upload)
-export const createFaculty = async (data: {
-  name: string;
-  description?: string;
-  university_id: number;
-  image?: File
-}) => {
-  const formData = new FormData();
-  formData.append('name', data.name);
-  formData.append('university_id', data.university_id.toString());
-
-  if (data.description) {
-    formData.append('description', data.description);
-  }
-
-  if (data.image) {
-    formData.append('image', data.image);
-  }
-
+export const createFaculty = async (formData: FormData) => {
   const response = await axios.post(`${API_URL}/faculties`, formData, {
     headers: {
       ...getAuthHeader(),
@@ -134,11 +134,10 @@ export const createFaculty = async (data: {
   return response.data;
 };
 
-// UPDATED: Create field of study (now belongs to faculty)
 export const createFieldOfStudy = async (fieldData: {
   name: string;
   degree_level: string;
-  faculty_id: number  // Changed from university_id
+  faculty_id: number
 }) => {
   const response = await axios.post(`${API_URL}/fields`, fieldData, {
     headers: getAuthHeader()
@@ -175,7 +174,6 @@ export const approveUniversity = async (universityId: number) => {
   return response.data;
 };
 
-// NEW: Approve faculty
 export const approveFaculty = async (facultyId: number) => {
   const response = await axios.post(
     `${API_URL}/admin/approve/faculty/${facultyId}`,
@@ -212,30 +210,20 @@ export const approveNote = async (noteId: number) => {
   return response.data;
 };
 
-// --- AI CHATBOT ---
+// NEW: Function to update university image
+export const updateUniversityImage = async (id: number, file: File) => {
+  const formData = new FormData();
+  formData.append('image', file);
 
-export const chatWithAI = async (data: { message: string; note_content?: string }) => {
-  const response = await axios.post(`${API_URL}/chat`, data, {
-    headers: getAuthHeader()
-  });
+  const response = await axios.patch(
+    `${API_URL}/admin/universities/${id}/image`,
+    formData,
+    {
+      headers: {
+        ...getAuthHeader(),
+        'Content-Type': 'multipart/form-data'
+      }
+    }
+  );
   return response.data;
-};
-
-// Helper function to check if user is authenticated
-export const isAuthenticated = (): boolean => {
-  const token = localStorage.getItem('token');
-  if (!token) return false;
-
-  try {
-    const decoded = jwtDecode<DecodedToken>(token);
-    const currentTime = Date.now() / 1000;
-    return decoded.exp > currentTime;
-  } catch {
-    return false;
-  }
-};
-
-// Logout function
-export const logout = () => {
-  localStorage.removeItem('token');
 };
