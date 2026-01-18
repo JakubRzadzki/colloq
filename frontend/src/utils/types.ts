@@ -21,6 +21,9 @@ export interface University {
   image_url?: string;
   banner_url?: string;
   is_approved: boolean;
+  // Optional relations for frontend convenience
+  faculties?: Faculty[];
+  notes?: Note[];
 }
 
 export interface Faculty {

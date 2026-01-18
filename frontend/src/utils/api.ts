@@ -1,14 +1,11 @@
 import axios from 'axios';
 import { jwtDecode } from "jwt-decode";
-import {
-  University, Faculty, FieldOfStudy, Subject, Note,
-  User, Review, Comment, PendingItems
-} from './types';
+import { University, Faculty, FieldOfStudy, Subject, Note, User, Review, Comment, PendingItems } from './types';
 
-// Re-export types so other components can import them from api.ts
+// Export types so components can use them directly from api.ts
 export * from './types';
 
-// Hardcoded API URL for MVP stability
+// Hardcoded API URL to prevent build issues
 export const API_URL = 'http://localhost:8000';
 
 export const getAuthHeader = () => {
@@ -16,7 +13,7 @@ export const getAuthHeader = () => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
-// Synchronous isAdmin check
+// Synchronous isAdmin check to prevent rendering issues
 export const isAdmin = (): boolean => {
   const token = localStorage.getItem('token');
   if (!token) return false;
@@ -30,12 +27,12 @@ export const isAdmin = (): boolean => {
 
 export const logout = () => localStorage.removeItem('token');
 
-// --- AUTH & USER ---
+// --- AUTH ---
 export const login = async (username: string, password: string) => {
-  const formData = new FormData();
-  formData.append('username', username);
-  formData.append('password', password);
-  return (await axios.post(`${API_URL}/token`, formData)).data;
+  const fd = new FormData();
+  fd.append('username', username);
+  fd.append('password', password);
+  return (await axios.post(`${API_URL}/token`, fd)).data;
 };
 
 export const register = async (userData: any) =>
@@ -46,7 +43,7 @@ export const getCurrentUser = async (): Promise<User> => {
   return { ...res.data, username: res.data.nickname };
 };
 
-export const updateProfile = async (data: { username?: string; bio?: string; avatar?: File }) => {
+export const updateProfile = async (data: any) => {
   const fd = new FormData();
   if (data.username) fd.append('nickname', data.username);
   if (data.bio) fd.append('bio', data.bio);
@@ -54,7 +51,7 @@ export const updateProfile = async (data: { username?: string; bio?: string; ava
   return await axios.put(`${API_URL}/users/me`, fd, { headers: { ...getAuthHeader(), 'Content-Type': 'multipart/form-data' } });
 };
 
-// --- DATA FETCHING ---
+// --- FETCHING ---
 export const getUniversities = async (): Promise<University[]> => (await axios.get(`${API_URL}/universities`)).data;
 export const getUniversity = async (id: number): Promise<University> => (await axios.get(`${API_URL}/universities/${id}`)).data;
 export const getFaculties = async (id: number): Promise<Faculty[]> => (await axios.get(`${API_URL}/universities/${id}/faculties`)).data;
@@ -68,7 +65,7 @@ export const getNotes = async (uniId?: number, search?: string): Promise<Note[]>
   return (await axios.get(`${API_URL}/notes?${params.toString()}`)).data;
 };
 
-// --- CREATION ---
+// --- CREATION & UPLOADS ---
 export const createUniversity = async (data: any) => {
   const fd = new FormData();
   fd.append('name', data.name);
@@ -79,22 +76,28 @@ export const createUniversity = async (data: any) => {
 };
 
 export const createFaculty = async (fd: FormData) => (await axios.post(`${API_URL}/faculties`, fd, { headers: { ...getAuthHeader(), 'Content-Type': 'multipart/form-data' } })).data;
-export const createFieldOfStudy = async (data: any) => (await axios.post(`${API_URL}/fields`, data, { headers: getAuthHeader() })).data;
-export const createSubject = async (data: any) => (await axios.post(`${API_URL}/subjects`, data, { headers: getAuthHeader() })).data;
-export const createNote = async (fd: FormData) => (await axios.post(`${API_URL}/notes`, fd, { headers: { ...getAuthHeader(), 'Content-Type': 'multipart/form-data' } })).data;
 
-// --- COMMUNITY ---
+// Fixed: Explicitly exported functions for hierarchy creation
+export const createFieldOfStudy = async (data: { name: string, degree_level: string, faculty_id: number }) =>
+  (await axios.post(`${API_URL}/fields`, data, { headers: getAuthHeader() })).data;
+
+export const createSubject = async (data: { name: string, semester: number, field_of_study_id: number }) =>
+  (await axios.post(`${API_URL}/subjects`, data, { headers: getAuthHeader() })).data;
+
+export const createNote = async (fd: FormData) =>
+  (await axios.post(`${API_URL}/notes`, fd, { headers: { ...getAuthHeader(), 'Content-Type': 'multipart/form-data' } })).data;
+
 export const requestUniversityImageChange = async (uniId: number, file: File) => {
   const fd = new FormData(); fd.append('image', file);
   return (await axios.post(`${API_URL}/universities/${uniId}/image_request`, fd, { headers: { ...getAuthHeader(), 'Content-Type': 'multipart/form-data' } })).data;
 };
 
+// --- INTERACTIONS ---
 export const voteNote = async (id: number) => (await axios.post(`${API_URL}/notes/${id}/vote`, {}, { headers: getAuthHeader() })).data;
 export const toggleFavorite = async (id: number) => (await axios.post(`${API_URL}/notes/${id}/favorite`, {}, { headers: getAuthHeader() })).data;
 
 export const getUniversityReviews = async (id: number): Promise<Review[]> => (await axios.get(`${API_URL}/universities/${id}/reviews`)).data;
 export const addReview = async (data: any) => await axios.post(`${API_URL}/reviews`, data, { headers: getAuthHeader() });
-export const deleteReview = async (id: number) => await axios.delete(`${API_URL}/reviews/${id}`, { headers: getAuthHeader() });
 
 export const getNoteComments = async (id: number): Promise<Comment[]> => (await axios.get(`${API_URL}/notes/${id}/comments`)).data;
 export const addComment = async (id: number, content: string) => await axios.post(`${API_URL}/notes/${id}/comments`, { content }, { headers: getAuthHeader() });

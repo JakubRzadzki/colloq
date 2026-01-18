@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ShieldCheck, FileText, GraduationCap, Building, Layers, BookOpen, Camera, Check, X, Edit, Upload } from 'lucide-react';
+import { ShieldCheck, FileText, GraduationCap, Building, Layers, BookOpen, Camera, Check, X, Edit } from 'lucide-react';
 import {
   getPendingItems, approveImageRequest, rejectImageRequest, rejectItem, approveItem,
   updateUniversityImage, API_URL, type PendingItems
