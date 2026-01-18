@@ -1,56 +1,32 @@
 """
-Pydantic schemas for request/response validation.
-
-Updated to support:
-- Registration without CAPTCHA
-- Community-submitted universities, faculties, fields, and subjects
-- Optional note content (image-only notes)
-- Faculty hierarchy
+Pydantic schemas for Colloq PRO.
 """
-
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
-
-# ===========================
-# USER SCHEMAS
-# ===========================
-
+# --- USER ---
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
     university_id: int
 
-
 class UserOut(BaseModel):
     id: int
     email: str
     nickname: Optional[str] = None
+    bio: Optional[str] = None
+    avatar_url: Optional[str] = None
     is_admin: bool
     is_verified: bool
     university_id: int
-
     class Config:
         from_attributes = True
 
-
-# Registration without CAPTCHA
 class RegisterRequest(BaseModel):
     user: UserCreate
 
-
-# ===========================
-# HIERARCHY SCHEMAS
-# ===========================
-
-# University
-class UniversityCreate(BaseModel):
-    name: str
-    city: str
-    region: str
-
-
+# --- HIERARCHY ---
 class UniversityOut(BaseModel):
     id: int
     name: str
@@ -58,84 +34,74 @@ class UniversityOut(BaseModel):
     name_pl: Optional[str] = None
     city: str
     region: str
-    type: Optional[str] = None
+    description: Optional[str] = None
     image_url: Optional[str] = None
+    banner_url: Optional[str] = None
     is_approved: bool = True
-
     class Config:
         from_attributes = True
-
-
-# Faculty
-class FacultyCreate(BaseModel):
-    name: str
-    description: Optional[str] = None
-    university_id: int
-
 
 class FacultyOut(BaseModel):
     id: int
     name: str
-    description: Optional[str] = None
     image_url: Optional[str] = None
     university_id: int
-    is_approved: bool = True
-
     class Config:
         from_attributes = True
-
-
-# Field of Study
-class FieldOfStudyCreate(BaseModel):
-    name: str
-    degree_level: str
-    faculty_id: int  # UPDATED: Now references faculty instead of university
-
 
 class FieldOfStudyOut(BaseModel):
     id: int
     name: str
     degree_level: Optional[str] = None
-    faculty_id: int  # UPDATED
-    university_id: Optional[int] = None  # For backward compatibility
-    is_approved: bool = True
-
+    faculty_id: int
     class Config:
         from_attributes = True
 
-
-# Subject
 class SubjectCreate(BaseModel):
     name: str
     semester: int
     field_of_study_id: int
-
 
 class SubjectOut(BaseModel):
     id: int
     name: str
     semester: Optional[int] = None
     field_of_study_id: int
-    is_approved: bool = True
-
     class Config:
         from_attributes = True
 
+class FieldOfStudyCreate(BaseModel):
+    name: str
+    degree_level: str
+    faculty_id: int
 
-# ===========================
-# NOTE SCHEMAS
-# ===========================
-
-class NoteCreate(BaseModel):
-    """Note creation - title and content are now optional."""
-    title: Optional[str] = None
-    content: Optional[str] = None
+# --- COMMUNITY ---
+class ReviewCreate(BaseModel):
     university_id: int
-    subject_id: int
-    video_url: Optional[str] = None
-    link_url: Optional[str] = None
+    rating: int
+    content: str
 
+class ReviewOut(BaseModel):
+    id: int
+    rating: int
+    content: str
+    created_at: datetime
+    user: UserOut
+    class Config:
+        from_attributes = True
 
+class CommentCreate(BaseModel):
+    content: str
+
+class CommentOut(BaseModel):
+    id: int
+    content: str
+    created_at: datetime
+    user: UserOut
+    class Config:
+        from_attributes = True
+
+# --- NOTES ---
 class NoteOut(BaseModel):
     id: int
     title: Optional[str] = None
@@ -146,36 +112,45 @@ class NoteOut(BaseModel):
     link_url: Optional[str] = None
     created_at: datetime
     university_id: int
-    subject_id: Optional[int] = None
     author: UserOut
     subject: Optional[SubjectOut] = None
-
     class Config:
         from_attributes = True
 
-
-# ===========================
-# ADMIN SCHEMAS
-# ===========================
+# --- ADMIN ---
+class ImageRequestOut(BaseModel):
+    id: int
+    university_id: int
+    new_image_url: str
+    status: str
+    submitted_by_id: int
+    created_at: datetime
+    class Config:
+        from_attributes = True
 
 class PendingItemsResponse(BaseModel):
-    """Response containing all pending items for admin review."""
-    notes: list
-    universities: list
-    faculties: list  # NEW
-    fields: list
-    subjects: list
+    notes: List[NoteOut]
+    universities: List[UniversityOut]
+    faculties: List[FacultyOut]
+    fields: List[FieldOfStudyOut]
+    subjects: List[SubjectOut]
+    image_requests: List[ImageRequestOut]
 
+# --- INTERACTIONS ---
+class VoteResponse(BaseModel):
+    msg: str
+    new_score: float
+    user_has_voted: bool
 
-# ===========================
-# AUTH SCHEMAS
-# ===========================
+class FavoriteResponse(BaseModel):
+    msg: str
+    is_favorited: bool
+
+class UserDashboard(BaseModel):
+    my_notes: List[NoteOut]
+    my_favorites: List[NoteOut]
+    pending_submissions: dict
 
 class Token(BaseModel):
     access_token: str
     token_type: str
-
-
-class ChatRequest(BaseModel):
-    message: str
-    note_content: Optional[str] = ""

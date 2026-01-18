@@ -1,195 +1,52 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, Building2, BookOpen, CheckCircle, Upload } from 'lucide-react';
+import { X, Layers, Upload } from 'lucide-react';
 import { createFaculty } from '../utils/api';
 
-interface Props {
-  isOpen: boolean;
-  onClose: () => void;
-  universityId: number;
-  universityName: string;
-}
+interface Props { isOpen: boolean; onClose: () => void; universityId: number; universityName: string; }
 
 export function AddFacultyModal({ isOpen, onClose, universityId, universityName }: Props) {
   const queryClient = useQueryClient();
-  const formRef = useRef<HTMLFormElement>(null);
-
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
 
-  // Mutacja używa poprawionej funkcji z api.ts
   const mutation = useMutation({
-    mutationFn: (data: FormData) => createFaculty(data),
+    mutationFn: createFaculty,
     onSuccess: () => {
-      setSuccess(true);
-      // Odświeżamy widok uczelni
       queryClient.invalidateQueries({ queryKey: ['faculties', universityId] });
-      // Odświeżamy panel admina (oczekujące)
-      queryClient.invalidateQueries({ queryKey: ['pending'] });
-
-      setTimeout(() => {
-        handleClose();
-      }, 2000);
+      onClose();
     },
-    onError: (err: any) => {
-      // Wyświetlamy dokładny błąd z backendu (np. "Could not validate credentials")
-      setError(err.response?.data?.detail || "Wystąpił błąd autoryzacji.");
-    }
+    onError: (err: any) => alert(err.response?.data?.detail)
   });
-
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setError("Plik jest za duży (max 5MB).");
-        return;
-      }
-      setImageFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => setImagePreview(reader.result as string);
-      reader.readAsDataURL(file);
-    }
-  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-
     const form = e.target as HTMLFormElement;
-    const formDataNative = new FormData(form);
-
-    // Budujemy FormData ręcznie dla pewności
-    const submissionData = new FormData();
-    submissionData.append('name', formDataNative.get('name') as string);
-    submissionData.append('university_id', universityId.toString());
-
-    if (imageFile) {
-      submissionData.append('image', imageFile);
-    }
-
-    mutation.mutate(submissionData);
-  };
-
-  const handleClose = () => {
-    setSuccess(false);
-    setError('');
-    setImagePreview(null);
-    setImageFile(null);
-    if (formRef.current) formRef.current.reset();
-    onClose();
+    const fd = new FormData();
+    fd.append('name', (form.elements.namedItem('name') as HTMLInputElement).value);
+    fd.append('university_id', universityId.toString());
+    if (imageFile) fd.append('image', imageFile);
+    mutation.mutate(fd);
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex justify-center items-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-base-100 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-primary/20">
-
-        {/* Header */}
-        <div className="bg-base-200 p-4 flex justify-between items-center border-b border-base-300">
-          <div>
-            <h3 className="font-bold text-lg flex items-center gap-2">
-              <BookOpen className="text-primary"/> Dodaj Wydział
-            </h3>
-            <p className="text-xs opacity-70 mt-1">Uczelnia: {universityName}</p>
+    <div className="fixed inset-0 bg-black/60 z-50 flex justify-center items-center p-4 backdrop-blur-sm">
+      <div className="bg-base-100 w-full max-w-md rounded-2xl shadow-xl p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-bold text-lg flex gap-2"><Layers/> Add Faculty to {universityName}</h3>
+          <button onClick={onClose}><X size={20}/></button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <input name="name" placeholder="Faculty Name" className="input input-bordered w-full" required />
+          <div className="form-control">
+             <label className="label cursor-pointer justify-start gap-4 border-2 border-dashed rounded-lg p-4">
+                <Upload/> <span>Upload Image</span>
+                <input type="file" accept="image/*" className="hidden" onChange={e => setImageFile(e.target.files?.[0] || null)} />
+             </label>
           </div>
-          <button onClick={handleClose} className="btn btn-ghost btn-circle btn-sm">
-            <X size={20}/>
-          </button>
-        </div>
-
-        <div className="p-6">
-          {success ? (
-            <div className="text-center py-8 space-y-4 animate-in zoom-in duration-300">
-              <CheckCircle size={64} className="text-success mx-auto" />
-              <div>
-                <h3 className="text-xl font-bold text-success">Sukces!</h3>
-                <p className="opacity-70 mt-2">
-                  Wydział wysłany do weryfikacji.
-                </p>
-              </div>
-            </div>
-          ) : (
-            <form ref={formRef} onSubmit={handleSubmit} className="flex flex-col gap-4">
-              {error && <div className="alert alert-error text-sm py-2 shadow-sm">{error}</div>}
-
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text font-semibold">Nazwa Wydziału</span>
-                </label>
-                <input
-                  name="name"
-                  placeholder="np. Wydział Architektury"
-                  className="input input-bordered w-full focus:input-primary"
-                  required
-                />
-              </div>
-
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text font-semibold">Zdjęcie (opcjonalne)</span>
-                </label>
-
-                <div className="space-y-3">
-                  {!imagePreview ? (
-                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-xl cursor-pointer border-base-300 bg-base-200/50 hover:bg-base-200 hover:border-primary transition-all duration-200">
-                      <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center">
-                        <Upload className="w-8 h-8 mb-2 opacity-50" />
-                        <p className="mb-1 text-sm text-base-content/70">
-                          <span className="font-bold text-primary">Kliknij</span> lub upuść zdjęcie
-                        </p>
-                        <p className="text-xs text-base-content/40">PNG, JPG (max. 5MB)</p>
-                      </div>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleImageChange}
-                      />
-                    </label>
-                  ) : (
-                    <div className="relative group">
-                      <img
-                        src={imagePreview}
-                        alt="Podgląd"
-                        className="w-full h-40 object-cover rounded-xl border border-base-300 shadow-sm"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setImagePreview(null);
-                          setImageFile(null);
-                        }}
-                        className="absolute top-2 right-2 btn btn-xs btn-circle btn-error shadow-md opacity-90 hover:opacity-100 transition-opacity"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-6 flex gap-3 justify-end">
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={handleClose}
-                >
-                  Anuluj
-                </button>
-                <button
-                  type="submit"
-                  className={`btn btn-primary px-6 ${mutation.isPending ? 'loading' : ''}`}
-                  disabled={mutation.isPending}
-                >
-                  {mutation.isPending ? 'Wysyłanie...' : 'Wyślij'}
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
+          <button className="btn btn-primary w-full" disabled={mutation.isPending}>Submit</button>
+        </form>
       </div>
     </div>
   );

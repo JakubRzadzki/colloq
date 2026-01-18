@@ -1,98 +1,51 @@
-import { useState } from 'react';
-import axios from 'axios';
-import { X, MessageCircle, FileText, Zap, Video, Link as LinkIcon, Download } from 'lucide-react';
-import { API_URL, getAuthHeader } from '../utils/api';
-import { ChatBot } from './ChatBot';
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { X, Send } from 'lucide-react';
+import { getNoteComments, addComment, Comment, API_URL } from '../utils/api';
 
-export function NoteModal({ note, onClose }: { note: any, onClose: () => void }) {
-  const [activeTab, setActiveTab] = useState<'content' | 'summary' | 'flashcards'>('content');
-  const [summary, setSummary] = useState<string>('');
-  const [flashcards, setFlashcards] = useState<any[]>([]);
-  const [loadingAI, setLoadingAI] = useState(false);
+interface NoteModalProps { note: any; onClose: () => void; }
 
-  const fetchSummary = async () => {
-    if (summary) return setActiveTab('summary');
-    setLoadingAI(true);
-    try {
-      const res = await axios.post(`${API_URL}/ai/summary`, { note_content: note.content }, { headers: getAuthHeader() });
-      setSummary(res.data.summary);
-      setActiveTab('summary');
-    } catch (e) { alert("Błąd AI"); }
-    finally { setLoadingAI(false); }
-  };
+export const NoteModal: React.FC<NoteModalProps> = ({ note, onClose }) => {
+  const [newComment, setNewComment] = useState('');
+  const queryClient = useQueryClient();
 
-  const fetchFlashcards = async () => {
-    if (flashcards.length) return setActiveTab('flashcards');
-    setLoadingAI(true);
-    try {
-      const res = await axios.post(`${API_URL}/ai/flashcards`, { note_content: note.content }, { headers: getAuthHeader() });
-      setFlashcards(res.data);
-      setActiveTab('flashcards');
-    } catch (e) { alert("Błąd AI"); }
-    finally { setLoadingAI(false); }
-  };
+  const { data: comments } = useQuery<Comment[]>({
+    queryKey: ['comments', note.id],
+    queryFn: () => getNoteComments(note.id),
+  });
+
+  const commentMutation = useMutation({
+    mutationFn: (content: string) => addComment(note.id, content),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['comments', note.id] }); setNewComment(''); }
+  });
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-base-100 w-full max-w-5xl h-[85vh] rounded-2xl shadow-2xl flex overflow-hidden">
+    <div className="modal modal-open">
+      <div className="modal-box w-11/12 max-w-5xl h-[90vh] p-0 flex flex-col md:flex-row bg-base-100 overflow-hidden">
+        <button onClick={onClose} className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2 z-50"><X/></button>
 
-        {/* Left Side: Content */}
-        <div className="flex-1 flex flex-col border-r border-base-300 relative">
-          <div className="p-4 border-b flex justify-between items-center bg-base-200/50">
-            <h2 className="font-bold text-xl">{note.title}</h2>
-            <div className="flex gap-2">
-               {note.video_url && <a href={note.video_url} target="_blank" className="btn btn-xs btn-error btn-outline"><Video size={14}/> Video</a>}
-               {note.link_url && <a href={note.link_url} target="_blank" className="btn btn-xs btn-info btn-outline"><LinkIcon size={14}/> Link</a>}
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-6 relative">
-            {activeTab === 'content' && (
-              <div className="prose max-w-none">
-                 <p className="whitespace-pre-wrap">{note.content}</p>
-                 {note.image_url && <img src={`${API_URL}${note.image_url}`} className="rounded-lg shadow-lg max-h-96 object-contain" />}
-              </div>
-            )}
-
-            {activeTab === 'summary' && (
-              <div className="animate-in fade-in">
-                <h3 className="font-bold text-lg mb-4 flex gap-2"><FileText className="text-primary"/> Podsumowanie AI</h3>
-                <div className="prose max-w-none">{summary}</div>
-              </div>
-            )}
-
-            {activeTab === 'flashcards' && (
-              <div className="animate-in fade-in grid grid-cols-1 md:grid-cols-2 gap-4">
-                 {flashcards.map((f, i) => (
-                   <div key={i} className="card bg-base-200 border border-base-300 group perspective">
-                     <div className="card-body p-4 text-center min-h-[150px] flex flex-col justify-center cursor-pointer hover:bg-base-300 transition-colors" onClick={(e) => e.currentTarget.classList.toggle('bg-primary/10')}>
-                        <p className="font-bold text-lg">{f.question}</p>
-                        <div className="divider my-1 opacity-20"></div>
-                        <p className="text-sm opacity-0 group-hover:opacity-100 transition-opacity text-primary font-bold">{f.answer}</p>
-                     </div>
-                   </div>
-                 ))}
-              </div>
-            )}
-
-            {loadingAI && <div className="absolute inset-0 bg-base-100/80 flex items-center justify-center"><span className="loading loading-spinner loading-lg text-primary"></span></div>}
-          </div>
-
-          <div className="p-4 border-t bg-base-100 flex justify-between">
-            <div className="join">
-               <button className={`join-item btn btn-sm ${activeTab === 'content' ? 'btn-neutral' : ''}`} onClick={() => setActiveTab('content')}>Treść</button>
-               <button className={`join-item btn btn-sm ${activeTab === 'summary' ? 'btn-neutral' : ''}`} onClick={fetchSummary}><FileText size={16}/> Podsumuj</button>
-               <button className={`join-item btn btn-sm ${activeTab === 'flashcards' ? 'btn-neutral' : ''}`} onClick={fetchFlashcards}><Zap size={16}/> Fiszki</button>
-            </div>
-          </div>
-
-          {/* Embedded Chat */}
-          <ChatBot currentNoteContent={note.content} />
+        <div className="w-full md:w-2/3 h-full overflow-y-auto p-8 border-r">
+          <h2 className="text-3xl font-bold mb-4">{note.title}</h2>
+          {note.image_url && <img src={`${API_URL}${note.image_url}`} className="w-full rounded-xl mb-6 shadow-sm"/>}
+          <p className="whitespace-pre-wrap text-lg">{note.content}</p>
         </div>
 
-        {/* Close Button Overlay */}
-        <button onClick={onClose} className="absolute top-4 right-4 btn btn-circle btn-sm btn-ghost bg-base-100 shadow-md z-50"><X size={20}/></button>
+        <div className="w-full md:w-1/3 h-full flex flex-col bg-base-200/50">
+          <div className="p-4 border-b font-bold">Comments</div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {comments?.map((c) => (
+              <div key={c.id} className="chat chat-start">
+                <div className="chat-header text-xs opacity-50 mb-1">{c.user.username}</div>
+                <div className="chat-bubble chat-bubble-secondary text-sm">{c.content}</div>
+              </div>
+            ))}
+          </div>
+          <form onSubmit={(e) => { e.preventDefault(); if(newComment.trim()) commentMutation.mutate(newComment); }} className="p-4 border-t flex gap-2">
+            <input value={newComment} onChange={e => setNewComment(e.target.value)} className="input input-bordered w-full input-sm" placeholder="Write a comment..." />
+            <button className="btn btn-primary btn-sm btn-square"><Send size={16}/></button>
+          </form>
+        </div>
       </div>
     </div>
   );
-}
+};
