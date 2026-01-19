@@ -5,7 +5,12 @@ import { Search, MapPin, ArrowRight, Building2, PlusCircle } from 'lucide-react'
 import { getUniversities, API_URL } from '../utils/api';
 import { AddUniversityModal } from '../components/AddUniversityModal';
 
-export default function HomePage() {
+// FIX: Define props interface
+interface HomePageProps {
+  t: any;
+}
+
+export default function HomePage({ t }: HomePageProps) {
   const [search, setSearch] = useState("");
   const [isAddUniOpen, setAddUniOpen] = useState(false);
   const token = localStorage.getItem('token');
@@ -17,13 +22,13 @@ export default function HomePage() {
     <div className="space-y-12 animate-in fade-in duration-500">
       <section className="text-center py-20 px-4 bg-gradient-to-b from-base-200 to-base-100">
         <h1 className="text-6xl font-black mb-6 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">Colloq PRO</h1>
-        <p className="text-xl opacity-70 mb-8 max-w-2xl mx-auto">Crowdsourced educational platform. Find notes, share knowledge, vote for the best content.</p>
+        <p className="text-xl opacity-70 mb-8 max-w-2xl mx-auto">{t.heroSubtitle}</p>
         <div className="max-w-xl mx-auto relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 opacity-50"/>
-          <input type="text" placeholder="Search university..." className="input input-lg w-full pl-12 shadow-xl" value={search} onChange={e => setSearch(e.target.value)} />
+          <input type="text" placeholder={t.searchPlaceholder} className="input input-lg w-full pl-12 shadow-xl" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <div className="mt-6">
-            {token ? <button onClick={() => setAddUniOpen(true)} className="btn btn-outline gap-2 rounded-full"><PlusCircle size={18}/> Missing University?</button> : <p className="text-sm opacity-50">Login to add universities</p>}
+            {token ? <button onClick={() => setAddUniOpen(true)} className="btn btn-outline gap-2 rounded-full"><PlusCircle size={18}/> Missing University?</button> : <p className="text-sm opacity-50">{t.login} to add universities</p>}
         </div>
       </section>
 

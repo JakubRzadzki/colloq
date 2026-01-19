@@ -8,7 +8,6 @@ import {
 
 type TabType = 'universities' | 'faculties' | 'fields' | 'subjects' | 'notes' | 'images';
 
-// Helper function to map UI tabs to API item types
 const getApiType = (tab: TabType): string => {
   switch (tab) {
     case 'universities': return 'university';
@@ -21,7 +20,8 @@ const getApiType = (tab: TabType): string => {
   }
 };
 
-export function AdminPage() {
+// FIX: Add t prop
+export function AdminPage({ t }: { t: any }) {
   const [activeTab, setActiveTab] = useState<TabType>('notes');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -71,7 +71,7 @@ export function AdminPage() {
   return (
     <div className="p-6 max-w-7xl mx-auto animate-in fade-in">
       <h1 className="text-3xl font-bold mb-6 flex gap-2 items-center">
-        <ShieldCheck className="text-primary"/> Admin Panel
+        <ShieldCheck className="text-primary"/> {t.admin || 'Admin Panel'}
       </h1>
 
       <div className="tabs tabs-boxed mb-6 overflow-x-auto justify-start">

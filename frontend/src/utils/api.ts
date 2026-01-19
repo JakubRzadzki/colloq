@@ -2,18 +2,42 @@ import axios from 'axios';
 import { jwtDecode } from "jwt-decode";
 import { University, Faculty, FieldOfStudy, Subject, Note, User, Review, Comment, PendingItems } from './types';
 
-// Export types so components can use them directly from api.ts
+// Export types so components can use them directly
 export * from './types';
 
-// Hardcoded API URL to prevent build issues
+// Hardcoded API URL
 export const API_URL = 'http://localhost:8000';
+
+// --- MVP TERM TYPES ---
+export interface GlobalField {
+  id: number;
+  name: string;
+  degree: string;
+  faculty: string;
+  university: string;
+  university_id: number;
+}
+
+export interface GlobalSubject {
+  id: number;
+  name: string;
+  semester: number;
+  field: string;
+  university: string;
+  university_id: number;
+}
+
+export interface SearchResult {
+  fields: GlobalField[];
+  subjects: GlobalSubject[];
+}
 
 export const getAuthHeader = () => {
   const token = localStorage.getItem('token');
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
-// Synchronous isAdmin check to prevent rendering issues
+// Synchronous isAdmin check
 export const isAdmin = (): boolean => {
   const token = localStorage.getItem('token');
   if (!token) return false;
@@ -51,7 +75,7 @@ export const updateProfile = async (data: any) => {
   return await axios.put(`${API_URL}/users/me`, fd, { headers: { ...getAuthHeader(), 'Content-Type': 'multipart/form-data' } });
 };
 
-// --- FETCHING ---
+// --- DATA FETCHING ---
 export const getUniversities = async (): Promise<University[]> => (await axios.get(`${API_URL}/universities`)).data;
 export const getUniversity = async (id: number): Promise<University> => (await axios.get(`${API_URL}/universities/${id}`)).data;
 export const getFaculties = async (id: number): Promise<Faculty[]> => (await axios.get(`${API_URL}/universities/${id}/faculties`)).data;
@@ -65,6 +89,11 @@ export const getNotes = async (uniId?: number, search?: string): Promise<Note[]>
   return (await axios.get(`${API_URL}/notes?${params.toString()}`)).data;
 };
 
+// --- GLOBAL SEARCH (MVP TERM) ---
+export const globalSearch = async (query: string): Promise<SearchResult> => {
+  return (await axios.get(`${API_URL}/search/global?q=${encodeURIComponent(query)}`)).data;
+};
+
 // --- CREATION & UPLOADS ---
 export const createUniversity = async (data: any) => {
   const fd = new FormData();
@@ -75,22 +104,22 @@ export const createUniversity = async (data: any) => {
   return (await axios.post(`${API_URL}/universities`, fd, { headers: { ...getAuthHeader(), 'Content-Type': 'multipart/form-data' } })).data;
 };
 
-export const createFaculty = async (fd: FormData) => (await axios.post(`${API_URL}/faculties`, fd, { headers: { ...getAuthHeader(), 'Content-Type': 'multipart/form-data' } })).data;
-
-// Fixed: Explicitly exported functions for hierarchy creation
-export const createFieldOfStudy = async (data: { name: string, degree_level: string, faculty_id: number }) =>
-  (await axios.post(`${API_URL}/fields`, data, { headers: getAuthHeader() })).data;
-
-export const createSubject = async (data: { name: string, semester: number, field_of_study_id: number }) =>
-  (await axios.post(`${API_URL}/subjects`, data, { headers: getAuthHeader() })).data;
-
-export const createNote = async (fd: FormData) =>
-  (await axios.post(`${API_URL}/notes`, fd, { headers: { ...getAuthHeader(), 'Content-Type': 'multipart/form-data' } })).data;
-
 export const requestUniversityImageChange = async (uniId: number, file: File) => {
   const fd = new FormData(); fd.append('image', file);
   return (await axios.post(`${API_URL}/universities/${uniId}/image_request`, fd, { headers: { ...getAuthHeader(), 'Content-Type': 'multipart/form-data' } })).data;
 };
+
+export const createNote = async (fd: FormData) => 
+  (await axios.post(`${API_URL}/notes`, fd, { headers: { ...getAuthHeader(), 'Content-Type': 'multipart/form-data' } })).data;
+
+export const createFaculty = async (fd: FormData) => 
+  (await axios.post(`${API_URL}/faculties`, fd, { headers: { ...getAuthHeader(), 'Content-Type': 'multipart/form-data' } })).data;
+
+export const createFieldOfStudy = async (data: { name: string, degree_level: string, faculty_id: number }) => 
+  (await axios.post(`${API_URL}/fields`, data, { headers: getAuthHeader() })).data;
+
+export const createSubject = async (data: { name: string, semester: number, field_of_study_id: number }) => 
+  (await axios.post(`${API_URL}/subjects`, data, { headers: getAuthHeader() })).data;
 
 // --- INTERACTIONS ---
 export const voteNote = async (id: number) => (await axios.post(`${API_URL}/notes/${id}/vote`, {}, { headers: getAuthHeader() })).data;

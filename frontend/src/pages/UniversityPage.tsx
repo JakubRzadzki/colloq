@@ -41,8 +41,8 @@ const ReviewForm: React.FC<{ universityId: number; onSuccess: () => void }> = ({
   );
 };
 
-// --- MAIN PAGE COMPONENT ---
-export function UniversityPage() {
+// FIX: Add t prop here
+export function UniversityPage({ t }: { t: any }) {
   const { id } = useParams<{ id: string }>();
   const uniId = parseInt(id || '0');
   const token = localStorage.getItem('token');
@@ -204,7 +204,6 @@ export function UniversityPage() {
                     <div className="stats shadow bg-base-200/50">
                         <div className="stat">
                             <div className="stat-title">Faculties</div>
-                            {/* FIX: Use 'faculties' variable instead of 'university.faculties' */}
                             <div className="stat-value">{faculties?.length || 0}</div>
                         </div>
                         <div className="stat">

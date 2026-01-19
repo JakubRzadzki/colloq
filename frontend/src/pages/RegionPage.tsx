@@ -3,7 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, GraduationCap, MapPin } from 'lucide-react';
 import { getUniversities, API_URL } from '../utils/api';
 
-export function RegionPage() {
+// FIX: Add t prop
+export function RegionPage({ t }: { t: any }) {
   const { regionName } = useParams();
   const { data: universities, isLoading } = useQuery({
     queryKey: ['universities'],
@@ -16,7 +17,7 @@ export function RegionPage() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto animate-in fade-in">
-      <Link to="/" className="btn btn-ghost mb-8 gap-2"><ArrowLeft size={18}/> Home</Link>
+      <Link to="/" className="btn btn-ghost mb-8 gap-2"><ArrowLeft size={18}/> {t.home}</Link>
 
       <div className="mb-10">
         <h1 className="text-4xl font-black">Region: <span className="text-primary">{regionName}</span></h1>
