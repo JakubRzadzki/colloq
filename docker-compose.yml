@@ -1,68 +1,52 @@
-# docker-compose.yml
-# Complete configuration with all bug fixes
-
 version: '3.8'
 
 services:
-  # PostgreSQL Database
-  db:
-    image: postgres:15-alpine
-    container_name: colloq_db
-    environment:
-      POSTGRES_USER: colloq
-      POSTGRES_PASSWORD: colloq
-      POSTGRES_DB: colloq
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U colloq"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Backend API
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: colloq_backend
-    environment:
-      # ✅ FIX #7: Explicit database URL
-      - DATABASE_URL=postgresql://colloq:colloq@db:5432/colloq
-      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production}
-      - PYTHONUNBUFFERED=1
     ports:
       - "8000:8000"
     volumes:
       - ./backend:/app
-      - uploads_data:/app/uploads
+      - ./backend/uploads:/app/uploads
+    environment:
+      - DATABASE_URL=postgresql://colloq:colloq123@db:5432/colloq
+      - SECRET_KEY=your-secret-key-change-in-production
     depends_on:
       db:
         condition: service_healthy
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
-  # Frontend
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: colloq_frontend
-    environment:
-      # ✅ FIX #3: Proper API URL configuration
-      - VITE_API_URL=http://localhost:8000
     ports:
-      - "3000:3000"
+      - "5173:5173"
     volumes:
       - ./frontend:/app
       - /app/node_modules
-    depends_on:
-      - backend
-    command: npm run dev -- --host 0.0.0.0
+    environment:
+      # Ensure frontend knows where backend is
+      - VITE_API_URL=http://localhost:8000
+    command: npm run dev -- --host
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=colloq
+      - POSTGRES_PASSWORD=colloq123
+      - POSTGRES_DB=colloq
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U colloq -d colloq"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:
-    driver: local
-  uploads_data:
-    driver: local

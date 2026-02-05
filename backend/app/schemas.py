@@ -1,8 +1,7 @@
 """
 Pydantic schemas for Colloq PRO.
 """
-from pydantic import BaseModel, EmailStr, computed_field
-from pydantic import ConfigDict
+from pydantic import BaseModel, EmailStr
 from datetime import datetime
 from typing import Optional, List
 
@@ -10,7 +9,6 @@ from typing import Optional, List
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
-    nickname: Optional[str] = None
     university_id: int
 
 class UserOut(BaseModel):
@@ -24,27 +22,6 @@ class UserOut(BaseModel):
     university_id: int
     class Config:
         from_attributes = True
-
-class UserResponse(BaseModel):
-    """API user response with role and username for frontend."""
-    id: int
-    email: str
-    nickname: Optional[str] = None
-    avatar_url: Optional[str] = None
-    created_at: Optional[datetime] = None
-    is_admin: bool = False
-
-    model_config = ConfigDict(from_attributes=True)
-
-    @computed_field
-    @property
-    def role(self) -> str:
-        return "admin" if self.is_admin else "user"
-
-    @computed_field
-    @property
-    def username(self) -> str:
-        return self.nickname or self.email or ""
 
 class RegisterRequest(BaseModel):
     user: UserCreate
@@ -140,40 +117,8 @@ class NoteOut(BaseModel):
     class Config:
         from_attributes = True
 
-
-class NoteResponse(BaseModel):
-    """API note response with user (from author) for frontend."""
-    id: int
-    title: Optional[str] = None
-    description: Optional[str] = None
-    content: Optional[str] = None
-    file_url: Optional[str] = None
-    course_name: Optional[str] = None
-    score: float = 0.0
-    created_at: Optional[datetime] = None
-    university_id: int
-    is_approved: bool = False
-    author: Optional[UserOut] = None
-
-    model_config = ConfigDict(from_attributes=True)
-
-    @computed_field
-    @property
-    def user(self) -> Optional[UserResponse]:
-        return UserResponse.model_validate(self.author) if self.author else None
-
-
-# Aliases for main.py
-CommentResponse = CommentOut
-ReviewResponse = ReviewOut
-
-
-class PendingContentResponse(BaseModel):
-    notes: List[NoteResponse]
-    reviews: List[ReviewOut]
-    image_requests: List[ImageRequestOut]
-
 # --- ADMIN ---
+# CRITICAL FIX: ImageRequestOut must be defined BEFORE PendingItemsResponse
 class ImageRequestOut(BaseModel):
     id: int
     university_id: int

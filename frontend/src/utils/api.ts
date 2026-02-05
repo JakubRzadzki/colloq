@@ -1,385 +1,169 @@
-// frontend/src/utils/api.ts
-// Complete version with all bug fixes applied
-
 import axios from 'axios';
+import { jwtDecode } from "jwt-decode";
+import { University, Faculty, FieldOfStudy, Subject, Note, User, Review, Comment, PendingItems } from './types';
 
-// ✅ FIX #3: Use environment variable for API URL
+// Export types so components can use them directly
+export * from './types';
+
+// Dynamic API URL for Docker/Production support
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-export const axiosInstance = axios.create({
-  baseURL: API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
+// --- MVP TERM TYPES ---
+export interface GlobalField {
+  id: number;
+  name: string;
+  degree: string;
+  faculty: string;
+  university: string;
+  university_id: number;
+}
 
-// Add auth token to requests
-axiosInstance.interceptors.request.use((config) => {
+export interface GlobalSubject {
+  id: number;
+  name: string;
+  semester: number;
+  field: string;
+  university: string;
+  university_id: number;
+}
+
+export interface SearchResult {
+  fields: GlobalField[];
+  subjects: GlobalSubject[];
+}
+
+export const getAuthHeader = () => {
   const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+// Synchronous isAdmin check
+export const isAdmin = (): boolean => {
+  const token = localStorage.getItem('token');
+  if (!token) return false;
+  try {
+    const decoded: any = jwtDecode(token);
+    return decoded.is_admin === true;
+  } catch {
+    return false;
   }
-  return config;
-});
-
-// Types
-export interface User {
-  id: number;
-  username: string;
-  nickname: string;
-  email: string;
-  role: string;
-  avatar_url?: string;
-  created_at: string;
-}
-
-export interface University {
-  id: number;
-  name: string;
-  city?: string;
-  region: string;
-  image_url?: string;
-  banner_url?: string;
-  description?: string;
-  website?: string;
-}
-
-export interface Faculty {
-  id: number;
-  name: string;
-  image_url?: string;
-  university_id: number;
-}
-
-export interface Note {
-  id: number;
-  title: string;
-  description?: string;
-  file_url: string;
-  university_id: number;
-  course_name: string;
-  score: number;
-  created_at: string;
-  user: User;
-  is_approved: boolean;
-}
-
-export interface Review {
-  id: number;
-  university_id: number;
-  rating: number;
-  comment: string;
-  created_at: string;
-  user: User;
-  is_approved: boolean;
-}
-
-export interface Comment {
-  id: number;
-  note_id: number;
-  content: string;
-  created_at: string;
-  user: User;
-}
-
-export interface PendingContent {
-  notes: Note[];
-  reviews: Review[];
-  image_requests: any[];
-}
-
-// ✅ FIX #2: Add user transformation helper
-const transformUser = (user: any): User => ({
-  id: user.id,
-  username: user.nickname || user.username,
-  nickname: user.nickname,
-  email: user.email,
-  role: user.role,
-  avatar_url: user.avatar_url,
-  created_at: user.created_at
-});
-
-// Auth
-export const login = async (email: string, password: string) => {
-  const formData = new FormData();
-  formData.append('username', email);
-  formData.append('password', password);
-
-  const res = await axiosInstance.post('/auth/login', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
-
-  if (res.data.access_token) {
-    localStorage.setItem('token', res.data.access_token);
-  }
-
-  return res.data;
 };
 
-export const register = async (data: { email: string; password: string; nickname?: string; university_id: number }) => {
-  const res = await axiosInstance.post('/auth/register', {
-    email: data.email,
-    password: data.password,
-    nickname: data.nickname ?? null,
-    university_id: data.university_id,
-  });
-  return res.data;
+export const logout = () => localStorage.removeItem('token');
+
+// --- AUTH ---
+export const login = async (username: string, password: string) => {
+  const fd = new FormData();
+  fd.append('username', username);
+  fd.append('password', password);
+  return (await axios.post(`${API_URL}/token`, fd)).data;
 };
 
-export const logout = () => {
-  localStorage.removeItem('token');
-};
+export const register = async (userData: any) =>
+  (await axios.post(`${API_URL}/register`, { user: userData })).data;
 
-// ✅ FIX #2: Transform user data
 export const getCurrentUser = async (): Promise<User> => {
-  const res = await axiosInstance.get('/users/me');
-  return transformUser(res.data);
+  const res = await axios.get(`${API_URL}/users/me`, { headers: getAuthHeader() });
+  return { ...res.data, username: res.data.nickname };
 };
 
-export const updateProfile = async (data: FormData): Promise<User> => {
-  const res = await axiosInstance.patch('/users/me', data, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
-  return transformUser(res.data);
+export const updateProfile = async (data: any) => {
+  const fd = new FormData();
+  if (data.username) fd.append('nickname', data.username);
+  if (data.bio) fd.append('bio', data.bio);
+  if (data.avatar) fd.append('avatar', data.avatar);
+  // FIX: Do NOT set Content-Type manually for FormData with axios; it breaks the boundary.
+  return await axios.put(`${API_URL}/users/me`, fd, { headers: { ...getAuthHeader() } });
 };
 
-// Universities
-export const getUniversities = async (): Promise<University[]> => {
-  const res = await axiosInstance.get('/universities');
-  return res.data;
+// --- DATA FETCHING ---
+export const getUniversities = async (): Promise<University[]> => (await axios.get(`${API_URL}/universities`)).data;
+export const getUniversity = async (id: number): Promise<University> => (await axios.get(`${API_URL}/universities/${id}`)).data;
+export const getFaculties = async (id: number): Promise<Faculty[]> => (await axios.get(`${API_URL}/universities/${id}/faculties`)).data;
+export const getFields = async (id: number): Promise<FieldOfStudy[]> => (await axios.get(`${API_URL}/faculties/${id}/fields`)).data;
+export const getSubjects = async (id: number): Promise<Subject[]> => (await axios.get(`${API_URL}/fields/${id}/subjects`)).data;
+
+export const getNotes = async (uniId?: number, search?: string): Promise<Note[]> => {
+  const params = new URLSearchParams();
+  if (uniId) params.append('university_id', uniId.toString());
+  if (search) params.append('search', search);
+  return (await axios.get(`${API_URL}/notes?${params.toString()}`)).data;
 };
 
-export const getUniversitiesByRegion = async (region: string): Promise<University[]> => {
-  const res = await axiosInstance.get(`/universities/region/${region}`);
-  return res.data;
-};
-
-export const getUniversity = async (id: number): Promise<University> => {
-  const res = await axiosInstance.get(`/universities/${id}`);
-  return res.data;
-};
-
+// --- NOWA FUNKCJA DLA TWOJEGO HOMEPAGE ---
 export const searchUniversities = async (query: string): Promise<University[]> => {
-  const res = await axiosInstance.get(`/universities/search?q=${query}`);
-  return res.data;
-};
-
-export const uploadUniversityImage = async (universityId: number, file: File) => {
-  const formData = new FormData();
-  formData.append('file', file);
-
-  const res = await axiosInstance.post(`/universities/${universityId}/image`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
-  return res.data;
-};
-
-// Notes
-export const getNotesByUniversity = async (universityId: number): Promise<Note[]> => {
-  const res = await axiosInstance.get(`/universities/${universityId}/notes`);
-  return res.data.map((note: any) => ({
-    ...note,
-    user: transformUser(note.user)
-  }));
-};
-
-export const searchNotes = async (query: string): Promise<Note[]> => {
-  const res = await axiosInstance.get(`/notes/search?q=${query}`);
-  return res.data.map((note: any) => ({
-    ...note,
-    user: transformUser(note.user)
-  }));
-};
-
-export const uploadNote = async (data: FormData): Promise<Note> => {
-  const res = await axiosInstance.post('/notes', data, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
-  return res.data;
-};
-
-export const voteNote = async (noteId: number): Promise<any> => {
-  const res = await axiosInstance.post(`/notes/${noteId}/vote`, {});
-  return res.data;
-};
-
-// ✅ FIX #2: Transform user in comments
-export const getNoteComments = async (noteId: number): Promise<Comment[]> => {
-  const res = await axiosInstance.get(`/notes/${noteId}/comments`);
-  return res.data.map((comment: any) => ({
-    ...comment,
-    user: transformUser(comment.user)
-  }));
-};
-
-export const addNoteComment = async (noteId: number, content: string): Promise<Comment> => {
-  const res = await axiosInstance.post(`/notes/${noteId}/comments`, { content });
-  return {
-    ...res.data,
-    user: transformUser(res.data.user)
-  };
-};
-
-// Reviews
-// ✅ FIX #2: Transform user in reviews; map content -> comment for frontend
-export const getUniversityReviews = async (universityId: number): Promise<Review[]> => {
-  const res = await axiosInstance.get(`/universities/${universityId}/reviews`);
-  return res.data.map((review: any) => ({
-    ...review,
-    comment: review.content ?? review.comment,
-    user: transformUser(review.user)
-  }));
-};
-
-export const addUniversityReview = async (
-  universityId: number,
-  rating: number,
-  comment: string
-): Promise<Review> => {
-  const res = await axiosInstance.post(`/universities/${universityId}/reviews`, {
-    rating,
-    content: comment, // backend expects "content"
-  });
-  return {
-    ...res.data,
-    user: transformUser(res.data.user),
-    comment,
-  };
-};
-
-// Admin
-export const getPendingContent = async (): Promise<PendingContent> => {
-  const res = await axiosInstance.get('/admin/pending');
-  return res.data;
-};
-
-export const approveNote = async (noteId: number) => {
-  const res = await axiosInstance.post(`/admin/notes/${noteId}/approve`);
-  return res.data;
-};
-
-export const rejectNote = async (noteId: number) => {
-  const res = await axiosInstance.post(`/admin/notes/${noteId}/reject`);
-  return res.data;
-};
-
-export const approveReview = async (reviewId: number) => {
-  const res = await axiosInstance.post(`/admin/reviews/${reviewId}/approve`);
-  return res.data;
-};
-
-export const rejectReview = async (reviewId: number) => {
-  const res = await axiosInstance.post(`/admin/reviews/${reviewId}/reject`);
-  return res.data;
-};
-
-export const approveImage = async (requestId: number) => {
-  const res = await axiosInstance.post(`/admin/images/${requestId}/approve`);
-  return res.data;
-};
-
-export const rejectImage = async (requestId: number) => {
-  const res = await axiosInstance.post(`/admin/images/${requestId}/reject`);
-  return res.data;
-};
-
-// --- Aliases and extra API for UniversityPage, addNoteModal, etc. ---
-
-export const requestUniversityImageChange = uploadUniversityImage;
-
-export const addComment = addNoteComment;
-
-export const addReview = async (body: { university_id: number; rating: number; content: string }): Promise<Review> =>
-  addUniversityReview(body.university_id, body.rating, body.content);
-
-/** Get notes for a university, optionally filtered by search (client-side filter). */
-export const getNotes = async (universityId: number, search?: string): Promise<Note[]> => {
-  const notes = await getNotesByUniversity(universityId);
-  if (!search?.trim()) return notes;
-  const q = search.toLowerCase();
-  return notes.filter(
-    (n) =>
-      (n.title && n.title.toLowerCase().includes(q)) ||
-      (n.description && n.description.toLowerCase().includes(q)) ||
-      (n.course_name && n.course_name.toLowerCase().includes(q))
+  // Pobieramy wszystkie i filtrujemy po stronie klienta (najszybsze rozwiązanie)
+  const all = await getUniversities();
+  if (!query) return [];
+  const lowerQuery = query.toLowerCase();
+  return all.filter(u =>
+    u.name.toLowerCase().includes(lowerQuery) ||
+    u.city.toLowerCase().includes(lowerQuery) ||
+    u.region.toLowerCase().includes(lowerQuery)
   );
 };
 
-/** Faculties (stub until backend has endpoint). */
-export const getFaculties = async (_universityId: number): Promise<Faculty[]> => {
-  const res = await axiosInstance.get(`/universities/${_universityId}/faculties`).catch(() => ({ data: [] }));
-  return Array.isArray(res.data) ? res.data : [];
+// --- GLOBAL SEARCH (MVP TERM) ---
+export const globalSearch = async (query: string): Promise<SearchResult> => {
+  return (await axios.get(`${API_URL}/search/global?q=${encodeURIComponent(query)}`)).data;
 };
 
-/** Fields of study (stub until backend has endpoint). */
-export const getFields = async (_facultyId: number): Promise<{ id: number; name: string; faculty_id: number }[]> => {
-  const res = await axiosInstance.get(`/faculties/${_facultyId}/fields`).catch(() => ({ data: [] }));
-  return Array.isArray(res.data) ? res.data : [];
-};
-
-/** Subjects (stub until backend has endpoint). */
-export const getSubjects = async (_fieldId: number): Promise<{ id: number; name: string; semester?: number; field_of_study_id: number }[]> => {
-  const res = await axiosInstance.get(`/fields/${_fieldId}/subjects`).catch(() => ({ data: [] }));
-  return Array.isArray(res.data) ? res.data : [];
-};
-
-/** Create note from form (maps to uploadNote with course_name/subject). */
-export const createNote = async (formData: FormData): Promise<Note> => {
-  const title = formData.get('title') as string;
-  const content = (formData.get('content') ?? formData.get('description')) as string | undefined;
-  const universityId = formData.get('university_id') as string;
-  const subjectId = formData.get('subject_id') as string;
-  const file = formData.get('image') ?? formData.get('file');
+// --- CREATION & UPLOADS ---
+export const createUniversity = async (data: any) => {
   const fd = new FormData();
-  fd.append('title', title ?? '');
-  fd.append('description', content ?? '');
-  fd.append('course_name', subjectId ? `Subject ${subjectId}` : 'General');
-  fd.append('university_id', universityId ?? '');
-  if (file instanceof File) fd.append('file', file);
-  return uploadNote(fd);
+  fd.append('name', data.name);
+  fd.append('city', data.city);
+  fd.append('region', data.region);
+  if (data.image) fd.append('image', data.image);
+  // FIX: Removed manual multipart/form-data header
+  return (await axios.post(`${API_URL}/universities`, fd, { headers: { ...getAuthHeader() } })).data;
 };
 
-export const createFieldOfStudy = async (_payload: { name: string; degree_level: string; faculty_id: number }): Promise<unknown> => {
-  const res = await axiosInstance.post('/fields', _payload).catch(() => ({ data: {} }));
-  return res.data;
+export const requestUniversityImageChange = async (uniId: number, file: File) => {
+  const fd = new FormData(); fd.append('image', file);
+  // FIX: Removed manual multipart/form-data header
+  return (await axios.post(`${API_URL}/universities/${uniId}/image_request`, fd, { headers: { ...getAuthHeader() } })).data;
 };
 
-export const createSubject = async (_payload: { name: string; semester: number; field_of_study_id: number }): Promise<unknown> => {
-  const res = await axiosInstance.post('/subjects', _payload).catch(() => ({ data: {} }));
-  return res.data;
-};
+export const createNote = async (fd: FormData) =>
+  // FIX: Removed manual multipart/form-data header
+  (await axios.post(`${API_URL}/notes`, fd, { headers: { ...getAuthHeader() } })).data;
 
-/** Toggle favorite (stub until backend has endpoint). */
-export const toggleFavorite = async (_noteId: number): Promise<{ is_favorited?: boolean }> => {
-  await axiosInstance.post(`/notes/${_noteId}/favorite`).catch(() => ({}));
-  return {};
-};
+export const createFaculty = async (fd: FormData) =>
+  // FIX: Removed manual multipart/form-data header
+  (await axios.post(`${API_URL}/faculties`, fd, { headers: { ...getAuthHeader() } })).data;
 
-/** Create university (stub until backend has endpoint). */
-export const createUniversity = async (payload: { name: string; city: string; region: string; image?: File }): Promise<University> => {
-  const formData = new FormData();
-  formData.append('name', payload.name);
-  formData.append('city', payload.city);
-  formData.append('region', payload.region);
-  if (payload.image) formData.append('file', payload.image);
-  const res = await axiosInstance.post('/universities', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  }).catch(() => ({ data: { id: 0, name: payload.name, region: payload.region, city: payload.city } }));
-  return res.data as University;
-};
+export const createFieldOfStudy = async (data: { name: string, degree_level: string, faculty_id: number }) =>
+  (await axios.post(`${API_URL}/fields`, data, { headers: getAuthHeader() })).data;
 
-/** Create faculty (stub until backend has endpoint). */
-export const createFaculty = async (formData: FormData): Promise<Faculty> => {
-  const res = await axiosInstance.post('/faculties', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  }).catch(() => ({ data: { id: 0, name: String(formData.get('name')), university_id: Number(formData.get('university_id')) } }));
-  return res.data as Faculty;
-};
+export const createSubject = async (data: { name: string, semester: number, field_of_study_id: number }) =>
+  (await axios.post(`${API_URL}/subjects`, data, { headers: getAuthHeader() })).data;
 
-/** Global search (stub until backend has endpoint). */
-export const globalSearch = async (_query: string): Promise<{ subjects: any[]; fields: any[] }> => {
-  const res = await axiosInstance.get(`/search?q=${encodeURIComponent(_query)}`).catch(() => ({ data: { subjects: [], fields: [] } }));
-  return res.data?.subjects != null ? res.data : { subjects: [], fields: [] };
-};
+// --- INTERACTIONS ---
+export const voteNote = async (id: number) => (await axios.post(`${API_URL}/notes/${id}/vote`, {}, { headers: getAuthHeader() })).data;
+export const toggleFavorite = async (id: number) => (await axios.post(`${API_URL}/notes/${id}/favorite`, {}, { headers: getAuthHeader() })).data;
 
-export default axiosInstance;
+export const getUniversityReviews = async (id: number): Promise<Review[]> => (await axios.get(`${API_URL}/universities/${id}/reviews`)).data;
+export const addReview = async (data: any) => await axios.post(`${API_URL}/reviews`, data, { headers: getAuthHeader() });
+
+export const getNoteComments = async (id: number): Promise<Comment[]> => (await axios.get(`${API_URL}/notes/${id}/comments`)).data;
+export const addComment = async (id: number, content: string) => await axios.post(`${API_URL}/notes/${id}/comments`, { content }, { headers: getAuthHeader() });
+
+// --- ADMIN ---
+export const getPendingItems = async (): Promise<PendingItems> => (await axios.get(`${API_URL}/admin/pending_items`, { headers: getAuthHeader() })).data;
+export const approveItem = async (type: string, id: number) => (await axios.post(`${API_URL}/admin/approve/${type}/${id}`, {}, { headers: getAuthHeader() })).data;
+export const rejectItem = async (type: string, id: number) => (await axios.delete(`${API_URL}/admin/reject/${type}/${id}`, { headers: getAuthHeader() })).data;
+export const approveImageRequest = async (id: number) => (await axios.post(`${API_URL}/admin/approve_image_request/${id}`, {}, { headers: getAuthHeader() })).data;
+export const rejectImageRequest = async (id: number) => (await axios.post(`${API_URL}/admin/reject_image_request/${id}`, {}, { headers: getAuthHeader() })).data;
+export const updateUniversityImage = async (id: number, file: File) => {
+  const fd = new FormData(); fd.append('image', file);
+  // FIX: Removed manual multipart/form-data header
+  return (await axios.patch(`${API_URL}/admin/universities/${id}/image`, fd, { headers: { ...getAuthHeader() } })).data;
+};
+export const updateUniversity = async (id: number, data: any) => {
+  const fd = new FormData();
+  if (data.description) fd.append('description', data.description);
+  if (data.banner) fd.append('banner', data.banner);
+  // FIX: Removed manual multipart/form-data header
+  return await axios.put(`${API_URL}/universities/${id}`, fd, { headers: { ...getAuthHeader() } });
+};
