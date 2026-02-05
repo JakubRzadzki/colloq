@@ -98,12 +98,30 @@ Colloq is a comprehensive university search platform that helps students navigat
 The easiest way to get started is using Docker Compose:
 
 ```bash
-# Clone the repository
-git clone https://github.com/JakubRzadzki/colloq.git
-cd colloq
-
-# Start all services
+# From the project root (colloq/)
 docker-compose up -d
+```
+
+**First time or after changing `backend/requirements.txt`?** Rebuild the backend image so dependencies (e.g. PyJWT) are installed:
+
+```bash
+docker-compose up -d --build
+```
+
+**Useful commands:**
+
+```bash
+# Start all services (detached)
+docker-compose up -d
+
+# Start and stream logs
+docker-compose up
+
+# Rebuild and start (e.g. after editing requirements.txt)
+docker-compose up -d --build
+
+# Stop everything
+docker-compose down
 
 # View logs
 docker-compose logs -f

@@ -1,17 +1,24 @@
+# backend/app/database.py
+# Database configuration with fixed credentials
+
 import os
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 
-# Use environment variable or default local DB
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@db:5432/colloq_db")
+# ✅ FIX #7: Updated default credentials to match docker-compose.yml
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://colloq:colloq@db:5432/colloq"
+)
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
 
+
 def get_db():
-    """Dependency for getting DB session."""
     db = SessionLocal()
     try:
         yield db
