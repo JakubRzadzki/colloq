@@ -1,5 +1,6 @@
 import os
 import shutil
+import time
 from typing import List, Dict, Any
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,10 +15,11 @@ class Config:
 	ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@colloq.pl")
 	ADMIN_PASS = os.getenv("ADMIN_PASS", "admin123")
 	UPLOAD_DIR = "uploads"
-	# Ensure subdirectories exist
-	for d in ["universities", "faculties", "avatars"]:
-		os.makedirs(os.path.join(UPLOAD_DIR, d), exist_ok=True)
 
+
+# Ensure subdirectories exist
+for d in ["universities", "faculties", "avatars"]:
+	os.makedirs(os.path.join(Config.UPLOAD_DIR, d), exist_ok=True)
 
 app = FastAPI(title="Colloq PRO MVP", version="5.2.0")
 
@@ -39,9 +41,10 @@ def startup():
 	"""
 	Initializes the database and seeds required data (Admin, University, Syllabus).
 	"""
-	models.Base.metadata.create_all(bind=database.engine)
-	db = database.SessionLocal()
 	try:
+		models.Base.metadata.create_all(bind=database.engine)
+		db = database.SessionLocal()
+		
 		# 1. Seed University: Politechnika Krakowska
 		uni_name = "Politechnika Krakowska"
 		uni = db.query(models.University).filter(models.University.name == uni_name).first()
@@ -123,8 +126,9 @@ def startup():
 			db.commit()
 			print("--- SYLLABUS SEEDED SUCCESSFULLY ---")
 
+		print("--- DATABASE CONNECTED ---")
 	except Exception as e:
-		print(f"Startup Error: {e}")
+		print(f"⚠️ Database not ready yet. Skipping seed. Error: {e}")
 	finally:
 		db.close()
 
@@ -170,13 +174,35 @@ def update_profile(
 		db: Session = Depends(database.get_db),
 		user: models.User = Depends(auth.get_current_user)
 ):
+	"""
+	Update user profile including avatar upload.
+	Args:
+		nickname: New username/nickname
+		bio: New bio text
+		avatar: Avatar image file
+		db: Database session
+		user: Current authenticated user
+	Returns:
+		Updated user data
+	"""
 	if nickname: user.nickname = nickname
 	if bio: user.bio = bio
 	if avatar:
-		file_path = os.path.join("uploads", "avatars", f"{user.id}_{avatar.filename}")
+		# Ensure avatars directory exists
+		avatars_dir = os.path.join(Config.UPLOAD_DIR, "avatars")
+		os.makedirs(avatars_dir, exist_ok=True)
+		
+		# Generate unique filename
+		file_extension = os.path.splitext(avatar.filename)[1]
+		unique_filename = f"{user.id}_{int(time.time())}{file_extension}"
+		file_path = os.path.join(avatars_dir, unique_filename)
+		
+		# Save file
 		with open(file_path, "wb+") as f:
 			shutil.copyfileobj(avatar.file, f)
-		user.avatar_url = f"/{file_path}"
+		
+		# Store relative path for StaticFiles
+		user.avatar_url = f"/uploads/avatars/{unique_filename}"
 
 	db.commit()
 	db.refresh(user)
@@ -478,7 +504,8 @@ def get_fields(id: int, db: Session = Depends(database.get_db)): return db.query
 @app.post("/fields")
 def add_field(f: schemas.FieldOfStudyCreate, db: Session = Depends(database.get_db),
               user: models.User = Depends(auth.get_current_user)):
-	db.add(models.FieldOfStudy(**f.dict(), submitted_by_id=user.id))
+	# Pydantic v2 fix: use model_dump() instead of dict()
+	db.add(models.FieldOfStudy(**f.model_dump(), submitted_by_id=user.id))
 	db.commit()
 	return {"msg": "OK"}
 
@@ -491,6 +518,101 @@ def get_subjects(id: int, db: Session = Depends(database.get_db)): return db.que
 @app.post("/subjects")
 def add_subject(s: schemas.SubjectCreate, db: Session = Depends(database.get_db),
                 user: models.User = Depends(auth.get_current_user)):
-	db.add(models.Subject(**s.dict(), submitted_by_id=user.id))
+	# Pydantic v2 fix: use model_dump() instead of dict()
+	db.add(models.Subject(**s.model_dump(), submitted_by_id=user.id))
 	db.commit()
 	return {"msg": "OK"}
+
+
+@app.get("/stats")
+async def get_stats(db: Session = Depends(database.get_db)):
+    """Get platform statistics"""
+    try:
+        # Count total items
+        users_count = db.query(models.User).count()
+        notes_count = db.query(models.Note).count()
+        universities_count = db.query(models.University).count()
+        
+        # Get latest activity
+        latest_note = db.query(models.Note).order_by(models.Note.created_at.desc()).first()
+        latest_user = db.query(models.User).order_by(models.User.created_at.desc()).first()
+        
+        # Get latest reviews (from universities)
+        latest_review = db.query(models.Review).order_by(models.Review.created_at.desc()).first()
+        
+        return {
+            "users_count": users_count,
+            "notes_count": notes_count,
+            "universities_count": universities_count,
+            "latest_activity": {
+                "latest_note": {
+                    "id": latest_note.id if latest_note else None,
+                    "title": latest_note.title if latest_note else None,
+                    "created_at": latest_note.created_at if latest_note else None,
+                    "university_id": latest_note.university_id if latest_note else None
+                } if latest_note else None,
+                "latest_user": {
+                    "id": latest_user.id if latest_user else None,
+                    "nickname": latest_user.nickname if latest_user else None,
+                    "created_at": latest_user.created_at if latest_user else None
+                } if latest_user else None,
+                "latest_review": {
+                    "id": latest_review.id if latest_review else None,
+                    "content": latest_review.content if latest_review else None,
+                    "created_at": latest_review.created_at if latest_review else None,
+                    "university_id": latest_review.university_id if latest_review else None
+                } if latest_review else None
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching stats: {str(e)}")
+
+@app.get("/leaderboard")
+async def get_leaderboard(db: Session = Depends(database.get_db)):
+    """Get user activity leaderboard"""
+    try:
+        # Get user activity stats with ranking
+        from sqlalchemy import func, desc
+        
+        # Query to get user activity stats
+        user_stats = db.query(
+            models.User.id,
+            models.User.nickname,
+            models.User.avatar_url,
+            func.count(models.Note.id).label('notes_count'),
+            func.sum(models.Note.score).label('total_score'),
+            func.count(models.Review.id).label('reviews_count'),
+            func.count(models.Comment.id).label('comments_count')
+        ).outerjoin(
+            models.Note, models.User.id == models.Note.author_id
+        ).outerjoin(
+            models.Review, models.User.id == models.Review.user_id
+        ).outerjoin(
+            models.Comment, models.User.id == models.Comment.user_id
+        ).group_by(
+            models.User.id, models.User.nickname, models.User.avatar_url
+        ).order_by(
+            desc(func.coalesce(func.sum(models.Note.score), 0))
+        ).limit(20).all()
+        
+        leaderboard = []
+        for i, stat in enumerate(user_stats):
+            total_activity = (stat.notes_count or 0) + (stat.reviews_count or 0) + (stat.comments_count or 0)
+            leaderboard.append({
+                "rank": i + 1,
+                "user_id": stat.id,
+                "nickname": stat.nickname,
+                "avatar_url": stat.avatar_url,
+                "notes_count": stat.notes_count or 0,
+                "total_score": stat.total_score or 0,
+                "reviews_count": stat.reviews_count or 0,
+                "comments_count": stat.comments_count or 0,
+                "total_activity": total_activity
+            })
+        
+        return {
+            "leaderboard": leaderboard,
+            "total_users": len(user_stats)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching leaderboard: {str(e)}")

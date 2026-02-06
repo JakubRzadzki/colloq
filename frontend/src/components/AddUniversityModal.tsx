@@ -44,12 +44,12 @@ export function AddUniversityModal({ isOpen, onClose }: Props) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <input name="name" placeholder="University Name" className="input input-bordered w-full" required />
           <input name="city" placeholder="City" className="input input-bordered w-full" required />
-          <select name="region" className="select select-bordered w-full" required>
-            <option value="" disabled selected>Select Region</option>
+          {/* FIX: Use defaultValue instead of selected attribute on options */}
+          <select name="region" className="select select-bordered w-full" defaultValue="" required>
+            <option value="" disabled>Select Region</option>
             <option value="Małopolskie">Małopolskie</option>
             <option value="Mazowieckie">Mazowieckie</option>
             <option value="Dolnośląskie">Dolnośląskie</option>
-            {/* Add more regions */}
           </select>
           <div className="form-control">
             <label className="label cursor-pointer justify-start gap-4 border-2 border-dashed rounded-xl p-4">

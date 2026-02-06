@@ -1,0 +1,715 @@
+/* frontend/src/index.css */
+/* iOS 26 "DEEP AURORA" SPATIAL DESIGN SYSTEM */
+/* All DaisyUI conflicts resolved - Ready for production */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================
+   BUG FIX #4: DAISYUI CONFLICT RESOLUTION
+   ============================================ */
+
+/* Reset and override DaisyUI defaults */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Force transparent backgrounds on all DaisyUI components */
+.input,
+.card,
+.btn,
+.navbar,
+.dropdown,
+.modal,
+.select,
+.textarea,
+.menu,
+.drawer,
+.tabs {
+  background: transparent !important;
+}
+
+/* Fix navbar alignment - CRITICAL FIX */
+.navbar {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+}
+
+/* Override all card backgrounds */
+.card {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* ============================================
+   ROOT VARIABLES - iOS 26 COLOR SYSTEM (THEMING)
+   ============================================ */
+
+:root {
+  /* --- PALETA BAZOWA (Deep Aurora - DARK DEFAULT) --- */
+  --midnight-deep: #000000;
+  --midnight-blue: #0a0a1a;
+  --electric-violet: #5e5ce6;
+  --neon-cyan: #32ade6;
+  --aurora-pink: #ff2d92;
+  --aurora-purple: #bf5af2;
+
+  /* --- ZMIENNE FUNKCJONALNE (Dynamiczne) --- */
+
+  /* Tło aplikacji */
+  --bg-app: var(--midnight-deep);
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --text-placeholder: rgba(255, 255, 255, 0.4);
+
+  /* Glass System - Dark Default */
+  --glass-bg: rgba(30, 30, 35, 0.4);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-highlight: rgba(255, 255, 255, 0.05);
+  --glass-bg-hover: rgba(40, 40, 45, 0.5); /* Kolor tła po najechaniu */
+
+  /* Inputy - Dark Default */
+  --input-bg: rgba(0, 0, 0, 0.3);
+  --input-border: rgba(255, 255, 255, 0.08);
+
+  /* Aurora - Widoczność */
+  --aurora-opacity: 1;
+
+  /* Spatial Depth */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 16px 64px rgba(0, 0, 0, 0.7);
+  --shadow-glow: 0 0 40px rgba(94, 92, 230, 0.3);
+
+  /* Typography */
+  --font-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+  --tracking-tight: -0.02em;
+}
+
+/* --- LIGHT MODE OVERRIDES --- */
+[data-theme='light'] {
+  /* Tło */
+  --bg-app: #f3f4f6; /* Jasny szary */
+  --text-primary: #1f2937; /* Ciemny grafit */
+  --text-secondary: rgba(31, 41, 55, 0.7);
+  --text-placeholder: rgba(31, 41, 55, 0.4);
+
+  /* Glass System - Light */
+  --glass-bg: rgba(255, 255, 255, 0.65); /* Białe szkło */
+  --glass-border: rgba(0, 0, 0, 0.05);
+  --glass-highlight: rgba(255, 255, 255, 0.4);
+  --glass-bg-hover: rgba(255, 255, 255, 0.9); /* Kolor tła po najechaniu (Light) */
+
+  /* Inputy - Light */
+  --input-bg: rgba(255, 255, 255, 0.8);
+  --input-border: rgba(0, 0, 0, 0.1);
+
+  /* Cienie - lżejsze */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 16px 64px rgba(0, 0, 0, 0.15);
+  --shadow-glow: 0 0 40px rgba(94, 92, 230, 0.15);
+
+  /* Ukryj Aurorę w Light Mode */
+  --aurora-opacity: 0;
+}
+
+/* Fix invisible text in inputs - CRITICAL FIX (Teraz używa zmiennych) */
+.input,
+.select,
+.textarea {
+  color: var(--text-primary) !important;
+  background: var(--input-bg) !important;
+  border: 1px solid var(--input-border) !important;
+  transition: all 0.3s ease;
+}
+
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--text-placeholder) !important;
+}
+
+/* ============================================
+   BASE STYLES - SPATIAL FOUNDATION
+   ============================================ */
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  position: relative;
+  min-height: 100vh;
+  /* Użycie zmiennej dynamicznej zamiast sztywnego koloru */
+  background: var(--bg-app);
+  color: var(--text-primary);
+  transition: background 0.5s ease, color 0.5s ease;
+}
+
+/* Deep Aurora Animated Background (Obsługuje Light/Dark) */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -2;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(94, 92, 230, 0.15) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(50, 173, 230, 0.15) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, rgba(191, 90, 242, 0.1) 0%, transparent 50%);
+  /* Tło bazowe pod gradientem też musi być dynamiczne */
+  opacity: var(--aurora-opacity);
+  transition: opacity 0.5s ease;
+  animation: aurora-drift 20s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Light Mode Background Subtle Gradient (Opcjonalnie) */
+[data-theme='light'] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -3;
+  background: radial-gradient(circle at 50% 0%, rgba(94, 92, 230, 0.05) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* Animated grain overlay for depth */
+body::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' /%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' /%3E%3C/svg%3E");
+  pointer-events: none;
+}
+
+@keyframes aurora-drift {
+  0%, 100% {
+    background-position: 0% 0%, 100% 100%, 50% 50%;
+  }
+  50% {
+    background-position: 100% 100%, 0% 0%, 30% 70%;
+  }
+}
+
+/* ============================================
+   HYPER-GLASS COMPONENT SYSTEM
+   ============================================ */
+
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  border-radius: 24px;
+  box-shadow: var(--shadow-md);
+  color: var(--text-primary);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* NAPRAWIONA SEKCJA HOVER */
+.glass-panel:hover {
+  transform: translateY(-4px) scale(1.01);
+  box-shadow: var(--shadow-lg), var(--shadow-glow);
+  background: var(--glass-bg-hover); /* Używamy zmiennej zamiast warunku */
+  border-color: var(--electric-violet);
+}
+
+/* ============================================
+   SQUIRCLE BUTTONS (SUPER-ELLIPSE)
+   ============================================ */
+
+.btn-squircle {
+  border-radius: 18px; /* Super-elipsa */
+  background: linear-gradient(135deg, #5e5ce6, #bf5af2); /* Violet -> Purple */
+  color: white;
+  border: none;
+  font-weight: 600;
+  box-shadow: 0 4px 15px rgba(94, 92, 230, 0.3);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.btn-squircle:hover {
+  transform: scale(1.02);
+  box-shadow: 0 0 25px rgba(94, 92, 230, 0.6); /* Glow effect */
+}
+
+.btn-squircle:active {
+  transform: scale(0.98);
+}
+
+/* ============================================
+   TYPOGRAPHY HOLOGRAPHIC
+   ============================================ */
+
+.text-holographic {
+  background: linear-gradient(135deg, #e0e0e0, #5e5ce6, #32ade6);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+/* ============================================
+   ANIMATIONS WEJŚCIA (SPATIAL TRANSITIONS)
+   ============================================ */
+
+@keyframes spatial-in {
+  from { opacity: 0; transform: scale(0.98) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.animate-spatial {
+  animation: spatial-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+/* ============================================
+   CARD SYSTEM - SPATIAL DEPTH
+   ============================================ */
+
+.card-spatial {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  border-radius: 24px;
+  padding: 32px;
+  box-shadow: var(--shadow-md);
+  color: var(--text-primary);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.card-spatial::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.1),
+    transparent
+  );
+}
+
+[data-theme='light'] .card-spatial::before {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(0, 0, 0, 0.05),
+    transparent
+  );
+}
+
+.card-spatial:hover {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow:
+    var(--shadow-lg),
+    0 0 60px rgba(94, 92, 230, 0.2);
+  /* Dynamiczne tło na hover */
+  background: var(--glass-bg-hover);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+[data-theme='light'] .card-spatial:hover {
+  border-color: rgba(94, 92, 230, 0.2);
+}
+
+/* Glass Input Fields */
+.glass-input {
+  background: var(--input-bg) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--input-border) !important;
+  border-radius: 16px;
+  padding: 14px 20px;
+  color: var(--text-primary) !important;
+  font-size: 16px;
+  transition: all 0.3s ease;
+  outline: none;
+  width: 100%;
+}
+
+.glass-input::placeholder {
+  color: var(--text-placeholder) !important;
+}
+
+.glass-input:focus {
+  border-color: var(--electric-violet) !important;
+  box-shadow:
+    0 0 0 4px rgba(94, 92, 230, 0.1),
+    inset 0 1px 3px rgba(255, 255, 255, 0.1);
+}
+
+/* ============================================
+   FLOATING ISLAND NAVBAR
+   ============================================ */
+
+.floating-navbar {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 8px;
+  padding: 12px 24px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  box-shadow:
+    var(--shadow-md),
+    0 0 20px rgba(94, 92, 230, 0.2);
+  animation: float-in 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background 0.3s ease, border 0.3s ease;
+}
+
+@keyframes float-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.nav-pill {
+  padding: 10px 20px;
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-size: 15px;
+  text-decoration: none;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+}
+
+.nav-pill::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, var(--electric-violet), var(--neon-cyan));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  border-radius: 999px;
+  z-index: -1;
+}
+
+.nav-pill:hover {
+  color: var(--text-primary);
+  transform: scale(1.05);
+}
+
+.nav-pill:hover::before {
+  opacity: 0.15;
+}
+
+.nav-pill.active {
+  background: linear-gradient(135deg, var(--electric-violet), var(--neon-cyan));
+  color: #ffffff;
+  box-shadow: 0 4px 20px rgba(94, 92, 230, 0.4);
+}
+
+/* ============================================
+   HOLOGRAPHIC TEXT GRADIENTS
+   ============================================ */
+
+.text-holographic {
+  background: linear-gradient(
+    135deg,
+    #e0e0e0 0%,
+    #5e5ce6 25%,
+    #32ade6 50%,
+    #bf5af2 75%,
+    #e0e0e0 100%
+  );
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: holographic-shift 8s ease-in-out infinite;
+  letter-spacing: var(--tracking-tight);
+  font-weight: 800;
+}
+
+/* W Light Mode tekst musi być ciemniejszy */
+[data-theme='light'] .text-holographic {
+  background: linear-gradient(
+    135deg,
+    #1f2937 0%,
+    #5e5ce6 25%,
+    #32ade6 50%,
+    #bf5af2 75%,
+    #1f2937 100%
+  );
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+@keyframes holographic-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+/* ============================================
+   SQUIRCLE BUTTONS (SUPER-ELLIPSE)
+   ============================================ */
+
+.btn-squircle {
+  padding: 14px 32px;
+  background: linear-gradient(135deg, #5e5ce6, #bf5af2);
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 16px;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow:
+    0 4px 16px rgba(94, 92, 230, 0.3),
+    0 0 20px rgba(191, 90, 242, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-squircle::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.2) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.btn-squircle:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow:
+    0 8px 32px rgba(94, 92, 230, 0.5),
+    0 0 40px rgba(191, 90, 242, 0.4);
+}
+
+.btn-squircle:hover::before {
+  opacity: 1;
+}
+
+.btn-squircle:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.btn-squircle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ============================================
+   CARD SYSTEM - SPATIAL DEPTH
+   ============================================ */
+
+.card-spatial {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  border-radius: 24px;
+  padding: 32px;
+  box-shadow: var(--shadow-md);
+  color: var(--text-primary);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.card-spatial::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.1),
+    transparent
+  );
+}
+
+[data-theme='light'] .card-spatial::before {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(0, 0, 0, 0.05),
+    transparent
+  );
+}
+
+.card-spatial:hover {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow:
+    var(--shadow-lg),
+    0 0 60px rgba(94, 92, 230, 0.2);
+  /* Dynamiczne tło na hover */
+  background: var(--glass-bg-hover);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+[data-theme='light'] .card-spatial:hover {
+  border-color: rgba(94, 92, 230, 0.2);
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+
+.text-white {
+  color: var(--text-primary) !important;
+}
+
+.text-glow {
+  text-shadow: 0 0 20px rgba(94, 92, 230, 0.5);
+}
+
+.container-spatial {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 100px 40px 60px;
+}
+
+/* Loading spinner with aurora colors */
+.loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 3px solid rgba(94, 92, 230, 0.2);
+  border-top-color: var(--electric-violet);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Selection styling */
+::selection {
+  background: rgba(94, 92, 230, 0.3);
+  color: #ffffff;
+}
+
+/* Line clamp utilities */
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-4 {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Fade-in animation */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ============================================
+   RESPONSIVE ADJUSTMENTS
+   ============================================ */
+
+@media (max-width: 768px) {
+  .floating-navbar {
+    top: 10px;
+    padding: 10px 16px;
+    gap: 4px;
+    max-width: calc(100vw - 20px);
+  }
+
+  .nav-pill {
+    padding: 8px 14px;
+    font-size: 14px;
+  }
+
+  .container-spatial {
+    padding: 80px 20px 40px;
+  }
+
+  .card-spatial {
+    padding: 24px;
+  }
+
+  .glass-panel {
+    padding: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .nav-pill span {
+    display: none;
+  }
+
+  .nav-pill {
+    padding: 8px 10px;
+  }
+}

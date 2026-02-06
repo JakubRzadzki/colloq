@@ -1,70 +1,95 @@
 import { Link } from 'react-router-dom';
-import { LogOut, ShieldCheck, Sun, Moon, User as UserIcon, Search } from 'lucide-react';
-import { isAdmin } from '../utils/api';
-import { Language } from '../translations';
+import { LogOut, Sun, Moon, User as UserIcon, Search, Shield } from 'lucide-react';
+import { jwtDecode } from "jwt-decode";
+import { API_URL } from '../utils/api';
 
 interface NavbarProps {
   token: string | null;
   theme: string;
   toggleTheme: () => void;
   logout: () => void;
-  // New props for i18n
   t: any;
-  lang: Language;
-  setLang: (lang: Language) => void;
+  lang: 'pl' | 'en';
+  setLang: (lang: 'pl' | 'en') => void;
 }
 
 export function Navbar({ token, theme, toggleTheme, logout, t, lang, setLang }: NavbarProps) {
-  const userIsAdmin = isAdmin();
+  // Decode JWT token to check admin status
+  const isAdmin = (): boolean => {
+    if (!token) return false;
+    try {
+      const decoded: any = jwtDecode(token);
+      return decoded.is_admin === true;
+    } catch {
+      return false;
+    }
+  };
+  // Style zależne od motywu (Glassmorphism Light/Dark)
+  const glassClass = theme === 'light'
+    ? 'bg-white/70 border-black/5 text-gray-900 shadow-[0_8px_32px_rgba(0,0,0,0.1)]'
+    : 'bg-[#1e1e23]/60 border-white/10 text-white shadow-[0_8px_32px_rgba(0,0,0,0.5)]';
+
+  const itemHoverClass = theme === 'light'
+    ? 'hover:bg-black/5'
+    : 'hover:bg-white/10';
 
   return (
-    <div className="navbar bg-base-100/80 backdrop-blur-lg shadow-sm px-4 sticky top-0 z-50 border-b border-base-200">
-      <div className="flex-1 flex gap-4 items-center">
-        <Link to="/" className="btn btn-ghost normal-case text-2xl font-black text-primary">Colloq</Link>
-        <Link to="/term" className="btn btn-ghost btn-sm hidden md:flex gap-2">
-           <Search size={16}/> {t.findTerm}
-        </Link>
-      </div>
+    <div className="fixed top-6 left-0 right-0 flex justify-center z-50 pointer-events-none px-4">
+      <div className={`${glassClass} backdrop-blur-xl border rounded-full px-6 py-3 flex items-center gap-4 md:gap-6 pointer-events-auto transition-all duration-300`}>
 
-      <div className="flex-none gap-2 items-center">
-        {/* Language Switcher */}
-        <div className="join">
+        {/* Logo */}
+        <Link to="/" className="text-xl font-black tracking-tight hover:opacity-80 transition-opacity">
+          Colloq
+        </Link>
+
+        {/* Nawigacja */}
+        <div className={`hidden md:flex items-center gap-1 rounded-full p-1 border ${theme === 'light' ? 'bg-black/5 border-black/5' : 'bg-white/5 border-white/5'}`}>
+          <Link to="/term" className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all flex gap-2 items-center ${itemHoverClass}`}>
+            <Search size={14} /> {t.findTerm || 'Szukaj'}
+          </Link>
+
+          <div className={`w-px h-4 mx-1 ${theme === 'light' ? 'bg-black/10' : 'bg-white/10'}`}></div>
+
+          {/* Przełącznik Języka */}
           <button
-            className={`join-item btn btn-xs ${lang === 'pl' ? 'btn-primary' : 'btn-outline'}`}
-            onClick={() => setLang('pl')}
+            onClick={() => setLang(lang === 'en' ? 'pl' : 'en')}
+            className={`px-3 py-1.5 text-xs font-bold transition-colors uppercase rounded-full ${itemHoverClass}`}
           >
-            PL
-          </button>
-          <button
-            className={`join-item btn btn-xs ${lang === 'en' ? 'btn-primary' : 'btn-outline'}`}
-            onClick={() => setLang('en')}
-          >
-            EN
+            {lang}
           </button>
         </div>
 
-        <button onClick={toggleTheme} className="btn btn-ghost btn-circle btn-sm text-base-content">
-          {theme === 'light' ? <Moon size={18}/> : <Sun size={18}/>}
-        </button>
+        {/* Prawa strona: Motyw i User */}
+        <div className="flex items-center gap-3">
+          <button onClick={toggleTheme} className={`btn btn-circle btn-sm btn-ghost ${itemHoverClass}`}>
+            {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+          </button>
 
-        {token ? (
-          <div className="dropdown dropdown-end">
-            <label tabIndex={0} className="btn btn-ghost btn-circle avatar placeholder ring ring-primary ring-offset-base-100 ring-offset-2">
-              <div className="bg-neutral text-neutral-content rounded-full w-10"><UserIcon size={20}/></div>
-            </label>
-            <ul tabIndex={0} className="mt-3 z-[1] p-2 shadow-lg menu menu-sm dropdown-content bg-base-100 rounded-box w-52">
-              <li><Link to="/profile">{t.profile}</Link></li>
-              {userIsAdmin && <li><Link to="/admin" className="text-warning"><ShieldCheck size={16}/> {t.admin}</Link></li>}
-              <div className="divider my-1"></div>
-              <li><button onClick={logout} className="text-error"><LogOut size={16}/> {t.logout}</button></li>
-            </ul>
-          </div>
-        ) : (
-          <div className="flex gap-2">
-            <Link to="/login" className="btn btn-ghost btn-sm">{t.login}</Link>
-            <Link to="/register" className="btn btn-primary btn-sm text-white">{t.register}</Link>
-          </div>
-        )}
+          {token ? (
+             <div className="dropdown dropdown-end">
+               <label tabIndex={0} className={`btn btn-circle btn-sm btn-ghost avatar border ${theme === 'light' ? 'border-black/10' : 'border-white/20'} hover:border-white/40 transition-all duration-300`}>
+                 {/* Avatar with fallback - IMPROVED: Better styling */}
+                 <div className="w-10 h-10 rounded-full overflow-hidden ring-2 ring-white/20 hover:ring-white/40 transition-all duration-300">
+                    {/* TODO: Add actual avatar logic here when API is ready */}
+                    <div className="w-full h-full bg-gradient-to-br from-[#5e5ce6] to-[#32ade6] flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                       U
+                    </div>
+                 </div>
+               </label>
+               <ul tabIndex={0} className={`mt-4 p-2 shadow-2xl menu menu-sm dropdown-content rounded-2xl w-52 border backdrop-blur-xl ${theme === 'light' ? 'bg-white/90 border-black/5 text-gray-900' : 'bg-[#1e1e23]/90 border-white/10 text-white'}`}>
+                  <li><Link to="/profile" className={itemHoverClass}>{t.profile}</Link></li>
+                  {isAdmin() && (
+                    <li><Link to="/admin" className={itemHoverClass}><Shield size={14} className="text-[#ff2d92]"/> {t.admin}</Link></li>
+                  )}
+                  <li><button onClick={logout} className="text-red-500 hover:bg-red-500/10 flex gap-2"><LogOut size={14}/> {t.logout}</button></li>
+               </ul>
+             </div>
+          ) : (
+            <Link to="/login" className="bg-gradient-to-r from-[#5e5ce6] to-[#bf5af2] text-white px-5 py-2 rounded-full text-sm font-semibold shadow-lg shadow-[#5e5ce6]/20 hover:scale-105 transition-all">
+              {t.login}
+            </Link>
+          )}
+        </div>
       </div>
     </div>
   );

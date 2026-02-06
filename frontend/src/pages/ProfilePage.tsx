@@ -1,8 +1,13 @@
 import React, { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getCurrentUser, updateProfile, type User } from '../utils/api';
+import { Camera, Save } from 'lucide-react';
+import { getCurrentUser, updateProfile, API_URL, type User } from '../utils/api';
 
-// FIX: Add t prop
+/**
+ * User Profile Page Component
+ * Allows users to update their profile information including avatar, username, and bio
+ * @param t - Translation object
+ */
 const ProfilePage: React.FC<{ t: any }> = ({ t }) => {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -19,9 +24,9 @@ const ProfilePage: React.FC<{ t: any }> = ({ t }) => {
 
   React.useEffect(() => {
     if (user) {
-      setUsername(user.username);
+      setUsername(user.nickname);
       setBio(user.bio || '');
-      setAvatarPreview(user.avatar_url || null);
+      setAvatarPreview(user.avatar_url ? `${API_URL}${user.avatar_url}` : null);
     }
   }, [user]);
 
@@ -29,47 +34,44 @@ const ProfilePage: React.FC<{ t: any }> = ({ t }) => {
     mutationFn: updateProfile,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['currentUser'] });
-      alert('Profile updated successfully! ✅');
+      alert('Zapisano zmiany! ✅');
       setAvatarFile(null);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
     },
     onError: (error: any) => {
-      alert(`Error: ${error.response?.data?.detail || 'Failed to update profile'}`);
+      alert(`Błąd: ${error.response?.data?.detail || 'Nie udało się zaktualizować profilu'}`);
     },
   });
 
+  /**
+   * Handle avatar file change
+   * @param e - File input change event
+   */
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setAvatarFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setAvatarPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      setAvatarPreview(URL.createObjectURL(file));
     }
   };
 
+  /**
+   * Handle form submission
+   * @param e - Form submit event
+   */
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const updates: any = {};
-    if (username !== user?.username) updates.username = username;
-    if (bio !== (user?.bio || '')) updates.bio = bio;
+    const updates: any = { username, bio };
     if (avatarFile) updates.avatar = avatarFile;
-
-    if (Object.keys(updates).length === 0) {
-      alert('No changes to save');
-      return;
-    }
     updateMutation.mutate(updates);
   };
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-base-200 to-base-300">
-        <span className="loading loading-spinner loading-lg"></span>
+      <div className="min-h-screen pt-40 flex justify-center">
+        <span className="loading-spinner"></span>
       </div>
     );
   }
@@ -85,51 +87,73 @@ const ProfilePage: React.FC<{ t: any }> = ({ t }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-base-200 to-base-300 py-12">
-      <div className="max-w-4xl mx-auto px-4">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold mb-2">{t.profile}</h1>
-          <p className="text-base-content/70">Customize your account settings</p>
-        </div>
+    <div className="min-h-screen pt-32 px-4 pb-12">
+      <div className="max-w-3xl mx-auto glass-panel p-8 md:p-12 relative overflow-hidden">
+        
+        {/* Dekoracyjne tło */}
+        <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-r from-[#5e5ce6]/20 to-[#32ade6]/20 -z-10"></div>
 
-        <div className="card bg-base-100/50 backdrop-blur-xl shadow-2xl">
-          <div className="card-body p-8">
-            <form onSubmit={handleSubmit}>
-              <div className="flex flex-col items-center mb-8">
-                <div className="relative mb-4">
-                  <div className="avatar">
-                    <div className="w-32 h-32 rounded-full ring ring-primary ring-offset-base-100 ring-offset-2">
-                      {avatarPreview ? (
-                        <img src={avatarPreview} alt="Avatar" />
-                      ) : (
-                        <div className="bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-primary-content text-4xl font-bold">
-                          {username?.[0]?.toUpperCase() || 'U'}
+        <div className="flex flex-col md:flex-row gap-8 items-start">
+            
+            {/* AVATAR SECTION - FIXED LAYOUT */}
+            <div className="relative group shrink-0 mx-auto md:mx-0">
+                {/* FIXED: Proper aspect ratio and overflow-hidden to prevent distortion */}
+                <div className="aspect-square w-40 h-40 rounded-full border-4 border-white/10 shadow-2xl overflow-hidden bg-black/50">
+                    {avatarPreview ? (
+                        /* FIXED: object-cover prevents image stretching/distortion */
+                        <img src={avatarPreview} className="w-full h-full object-cover" alt="Avatar" />
+                    ) : (
+                        /* Placeholder */
+                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#5e5ce6] to-[#bf5af2] text-white text-5xl font-bold">
+                            {user?.nickname?.[0]?.toUpperCase() || 'U'}
                         </div>
-                      )}
-                    </div>
-                  </div>
-                  <button type="button" onClick={() => fileInputRef.current?.click()} className="absolute bottom-0 right-0 btn btn-circle btn-primary btn-sm">📷</button>
-                  <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
+                    )}
                 </div>
-              </div>
-
-              <div className="form-control mb-6">
-                <label className="label"><span className="label-text font-semibold">Username</span></label>
-                <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="input input-bordered input-lg w-full" required />
-              </div>
-
-              <div className="form-control mb-6">
-                <label className="label"><span className="label-text font-semibold">Bio</span></label>
-                <textarea value={bio} onChange={(e) => setBio(e.target.value.slice(0, 500))} className="textarea textarea-bordered textarea-lg h-32 w-full" maxLength={500} />
-              </div>
-
-              <div className="flex gap-4 justify-end">
-                <button type="submit" className="btn btn-primary px-8" disabled={updateMutation.isPending}>
-                  {updateMutation.isPending ? "Saving..." : "Save Changes"}
+                
+                {/* Przycisk edycji */}
+                <button 
+                    type="button" 
+                    onClick={() => fileInputRef.current?.click()} 
+                    className="absolute bottom-2 right-2 btn btn-circle bg-[#32ade6] hover:bg-[#2697cc] border-none text-white shadow-lg"
+                >
+                    <Camera size={18}/>
                 </button>
-              </div>
+                <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
+            </div>
+
+            {/* FORM SECTION */}
+            <form onSubmit={handleSubmit} className="flex-1 w-full space-y-6 pt-4">
+                <div>
+                    <h1 className="text-3xl font-black text-white">{user?.email}</h1>
+                    <div className="badge badge-outline mt-2 opacity-50 text-white">{user?.is_admin ? 'Administrator' : 'Student'}</div>
+                </div>
+
+                <div className="grid gap-4">
+                    <div className="form-control">
+                        <label className="label uppercase text-xs font-bold opacity-60 text-white">Nazwa Użytkownika</label>
+                        <input 
+                            value={username} 
+                            onChange={e => setUsername(e.target.value)} 
+                            className="glass-input font-bold text-lg" 
+                        />
+                    </div>
+                    <div className="form-control">
+                        <label className="label uppercase text-xs font-bold opacity-60 text-white">Bio</label>
+                        <textarea 
+                            value={bio} 
+                            onChange={e => setBio(e.target.value)} 
+                            className="glass-input h-32 resize-none" 
+                            placeholder="Napisz coś o sobie..." 
+                        />
+                    </div>
+                </div>
+
+                <div className="flex justify-end">
+                    <button className="btn-squircle flex items-center gap-2" disabled={updateMutation.isPending}>
+                        <Save size={18}/> {updateMutation.isPending ? 'Zapisywanie...' : 'Zapisz Zmiany'}
+                    </button>
+                </div>
             </form>
-          </div>
         </div>
       </div>
     </div>

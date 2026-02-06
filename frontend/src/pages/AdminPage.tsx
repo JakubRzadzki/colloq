@@ -1,177 +1,185 @@
-import React, { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ShieldCheck, FileText, GraduationCap, Building, Layers, BookOpen, Camera, Check, X, Edit } from 'lucide-react';
-import {
-  getPendingItems, approveImageRequest, rejectImageRequest, rejectItem, approveItem,
-  updateUniversityImage, API_URL, type PendingItems
-} from '../utils/api';
+import { Check, X, Shield, FileText, Image as ImageIcon, Building2, AlertCircle } from 'lucide-react';
+import { getPendingItems, approveItem, rejectItem, approveImageRequest, rejectImageRequest, API_URL } from '../utils/api';
 
-type TabType = 'universities' | 'faculties' | 'fields' | 'subjects' | 'notes' | 'images';
-
-const getApiType = (tab: TabType): string => {
-  switch (tab) {
-    case 'universities': return 'university';
-    case 'faculties': return 'faculty';
-    case 'fields': return 'field';
-    case 'subjects': return 'subject';
-    case 'notes': return 'note';
-    case 'images': return 'image';
-    default: return 'note';
-  }
-};
-
-// FIX: Add t prop
 export function AdminPage({ t }: { t: any }) {
-  const [activeTab, setActiveTab] = useState<TabType>('notes');
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'notes' | 'universities' | 'images'>('notes');
   const queryClient = useQueryClient();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [editingUniId, setEditingUniId] = useState<number | null>(null);
 
-  const { data: pending, isLoading } = useQuery<PendingItems>({
+  // Pobieranie danych
+  const { data, isLoading } = useQuery({
     queryKey: ['pending'],
     queryFn: getPendingItems
   });
 
+  // Mutacje (Akcje)
   const approveMutation = useMutation({
-    mutationFn: ({type, id}: {type: string, id: number}) => approveItem(type, id),
+    mutationFn: ({ type, id }: { type: string, id: number }) => approveItem(type, id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pending'] })
   });
 
   const rejectMutation = useMutation({
-    mutationFn: ({type, id}: {type: string, id: number}) => rejectItem(type, id),
+    mutationFn: ({ type, id }: { type: string, id: number }) => rejectItem(type, id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pending'] })
   });
 
-  const imgMutation = useMutation({
-    mutationFn: ({id, action}: {id: number, action: 'approve'|'reject'}) =>
+  const imageActionMutation = useMutation({
+    mutationFn: ({ action, id }: { action: 'approve' | 'reject', id: number }) =>
       action === 'approve' ? approveImageRequest(id) : rejectImageRequest(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pending'] })
   });
 
-  const uniImgMutation = useMutation({
-    mutationFn: ({id, file}: {id: number, file: File}) => updateUniversityImage(id, file),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['pending'] });
-      setEditingUniId(null);
-    }
-  });
+  if (isLoading) return <div className="flex justify-center pt-40"><span className="loading-spinner"></span></div>;
 
-  if (isLoading) return <div className="p-20 text-center">Loading...</div>;
-
-  const tabs = [
-    { id: 'notes', icon: FileText, label: 'Notes', list: pending?.notes },
-    { id: 'universities', icon: GraduationCap, label: 'Universities', list: pending?.universities },
-    { id: 'faculties', icon: Building, label: 'Faculties', list: pending?.faculties },
-    { id: 'fields', icon: Layers, label: 'Fields', list: pending?.fields },
-    { id: 'subjects', icon: BookOpen, label: 'Subjects', list: pending?.subjects },
-    { id: 'images', icon: Camera, label: 'Images', list: pending?.image_requests }
-  ];
+  const pendingNotes = data?.notes || [];
+  const pendingUnis = data?.universities || [];
+  const pendingImages = data?.image_requests || [];
 
   return (
-    <div className="p-6 max-w-7xl mx-auto animate-in fade-in">
-      <h1 className="text-3xl font-bold mb-6 flex gap-2 items-center">
-        <ShieldCheck className="text-primary"/> {t.admin || 'Admin Panel'}
-      </h1>
-
-      <div className="tabs tabs-boxed mb-6 overflow-x-auto justify-start">
-        {tabs.map(t => (
-            <a
-              key={t.id}
-              className={`tab ${activeTab === t.id ? 'tab-active' : ''}`}
-              onClick={() => setActiveTab(t.id as any)}
-            >
-                <t.icon size={16} className="mr-2"/> {t.label} ({t.list?.length || 0})
-            </a>
-        ))}
-      </div>
-
-      <input
-        type="file"
-        ref={fileInputRef}
-        className="hidden"
-        onChange={e => e.target.files?.[0] && editingUniId && uniImgMutation.mutate({id: editingUniId, file: e.target.files[0]})}
-      />
-
-      <div className="space-y-2">
-        {activeTab === 'images' ? (
-            pending?.image_requests.map((req: any) => (
-                <div key={req.id} className="card bg-base-100 shadow p-4 flex-col md:flex-row gap-4 items-center border border-base-200">
-                    <div className="relative group cursor-pointer" onClick={() => setSelectedImage(`${API_URL}${req.new_image_url}`)}>
-                      <img src={`${API_URL}${req.new_image_url}`} className="w-24 h-24 object-cover rounded-lg border-2 border-success"/>
-                      <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-lg text-white font-bold text-xs">VIEW</div>
-                    </div>
-                    <div className="flex-1">
-                        <h3 className="font-bold">Image Request #{req.id}</h3>
-                        <p className="text-sm opacity-50">University ID: {req.university_id}</p>
-                        <p className="text-xs opacity-40">By User ID: {req.submitted_by_id}</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => imgMutation.mutate({id: req.id, action: 'approve'})} className="btn btn-success btn-sm text-white"><Check size={16}/> Approve</button>
-                      <button onClick={() => imgMutation.mutate({id: req.id, action: 'reject'})} className="btn btn-error btn-sm text-white"><X size={16}/> Reject</button>
-                    </div>
-                </div>
-            ))
-        ) : (
-            (pending as any)?.[activeTab]?.map((item: any) => (
-                <div key={item.id} className="card bg-base-100 shadow p-4 flex-col md:flex-row justify-between items-center border border-base-200 gap-4">
-                    <div className="flex gap-4 items-center w-full">
-                        {activeTab === 'universities' && (
-                            <div className="relative group shrink-0">
-                                <img src={item.image_url ? `${API_URL}${item.image_url}` : "https://via.placeholder.com/50"} className="w-12 h-12 rounded bg-base-200 object-cover"/>
-                                <button onClick={() => { setEditingUniId(item.id); fileInputRef.current?.click(); }} className="absolute inset-0 bg-black/50 hidden group-hover:flex items-center justify-center text-white rounded"><Edit size={12}/></button>
-                            </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                            <h3 className="font-bold truncate">{item.name || item.title}</h3>
-                            <p className="text-xs opacity-50 truncate">
-                              {activeTab === 'notes' ? item.content : `${item.city || ''} (ID: ${item.id})`}
-                            </p>
-                            {item.image_url && activeTab !== 'universities' && (
-                              <button onClick={() => setSelectedImage(`${API_URL}${item.image_url}`)} className="btn btn-xs btn-outline mt-1 gap-1"><Camera size={10}/> View Image</button>
-                            )}
-                        </div>
-                    </div>
-                    <div className="flex gap-2 shrink-0">
-                        <button
-                          onClick={() => approveMutation.mutate({type: getApiType(activeTab), id: item.id})}
-                          className="btn btn-success btn-sm text-white"
-                          title="Approve"
-                        >
-                          <Check size={16}/>
-                        </button>
-                        <button
-                          onClick={() => rejectMutation.mutate({type: getApiType(activeTab), id: item.id})}
-                          className="btn btn-error btn-sm text-white"
-                          title="Reject (Delete)"
-                        >
-                          <X size={16}/>
-                        </button>
-                    </div>
-                </div>
-            ))
-        )}
-
-        {(activeTab === 'images' ? pending?.image_requests : (pending as any)?.[activeTab])?.length === 0 && (
-          <div className="text-center py-16 opacity-50 border-2 border-dashed border-base-300 rounded-xl">
-            <Check size={48} className="mx-auto mb-2 opacity-20"/>
-            <p>All clean! Nothing pending here.</p>
-          </div>
-        )}
-      </div>
-
-      {/* Image Preview Modal */}
-      {selectedImage && (
-        <div
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-in fade-in duration-200"
-            onClick={() => setSelectedImage(null)}
-        >
-          <div className="relative max-w-5xl max-h-[90vh]">
-            <button className="absolute -top-10 right-0 btn btn-circle btn-ghost text-white">✕</button>
-            <img src={selectedImage} className="max-w-full max-h-[85vh] rounded-lg shadow-2xl" />
-          </div>
+    <div className="container-spatial pt-32 animate-in fade-in">
+      {/* Header */}
+      <div className="flex items-center gap-4 mb-10">
+        <div className="p-4 bg-gradient-to-br from-[#5e5ce6] to-[#bf5af2] rounded-2xl shadow-lg shadow-[#5e5ce6]/30">
+          <Shield className="text-white" size={32} />
         </div>
-      )}
+        <div>
+          <h1 className="text-4xl font-black text-white">Admin Dashboard</h1>
+          <p className="text-white/60">Zarządzaj treściami oczekującymi na moderację.</p>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
+        <TabButton
+          active={activeTab === 'notes'}
+          onClick={() => setActiveTab('notes')}
+          icon={<FileText size={18}/>}
+          label={`Notatki (${pendingNotes.length})`}
+        />
+        <TabButton
+          active={activeTab === 'universities'}
+          onClick={() => setActiveTab('universities')}
+          icon={<Building2 size={18}/>}
+          label={`Uczelnie (${pendingUnis.length})`}
+        />
+        <TabButton
+          active={activeTab === 'images'}
+          onClick={() => setActiveTab('images')}
+          icon={<ImageIcon size={18}/>}
+          label={`Zmiany Obrazów (${pendingImages.length})`}
+        />
+      </div>
+
+      {/* Content */}
+      <div className="grid grid-cols-1 gap-6">
+
+        {/* --- NOTES TAB --- */}
+        {activeTab === 'notes' && (
+          pendingNotes.length === 0 ? <EmptyState msg="Brak oczekujących notatek." /> :
+          pendingNotes.map((note: any) => (
+            <div key={note.id} className="glass-panel p-6 flex flex-col md:flex-row gap-6 items-start md:items-center justify-between group hover:border-[#5e5ce6]/50 transition-colors">
+              <div className="flex gap-4 items-center">
+                <div className="p-3 bg-white/5 rounded-xl text-[#32ade6]">
+                  <FileText size={24} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-white">{note.title}</h3>
+                  <p className="text-white/60 text-sm">{note.subject?.name} • {note.university?.name}</p>
+                  <a href={`${API_URL}/uploads/${note.file_url}`} target="_blank" rel="noreferrer" className="text-xs text-[#5e5ce6] hover:underline mt-1 block">
+                    Podgląd pliku
+                  </a>
+                </div>
+              </div>
+              <ActionButtons
+                onApprove={() => approveMutation.mutate({ type: 'note', id: note.id })}
+                onReject={() => rejectMutation.mutate({ type: 'note', id: note.id })}
+              />
+            </div>
+          ))
+        )}
+
+        {/* --- UNIVERSITIES TAB --- */}
+        {activeTab === 'universities' && (
+          pendingUnis.length === 0 ? <EmptyState msg="Brak oczekujących uczelni." /> :
+          pendingUnis.map((uni: any) => (
+            <div key={uni.id} className="glass-panel p-6 flex flex-col md:flex-row gap-6 items-start md:items-center justify-between">
+              <div className="flex gap-4 items-center">
+                 <div className="p-3 bg-white/5 rounded-xl text-[#bf5af2]">
+                  <Building2 size={24} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-white">{uni.name}</h3>
+                  <p className="text-white/60 text-sm">{uni.city}, {uni.region}</p>
+                </div>
+              </div>
+              <ActionButtons
+                onApprove={() => approveMutation.mutate({ type: 'university', id: uni.id })}
+                onReject={() => rejectMutation.mutate({ type: 'university', id: uni.id })}
+              />
+            </div>
+          ))
+        )}
+
+        {/* --- IMAGES TAB --- */}
+        {activeTab === 'images' && (
+          pendingImages.length === 0 ? <EmptyState msg="Brak próśb o zmianę zdjęcia." /> :
+          pendingImages.map((req: any) => (
+            <div key={req.id} className="glass-panel p-6">
+              <div className="flex flex-col md:flex-row gap-8 items-center">
+                <div className="w-full md:w-1/3">
+                  <p className="text-sm text-white/50 mb-2">Propozycja dla: <span className="text-white font-bold">{req.university?.name}</span></p>
+                  <img src={`${API_URL}${req.image_url}`} alt="Proposal" className="rounded-xl w-full h-48 object-cover border border-white/10 shadow-lg" />
+                </div>
+                <div className="flex-1 flex flex-col items-center md:items-start gap-4">
+                  <div className="flex gap-2">
+                    <span className="badge badge-primary bg-[#5e5ce6]/20 text-[#5e5ce6] border-none">Nowe zdjęcie</span>
+                    <span className="text-white/40 text-sm">od użytkownika ID: {req.user_id}</span>
+                  </div>
+                  <ActionButtons
+                    onApprove={() => imageActionMutation.mutate({ action: 'approve', id: req.id })}
+                    onReject={() => imageActionMutation.mutate({ action: 'reject', id: req.id })}
+                    labels={['Zatwierdź zmianę', 'Odrzuć']}
+                  />
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+
+      </div>
     </div>
   );
 }
+
+// Komponenty pomocnicze
+const TabButton = ({ active, onClick, icon, label }: any) => (
+  <button
+    onClick={onClick}
+    className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all whitespace-nowrap
+      ${active 
+        ? 'bg-gradient-to-r from-[#5e5ce6] to-[#32ade6] text-white shadow-lg shadow-[#5e5ce6]/20' 
+        : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
+      }`}
+  >
+    {icon} {label}
+  </button>
+);
+
+const ActionButtons = ({ onApprove, onReject, labels = ['Zatwierdź', 'Odrzuć'] }: any) => (
+  <div className="flex gap-3">
+    <button onClick={onReject} className="btn btn-ghost hover:bg-red-500/20 text-red-400 gap-2 rounded-xl">
+      <X size={18}/> {labels[1]}
+    </button>
+    <button onClick={onApprove} className="btn bg-[#5e5ce6] hover:bg-[#4d4ac9] text-white border-none gap-2 rounded-xl shadow-lg shadow-[#5e5ce6]/20">
+      <Check size={18}/> {labels[0]}
+    </button>
+  </div>
+);
+
+const EmptyState = ({ msg }: { msg: string }) => (
+  <div className="text-center py-20 opacity-50 bg-white/5 rounded-3xl border border-dashed border-white/10">
+    <AlertCircle size={48} className="mx-auto mb-4 opacity-50"/>
+    <p className="text-xl">{msg}</p>
+  </div>
+);

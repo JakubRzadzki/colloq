@@ -10,8 +10,11 @@ export const translations = {
     home: "Home",
     profile: "Profile",
     findTerm: "Find Term",
+    search: "Search",
 
-    // MVP Term Page
+    "home.subtitle": "Discover universities, share study materials, and connect with students worldwide.",
+    "home.search.placeholder": "Search universities...",
+
     searchTitle: "Find Your Term",
     searchSubtitle: "Search for subjects or fields across all universities.",
     fields: "Fields of Study",
@@ -20,6 +23,32 @@ export const translations = {
     viewUniversity: "View University",
     noResults: "No results found. Try a different query.",
     resultsFound: "Results found",
+
+    leaderboard: {
+      title: "Leaderboard",
+      subtitle: "Top active users in the community",
+      total_users: "Total Users",
+      top_users: "Top Users",
+      sort: {
+        score: "Score",
+        activity: "Activity",
+        notes: "Notes"
+      },
+      columns: {
+        user: "User",
+        score: "Score",
+        notes: "Notes",
+        reviews: "Reviews",
+        comments: "Comments",
+        activity: "Activity"
+      },
+      points: "points",
+      notes: "notes",
+      reviews: "reviews",
+      comments: "comments",
+      total: "total",
+      no_data: "No leaderboard data available yet"
+    }
   },
   pl: {
     heroTitle: "Znajdź swoją uczelnię, notatki i egzaminy.",
@@ -32,8 +61,11 @@ export const translations = {
     home: "Strona Główna",
     profile: "Profil",
     findTerm: "Szukaj Przedmiotu",
+    search: "Szukaj",
 
-    // MVP Term Page
+    "home.subtitle": "Odkrywaj uczelnie, dziel się materiałami i łącz się ze studentami z całego świata.",
+    "home.search.placeholder": "Szukaj uczelni...",
+
     searchTitle: "Znajdź Przedmiot",
     searchSubtitle: "Wyszukuj przedmioty i kierunki na wszystkich uczelniach.",
     fields: "Kierunki Studiów",
@@ -42,6 +74,32 @@ export const translations = {
     viewUniversity: "Zobacz Uczelnię",
     noResults: "Brak wyników. Spróbuj innego zapytania.",
     resultsFound: "Znaleziono wyniki",
+
+    leaderboard: {
+      title: "Ranking",
+      subtitle: "Najaktywniejsi użytkownicy społeczności",
+      total_users: "Wszyscy Użytkownicy",
+      top_users: "Top Użytkownicy",
+      sort: {
+        score: "Punkty",
+        activity: "Aktywność",
+        notes: "Notatki"
+      },
+      columns: {
+        user: "Użytkownik",
+        score: "Punkty",
+        notes: "Notatki",
+        reviews: "Recenzje",
+        comments: "Komentarze",
+        activity: "Aktywność"
+      },
+      points: "punktów",
+      notes: "notatek",
+      reviews: "recenzji",
+      comments: "komentarzy",
+      total: "razem",
+      no_data: "Brak danych rankingu"
+    }
   }
 };
 

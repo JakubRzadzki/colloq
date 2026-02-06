@@ -118,6 +118,7 @@ class NoteOut(BaseModel):
         from_attributes = True
 
 # --- ADMIN ---
+# CRITICAL FIX: ImageRequestOut must be defined BEFORE PendingItemsResponse
 class ImageRequestOut(BaseModel):
     id: int
     university_id: int

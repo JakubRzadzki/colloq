@@ -15,7 +15,7 @@ services:
       - SECRET_KEY=your-secret-key-change-in-production
     depends_on:
       db:
-        condition: service_healthy  # <--- TO JEST KLUCZOWA NAPRAWA
+        condition: service_healthy
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   frontend:
@@ -28,6 +28,7 @@ services:
       - ./frontend:/app
       - /app/node_modules
     environment:
+      # Ensure frontend knows where backend is
       - VITE_API_URL=http://localhost:8000
     command: npm run dev -- --host
 
@@ -41,7 +42,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    healthcheck:  # <--- SPRAWDZANIE CZY BAZA JUŻ WSTAŁA
+    healthcheck:
       test: ["CMD-SHELL", "pg_isready -U colloq -d colloq"]
       interval: 5s
       timeout: 5s
