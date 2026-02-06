@@ -1,7 +1,5 @@
 import { Link } from 'react-router-dom';
-import { LogOut, ShieldCheck, Sun, Moon, User as UserIcon, Search } from 'lucide-react';
-import { isAdmin } from '../utils/api';
-import { Language } from '../translations';
+import { LogOut, Sun, Moon, User as UserIcon, Search } from 'lucide-react';
 
 interface NavbarProps {
   token: string | null;
@@ -9,66 +7,68 @@ interface NavbarProps {
   toggleTheme: () => void;
   logout: () => void;
   t: any;
-  lang: Language;
-  setLang: (lang: Language) => void;
+  lang: 'pl' | 'en';
+  setLang: (lang: 'pl' | 'en') => void;
 }
 
 export function Navbar({ token, theme, toggleTheme, logout, t, lang, setLang }: NavbarProps) {
-  const userIsAdmin = isAdmin();
+  // Style zależne od motywu (Glassmorphism Light/Dark)
+  const glassClass = theme === 'light'
+    ? 'bg-white/70 border-black/5 text-gray-900 shadow-[0_8px_32px_rgba(0,0,0,0.1)]'
+    : 'bg-[#1e1e23]/60 border-white/10 text-white shadow-[0_8px_32px_rgba(0,0,0,0.5)]';
+
+  const itemHoverClass = theme === 'light'
+    ? 'hover:bg-black/5'
+    : 'hover:bg-white/10';
 
   return (
-    // FIX: Dodano w-full i sticky, usunięto backdrop-blur z klasy navbar bo gryzł się z body
-    <div className="sticky top-0 z-50 w-full border-b border-white/10 bg-slate-950/80 backdrop-blur-xl">
-      <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+    <div className="fixed top-6 left-0 right-0 flex justify-center z-50 pointer-events-none px-4">
+      <div className={`${glassClass} backdrop-blur-xl border rounded-full px-6 py-3 flex items-center gap-4 md:gap-6 pointer-events-auto transition-all duration-300`}>
 
-        {/* LEWA STRONA: LOGO */}
-        <div className="flex items-center gap-6">
-          <Link to="/" className="text-2xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-fuchsia-400 hover:opacity-80 transition-opacity">
-            Colloq
+        {/* Logo */}
+        <Link to="/" className="text-xl font-black tracking-tight hover:opacity-80 transition-opacity">
+          Colloq
+        </Link>
+
+        {/* Nawigacja */}
+        <div className={`hidden md:flex items-center gap-1 rounded-full p-1 border ${theme === 'light' ? 'bg-black/5 border-black/5' : 'bg-white/5 border-white/5'}`}>
+          <Link to="/term" className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all flex gap-2 items-center ${itemHoverClass}`}>
+            <Search size={14} /> {t.findTerm || 'Szukaj'}
           </Link>
-          <Link to="/term" className="hidden md:flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-white transition-colors">
-             <Search size={16}/> {t.findTerm}
-          </Link>
+
+          <div className={`w-px h-4 mx-1 ${theme === 'light' ? 'bg-black/10' : 'bg-white/10'}`}></div>
+
+          {/* Przełącznik Języka */}
+          <button
+            onClick={() => setLang(lang === 'en' ? 'pl' : 'en')}
+            className={`px-3 py-1.5 text-xs font-bold transition-colors uppercase rounded-full ${itemHoverClass}`}
+          >
+            {lang}
+          </button>
         </div>
 
-        {/* PRAWA STRONA: AKCJE */}
+        {/* Prawa strona: Motyw i User */}
         <div className="flex items-center gap-3">
-          {/* Język */}
-          <div className="join border border-white/10 rounded-lg overflow-hidden">
-            <button
-              className={`join-item px-3 py-1 text-xs font-bold ${lang === 'pl' ? 'bg-violet-600 text-white' : 'bg-transparent text-slate-400 hover:bg-white/5'}`}
-              onClick={() => setLang('pl')}
-            >
-              PL
-            </button>
-            <button
-              className={`join-item px-3 py-1 text-xs font-bold ${lang === 'en' ? 'bg-violet-600 text-white' : 'bg-transparent text-slate-400 hover:bg-white/5'}`}
-              onClick={() => setLang('en')}
-            >
-              EN
-            </button>
-          </div>
+          <button onClick={toggleTheme} className={`btn btn-circle btn-sm btn-ghost ${itemHoverClass}`}>
+            {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+          </button>
 
-          {/* User / Login */}
           {token ? (
-            <div className="dropdown dropdown-end">
-              <label tabIndex={0} className="btn btn-ghost btn-circle avatar placeholder ring-1 ring-white/20">
-                <div className="bg-violet-900/50 text-white rounded-full w-9"><UserIcon size={18}/></div>
-              </label>
-              <ul tabIndex={0} className="mt-3 z-[1] p-2 shadow-2xl menu menu-sm dropdown-content bg-slate-900 border border-white/10 rounded-xl w-52 text-slate-200">
-                <li><Link to="/profile">{t.profile}</Link></li>
-                {userIsAdmin && (
-                  <li><Link to="/admin" className="text-yellow-400"><ShieldCheck size={16}/> {t.admin}</Link></li>
-                )}
-                <div className="divider my-1 border-white/10"></div>
-                <li><button onClick={logout} className="text-red-400 hover:text-red-300"><LogOut size={16}/> {t.logout}</button></li>
-              </ul>
-            </div>
+             <div className="dropdown dropdown-end">
+               <label tabIndex={0} className={`btn btn-circle btn-sm btn-ghost avatar border ${theme === 'light' ? 'border-black/10' : 'border-white/20'}`}>
+                 <div className="w-8 rounded-full bg-gradient-to-br from-[#5e5ce6] to-[#bf5af2] flex items-center justify-center text-white">
+                    <UserIcon size={16}/>
+                 </div>
+               </label>
+               <ul tabIndex={0} className={`mt-4 p-2 shadow-2xl menu menu-sm dropdown-content rounded-2xl w-52 border backdrop-blur-xl ${theme === 'light' ? 'bg-white/90 border-black/5 text-gray-900' : 'bg-[#1e1e23]/90 border-white/10 text-white'}`}>
+                  <li><Link to="/profile" className={itemHoverClass}>{t.profile}</Link></li>
+                  <li><button onClick={logout} className="text-red-500 hover:bg-red-500/10 flex gap-2"><LogOut size={14}/> {t.logout}</button></li>
+               </ul>
+             </div>
           ) : (
-            <div className="flex gap-2">
-              <Link to="/login" className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white transition-colors">{t.login}</Link>
-              <Link to="/register" className="px-4 py-2 text-sm font-bold bg-white text-black rounded-lg hover:bg-slate-200 transition-colors">{t.register}</Link>
-            </div>
+            <Link to="/login" className="bg-gradient-to-r from-[#5e5ce6] to-[#bf5af2] text-white px-5 py-2 rounded-full text-sm font-semibold shadow-lg shadow-[#5e5ce6]/20 hover:scale-105 transition-all">
+              {t.login}
+            </Link>
           )}
         </div>
       </div>

@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { Search, BookOpen, GraduationCap, ArrowRight, Library, Building2 } from 'lucide-react';
 import { globalSearch } from '../utils/api';
 
-// Simple debounce hook
+// Hook debouncingu (opóźnienie wyszukiwania)
 function useDebounceValue<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState<T>(value);
   useEffect(() => {
@@ -29,26 +29,29 @@ export function TermPage({ t }: TermPageProps) {
   });
 
   return (
-    <div className="min-h-screen bg-base-200 p-6 md:p-12 animate-in fade-in">
+    // FIX: Dodano 'pt-32 md:pt-40', aby Navbar nie zasłaniał treści
+    // Usunięto bg-base-200, aby działało tło z index.css
+    <div className="min-h-screen p-6 md:p-12 pt-32 md:pt-40 animate-in fade-in">
       <div className="max-w-4xl mx-auto">
         {/* HEADER */}
         <div className="text-center mb-12">
-          <h1 className="text-5xl font-black mb-4 bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">
+          <h1 className="text-5xl font-black mb-4 bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60">
             {t.searchTitle}
           </h1>
-          <p className="text-xl opacity-70">
+          <p className="text-xl opacity-70 text-white/80">
             {t.searchSubtitle}
           </p>
         </div>
 
         {/* SEARCH BAR */}
-        <div className="relative mb-12">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-            <Search className="text-base-content/50" />
+        <div className="relative mb-12 z-10">
+          <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
+            <Search className="text-white/50" />
           </div>
+          {/* Użycie klasy glass-input dla spójności */}
           <input
             type="text"
-            className="input input-lg w-full pl-12 shadow-xl border-none ring-1 ring-base-300 focus:ring-primary transition-all"
+            className="glass-input text-lg py-4 pl-14 w-full shadow-2xl focus:scale-[1.01] transition-transform"
             placeholder="e.g. 'Informatyka', 'Algorytmy', 'Analiza'..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -59,37 +62,35 @@ export function TermPage({ t }: TermPageProps) {
         {/* RESULTS AREA */}
         {isLoading && (
           <div className="text-center py-12">
-            <span className="loading loading-dots loading-lg text-primary"></span>
+            <span className="loading loading-dots loading-lg text-[#5e5ce6]"></span>
           </div>
         )}
 
         {!isLoading && results && (
-          <div className="space-y-8">
+          <div className="space-y-8 pb-20">
 
             {/* SUBJECTS RESULTS */}
             {results.subjects.length > 0 && (
               <section>
-                <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-                  <BookOpen className="text-primary"/> {t.subjects} ({results.subjects.length})
+                <h2 className="text-2xl font-bold mb-4 flex items-center gap-2 text-white">
+                  <BookOpen className="text-[#5e5ce6]"/> {t.subjects} ({results.subjects.length})
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {results.subjects.map((sub) => (
-                    <div key={sub.id} className="card bg-base-100 shadow-md hover:shadow-xl transition-all border border-base-200">
-                      <div className="card-body p-5">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h3 className="font-bold text-lg">{sub.name}</h3>
-                            <div className="badge badge-sm badge-ghost mt-1">{t.semester} {sub.semester}</div>
-                          </div>
-                          <Link to={`/university/${sub.university_id}`} className="btn btn-circle btn-sm btn-ghost">
-                            <ArrowRight size={16}/>
-                          </Link>
+                  {results.subjects.map((sub: any) => (
+                    <div key={sub.id} className="card-spatial p-6 hover:border-[#5e5ce6]/40 group">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className="font-bold text-lg text-white group-hover:text-[#5e5ce6] transition-colors">{sub.name}</h3>
+                          <div className="badge badge-sm bg-white/10 text-white border-none mt-2">{t.semester} {sub.semester}</div>
                         </div>
-                        <div className="divider my-2"></div>
-                        <div className="text-sm opacity-70 space-y-1">
-                          <p className="flex items-center gap-2"><GraduationCap size={14}/> {sub.field}</p>
-                          <p className="flex items-center gap-2"><Building2 size={14}/> {sub.university}</p>
-                        </div>
+                        <Link to={`/university/${sub.university_id}`} className="btn btn-circle btn-sm btn-ghost text-white/50 hover:text-white hover:bg-white/10">
+                          <ArrowRight size={16}/>
+                        </Link>
+                      </div>
+                      <div className="h-px bg-white/10 my-4"></div>
+                      <div className="text-sm text-white/60 space-y-1">
+                        <p className="flex items-center gap-2"><GraduationCap size={14} className="text-[#32ade6]"/> {sub.field}</p>
+                        <p className="flex items-center gap-2"><Building2 size={14} className="text-[#bf5af2]"/> {sub.university}</p>
                       </div>
                     </div>
                   ))}
@@ -100,24 +101,22 @@ export function TermPage({ t }: TermPageProps) {
             {/* FIELDS RESULTS */}
             {results.fields.length > 0 && (
               <section>
-                <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-                  <Library className="text-secondary"/> {t.fields} ({results.fields.length})
+                <h2 className="text-2xl font-bold mb-4 flex items-center gap-2 text-white">
+                  <Library className="text-[#32ade6]"/> {t.fields} ({results.fields.length})
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {results.fields.map((field) => (
-                    <div key={field.id} className="card bg-base-100 shadow-md hover:shadow-xl transition-all border border-base-200">
-                      <div className="card-body p-5">
-                        <h3 className="font-bold text-lg">{field.name}</h3>
-                        <p className="text-sm opacity-50 mb-2">{field.degree}</p>
-                        <div className="flex items-center gap-2 text-sm">
-                          <Building2 size={14} className="text-primary"/>
-                          <span>{field.university} ({field.faculty})</span>
-                        </div>
-                        <div className="card-actions justify-end mt-4">
-                          <Link to={`/university/${field.university_id}`} className="btn btn-sm btn-outline">
-                            {t.viewUniversity}
-                          </Link>
-                        </div>
+                  {results.fields.map((field: any) => (
+                    <div key={field.id} className="card-spatial p-6 hover:border-[#32ade6]/40 group">
+                      <h3 className="font-bold text-lg text-white group-hover:text-[#32ade6] transition-colors">{field.name}</h3>
+                      <p className="text-sm text-white/50 mb-3">{field.degree}</p>
+                      <div className="flex items-center gap-2 text-sm text-white/70">
+                        <Building2 size={14} className="text-[#5e5ce6]"/>
+                        <span>{field.university} ({field.faculty})</span>
+                      </div>
+                      <div className="mt-4 flex justify-end">
+                        <Link to={`/university/${field.university_id}`} className="text-sm font-bold text-[#32ade6] hover:text-white transition-colors flex items-center gap-1">
+                          {t.viewUniversity} <ArrowRight size={14}/>
+                        </Link>
                       </div>
                     </div>
                   ))}
@@ -126,8 +125,8 @@ export function TermPage({ t }: TermPageProps) {
             )}
 
             {results.subjects.length === 0 && results.fields.length === 0 && debouncedQuery.length > 1 && (
-              <div className="text-center py-12 opacity-50">
-                <Search size={48} className="mx-auto mb-4 opacity-20"/>
+              <div className="text-center py-16 opacity-50 border border-dashed border-white/10 rounded-2xl bg-white/5">
+                <Search size={48} className="mx-auto mb-4 opacity-30"/>
                 <p className="text-xl">{t.noResults}</p>
               </div>
             )}

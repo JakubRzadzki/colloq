@@ -2,42 +2,17 @@ import axios from 'axios';
 import { jwtDecode } from "jwt-decode";
 import { University, Faculty, FieldOfStudy, Subject, Note, User, Review, Comment, PendingItems } from './types';
 
-// Export types so components can use them directly
 export * from './types';
 
-// Dynamic API URL for Docker/Production support
+// Obsługa adresu API (zmienna środowiskowa lub domyślnie localhost)
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-// --- MVP TERM TYPES ---
-export interface GlobalField {
-  id: number;
-  name: string;
-  degree: string;
-  faculty: string;
-  university: string;
-  university_id: number;
-}
-
-export interface GlobalSubject {
-  id: number;
-  name: string;
-  semester: number;
-  field: string;
-  university: string;
-  university_id: number;
-}
-
-export interface SearchResult {
-  fields: GlobalField[];
-  subjects: GlobalSubject[];
-}
-
+// --- HELPERY ---
 export const getAuthHeader = () => {
   const token = localStorage.getItem('token');
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
-// Synchronous isAdmin check
 export const isAdmin = (): boolean => {
   const token = localStorage.getItem('token');
   if (!token) return false;
@@ -51,12 +26,16 @@ export const isAdmin = (): boolean => {
 
 export const logout = () => localStorage.removeItem('token');
 
-// --- AUTH ---
+// --- AUTH (KLUCZOWA POPRAWKA) ---
+
 export const login = async (username: string, password: string) => {
-  const fd = new FormData();
-  fd.append('username', username);
-  fd.append('password', password);
-  return (await axios.post(`${API_URL}/token`, fd)).data;
+  // WAŻNE: FastAPI OAuth2 wymaga URLSearchParams (application/x-www-form-urlencoded)
+  const params = new URLSearchParams();
+  params.append('username', username);
+  params.append('password', password);
+
+  // Axios automatycznie ustawi nagłówek Content-Type
+  return (await axios.post(`${API_URL}/token`, params)).data;
 };
 
 export const register = async (userData: any) =>
@@ -72,7 +51,6 @@ export const updateProfile = async (data: any) => {
   if (data.username) fd.append('nickname', data.username);
   if (data.bio) fd.append('bio', data.bio);
   if (data.avatar) fd.append('avatar', data.avatar);
-  // FIX: Do NOT set Content-Type manually for FormData with axios; it breaks the boundary.
   return await axios.put(`${API_URL}/users/me`, fd, { headers: { ...getAuthHeader() } });
 };
 
@@ -90,20 +68,11 @@ export const getNotes = async (uniId?: number, search?: string): Promise<Note[]>
   return (await axios.get(`${API_URL}/notes?${params.toString()}`)).data;
 };
 
-// --- NOWA FUNKCJA DLA TWOJEGO HOMEPAGE ---
-export const searchUniversities = async (query: string): Promise<University[]> => {
-  // Pobieramy wszystkie i filtrujemy po stronie klienta (najszybsze rozwiązanie)
-  const all = await getUniversities();
-  if (!query) return [];
-  const lowerQuery = query.toLowerCase();
-  return all.filter(u =>
-    u.name.toLowerCase().includes(lowerQuery) ||
-    u.city.toLowerCase().includes(lowerQuery) ||
-    u.region.toLowerCase().includes(lowerQuery)
-  );
-};
-
-// --- GLOBAL SEARCH (MVP TERM) ---
+// --- GLOBAL SEARCH ---
+export interface SearchResult {
+  fields: any[];
+  subjects: any[];
+}
 export const globalSearch = async (query: string): Promise<SearchResult> => {
   return (await axios.get(`${API_URL}/search/global?q=${encodeURIComponent(query)}`)).data;
 };
@@ -115,22 +84,18 @@ export const createUniversity = async (data: any) => {
   fd.append('city', data.city);
   fd.append('region', data.region);
   if (data.image) fd.append('image', data.image);
-  // FIX: Removed manual multipart/form-data header
   return (await axios.post(`${API_URL}/universities`, fd, { headers: { ...getAuthHeader() } })).data;
 };
 
 export const requestUniversityImageChange = async (uniId: number, file: File) => {
   const fd = new FormData(); fd.append('image', file);
-  // FIX: Removed manual multipart/form-data header
   return (await axios.post(`${API_URL}/universities/${uniId}/image_request`, fd, { headers: { ...getAuthHeader() } })).data;
 };
 
 export const createNote = async (fd: FormData) =>
-  // FIX: Removed manual multipart/form-data header
   (await axios.post(`${API_URL}/notes`, fd, { headers: { ...getAuthHeader() } })).data;
 
 export const createFaculty = async (fd: FormData) =>
-  // FIX: Removed manual multipart/form-data header
   (await axios.post(`${API_URL}/faculties`, fd, { headers: { ...getAuthHeader() } })).data;
 
 export const createFieldOfStudy = async (data: { name: string, degree_level: string, faculty_id: number }) =>
@@ -142,10 +107,8 @@ export const createSubject = async (data: { name: string, semester: number, fiel
 // --- INTERACTIONS ---
 export const voteNote = async (id: number) => (await axios.post(`${API_URL}/notes/${id}/vote`, {}, { headers: getAuthHeader() })).data;
 export const toggleFavorite = async (id: number) => (await axios.post(`${API_URL}/notes/${id}/favorite`, {}, { headers: getAuthHeader() })).data;
-
 export const getUniversityReviews = async (id: number): Promise<Review[]> => (await axios.get(`${API_URL}/universities/${id}/reviews`)).data;
 export const addReview = async (data: any) => await axios.post(`${API_URL}/reviews`, data, { headers: getAuthHeader() });
-
 export const getNoteComments = async (id: number): Promise<Comment[]> => (await axios.get(`${API_URL}/notes/${id}/comments`)).data;
 export const addComment = async (id: number, content: string) => await axios.post(`${API_URL}/notes/${id}/comments`, { content }, { headers: getAuthHeader() });
 
@@ -157,13 +120,11 @@ export const approveImageRequest = async (id: number) => (await axios.post(`${AP
 export const rejectImageRequest = async (id: number) => (await axios.post(`${API_URL}/admin/reject_image_request/${id}`, {}, { headers: getAuthHeader() })).data;
 export const updateUniversityImage = async (id: number, file: File) => {
   const fd = new FormData(); fd.append('image', file);
-  // FIX: Removed manual multipart/form-data header
   return (await axios.patch(`${API_URL}/admin/universities/${id}/image`, fd, { headers: { ...getAuthHeader() } })).data;
 };
 export const updateUniversity = async (id: number, data: any) => {
   const fd = new FormData();
   if (data.description) fd.append('description', data.description);
   if (data.banner) fd.append('banner', data.banner);
-  // FIX: Removed manual multipart/form-data header
   return await axios.put(`${API_URL}/universities/${id}`, fd, { headers: { ...getAuthHeader() } });
 };

@@ -10,18 +10,11 @@ export const translations = {
     home: "Home",
     profile: "Profile",
     findTerm: "Find Term",
+    search: "Search",
 
-    // Nowe klucze dla nowoczesnego HomePage
     "home.subtitle": "Discover universities, share study materials, and connect with students worldwide.",
     "home.search.placeholder": "Search universities...",
-    "home.features.universities.title": "Discover Universities",
-    "home.features.universities.description": "Browse universities from around the world and explore their programs.",
-    "home.features.materials.title": "Share Materials",
-    "home.features.materials.description": "Upload and access study materials, notes, and resources shared by students.",
-    "home.features.community.title": "Join Community",
-    "home.features.community.description": "Connect with students, share experiences, and build a global community.",
 
-    // MVP Term Page
     searchTitle: "Find Your Term",
     searchSubtitle: "Search for subjects or fields across all universities.",
     fields: "Fields of Study",
@@ -42,18 +35,11 @@ export const translations = {
     home: "Strona Główna",
     profile: "Profil",
     findTerm: "Szukaj Przedmiotu",
+    search: "Szukaj",
 
-    // Nowe klucze dla nowoczesnego HomePage
     "home.subtitle": "Odkrywaj uczelnie, dziel się materiałami i łącz się ze studentami z całego świata.",
     "home.search.placeholder": "Szukaj uczelni...",
-    "home.features.universities.title": "Odkrywaj Uczelnie",
-    "home.features.universities.description": "Przeglądaj uczelnie i poznawaj ich programy oraz opinie.",
-    "home.features.materials.title": "Dziel się Wiedzą",
-    "home.features.materials.description": "Wysyłaj i pobieraj notatki oraz zasoby udostępnione przez innych.",
-    "home.features.community.title": "Dołącz do Społeczności",
-    "home.features.community.description": "Łącz się ze studentami, dziel się doświadczeniem i buduj sieć kontaktów.",
 
-    // MVP Term Page
     searchTitle: "Znajdź Przedmiot",
     searchSubtitle: "Wyszukuj przedmioty i kierunki na wszystkich uczelniach.",
     fields: "Kierunki Studiów",

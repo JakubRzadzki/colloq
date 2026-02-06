@@ -17,18 +17,15 @@ function App() {
   );
 
   const [theme, setTheme] = useState(() =>
-    localStorage.getItem('theme') || 'light'
+    localStorage.getItem('theme') || 'dark'
   );
 
   const [token, setToken] = useState<string | null>(
     localStorage.getItem('token')
   );
 
-  // 1. Obiekt tłumaczeń dla starych stron (LoginPage, Navbar, itp.)
   const tObj = translations[lang];
 
-  // 2. Funkcja tłumaczeń dla nowego HomePage
-  // (Pobiera tekst z obiektu na podstawie klucza, np. 'home.subtitle')
   const tFunc = (key: string) => {
     return (tObj as any)[key] || key;
   };
@@ -38,7 +35,14 @@ function App() {
   }, [lang]);
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
+    const root = document.documentElement;
+    // Zarządzanie motywem dla CSS (index.css) i Tailwind
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+    root.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
   }, [theme]);
 
@@ -53,36 +57,29 @@ function App() {
 
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-base-200 font-sans text-base-content">
+      {/* Usunięto sztywne bg-base-200. Tło jest w body (index.css) */}
+      <div className="min-h-screen font-sans transition-colors duration-500">
         <Navbar
           token={token}
           theme={theme}
           toggleTheme={toggleTheme}
           logout={handleLogout}
-          t={tObj} // Navbar używa obiektu
+          t={tObj}
           lang={lang}
           setLang={setLang}
         />
 
         <Routes>
-          {/* WAŻNE: HomePage dostaje funkcję tFunc */}
           <Route path="/" element={<HomePage t={tFunc} />} />
-
-          {/* Pozostałe strony dostają obiekt tObj */}
           <Route path="/login" element={<LoginPage setToken={setToken} t={tObj} />} />
           <Route path="/register" element={<RegisterPage t={tObj} />} />
           <Route path="/term" element={<TermPage t={tObj} />} />
-
-          {/* Obsługa obu wariantów ścieżki do uczelni */}
           <Route path="/university/:id" element={<UniversityPage t={tObj} />} />
           <Route path="/universities/:id" element={<UniversityPage t={tObj} />} />
-
           <Route path="/region/:regionName" element={<RegionPage t={tObj} />} />
-
           <Route path="/profile" element={token ? <ProfilePage t={tObj} /> : <Navigate to="/login" />} />
           <Route path="/admin" element={token ? <AdminPage t={tObj} /> : <Navigate to="/login" />} />
-
-          <Route path="*" element={<div className="p-10 text-center">404 - Not Found</div>} />
+          <Route path="*" element={<div className="p-20 text-center opacity-50">404 - Page Not Found</div>} />
         </Routes>
       </div>
     </BrowserRouter>
