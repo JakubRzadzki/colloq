@@ -219,7 +219,7 @@ export function UniversityPage({ t }: { t: any }) {
       {/* MODALS - Clean Props (No i18n) */}
       {token && <AddNoteModal universityId={uniId} isOpen={isNoteModalOpen} onClose={() => setNoteModalOpen(false)} />}
       {token && <AddFacultyModal isOpen={isFacModalOpen} onClose={() => setFacModalOpen(false)} universityId={uniId} universityName={university.name} />}
-      {selectedNote && <NoteModal note={selectedNote} onClose={() => setSelectedNote(null)} />}
+      {selectedNote && <NoteModal note={selectedNote} onClose={() => setSelectedNote(null)} token={token} />}
     </div>
   );
 }

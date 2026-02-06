@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom';
-import { LogOut, Sun, Moon, User as UserIcon, Search } from 'lucide-react';
+import { LogOut, Sun, Moon, User as UserIcon, Search, Shield } from 'lucide-react';
+import { jwtDecode } from "jwt-decode";
+import { API_URL } from '../utils/api';
 
 interface NavbarProps {
   token: string | null;
@@ -12,6 +14,16 @@ interface NavbarProps {
 }
 
 export function Navbar({ token, theme, toggleTheme, logout, t, lang, setLang }: NavbarProps) {
+  // Decode JWT token to check admin status
+  const isAdmin = (): boolean => {
+    if (!token) return false;
+    try {
+      const decoded: any = jwtDecode(token);
+      return decoded.is_admin === true;
+    } catch {
+      return false;
+    }
+  };
   // Style zależne od motywu (Glassmorphism Light/Dark)
   const glassClass = theme === 'light'
     ? 'bg-white/70 border-black/5 text-gray-900 shadow-[0_8px_32px_rgba(0,0,0,0.1)]'
@@ -55,13 +67,20 @@ export function Navbar({ token, theme, toggleTheme, logout, t, lang, setLang }: 
 
           {token ? (
              <div className="dropdown dropdown-end">
-               <label tabIndex={0} className={`btn btn-circle btn-sm btn-ghost avatar border ${theme === 'light' ? 'border-black/10' : 'border-white/20'}`}>
-                 <div className="w-8 rounded-full bg-gradient-to-br from-[#5e5ce6] to-[#bf5af2] flex items-center justify-center text-white">
-                    <UserIcon size={16}/>
+               <label tabIndex={0} className={`btn btn-circle btn-sm btn-ghost avatar border ${theme === 'light' ? 'border-black/10' : 'border-white/20'} hover:border-white/40 transition-all duration-300`}>
+                 {/* Avatar with fallback - IMPROVED: Better styling */}
+                 <div className="w-10 h-10 rounded-full overflow-hidden ring-2 ring-white/20 hover:ring-white/40 transition-all duration-300">
+                    {/* TODO: Add actual avatar logic here when API is ready */}
+                    <div className="w-full h-full bg-gradient-to-br from-[#5e5ce6] to-[#32ade6] flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                       U
+                    </div>
                  </div>
                </label>
                <ul tabIndex={0} className={`mt-4 p-2 shadow-2xl menu menu-sm dropdown-content rounded-2xl w-52 border backdrop-blur-xl ${theme === 'light' ? 'bg-white/90 border-black/5 text-gray-900' : 'bg-[#1e1e23]/90 border-white/10 text-white'}`}>
                   <li><Link to="/profile" className={itemHoverClass}>{t.profile}</Link></li>
+                  {isAdmin() && (
+                    <li><Link to="/admin" className={itemHoverClass}><Shield size={14} className="text-[#ff2d92]"/> {t.admin}</Link></li>
+                  )}
                   <li><button onClick={logout} className="text-red-500 hover:bg-red-500/10 flex gap-2"><LogOut size={14}/> {t.logout}</button></li>
                </ul>
              </div>

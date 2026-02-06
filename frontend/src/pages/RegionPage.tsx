@@ -31,6 +31,8 @@ export function RegionPage({ t }: { t: any }) {
     fetchUniversities();
   }, []);
 
+  // FIX: Case-insensitive filtering (Malopolskie === malopolskie)
+  // FIXED: Case-insensitive filtering (Malopolskie === malopolskie)
   const filteredUniversities = universities.filter(
     (uni) => uni.region?.toLowerCase() === regionName?.toLowerCase()
   );
@@ -70,7 +72,7 @@ export function RegionPage({ t }: { t: any }) {
             <Link 
               to={`/university/${uni.id}`}
               key={uni.id} 
-              className="group bg-[#1e1e23]/60 backdrop-blur-md border border-white/10 rounded-2xl overflow-hidden hover:border-[#5e5ce6]/50 hover:shadow-lg hover:shadow-[#5e5ce6]/10 transition-all duration-300 hover:-translate-y-1"
+              className="group bg-[#1e1e23]/60 backdrop-blur-md border border-white/10 rounded-2xl overflow-hidden hover:border-[#5e5ce6]/50 hover:shadow-lg hover:shadow-[#5e5ce6]/10 transition-all duration-300 hover:-translate-y-1 cursor-pointer block"
             >
               <div className="h-48 overflow-hidden relative">
                  {/* Fallback image logic */}

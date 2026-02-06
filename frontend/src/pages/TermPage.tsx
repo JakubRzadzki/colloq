@@ -14,18 +14,40 @@ function useDebounceValue<T>(value: T, delay: number): T {
   return debouncedValue;
 }
 
+// Hook for immediate search with loading state
+function useImmediateSearch<T>(value: T, delay: number): { debouncedValue: T; isSearching: boolean } {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+  const [isSearching, setIsSearching] = useState(false);
+  
+  useEffect(() => {
+    if (value && String(value).length > 1) {
+      setIsSearching(true);
+      const handler = setTimeout(() => {
+        setDebouncedValue(value);
+        setIsSearching(false);
+      }, delay);
+      return () => clearTimeout(handler);
+    } else {
+      setDebouncedValue(value);
+      setIsSearching(false);
+    }
+  }, [value, delay]);
+  
+  return { debouncedValue, isSearching };
+}
+
 interface TermPageProps {
   t: any;
 }
 
 export function TermPage({ t }: TermPageProps) {
   const [query, setQuery] = useState("");
-  const debouncedQuery = useDebounceValue(query, 500);
+  const { debouncedValue, isSearching } = useImmediateSearch(query, 300);
 
   const { data: results, isLoading } = useQuery({
-    queryKey: ['globalSearch', debouncedQuery],
-    queryFn: () => globalSearch(debouncedQuery),
-    enabled: debouncedQuery.length > 1
+    queryKey: ['globalSearch', debouncedValue],
+    queryFn: () => globalSearch(debouncedValue),
+    enabled: debouncedValue.length > 1
   });
 
   return (
@@ -124,7 +146,7 @@ export function TermPage({ t }: TermPageProps) {
               </section>
             )}
 
-            {results.subjects.length === 0 && results.fields.length === 0 && debouncedQuery.length > 1 && (
+            {results.subjects.length === 0 && results.fields.length === 0 && debouncedValue.length > 1 && (
               <div className="text-center py-16 opacity-50 border border-dashed border-white/10 rounded-2xl bg-white/5">
                 <Search size={48} className="mx-auto mb-4 opacity-30"/>
                 <p className="text-xl">{t.noResults}</p>

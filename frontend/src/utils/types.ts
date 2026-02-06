@@ -2,7 +2,7 @@
 export interface User {
   id: number;
   email: string;
-  username: string; // Mapped from backend 'nickname'
+  nickname: string; // Direct mapping from backend 'nickname'
   bio?: string;
   avatar_url?: string;
   is_admin: boolean;
