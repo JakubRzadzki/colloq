@@ -6,7 +6,9 @@
 import { useState, useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
+import { FeedbackWidget } from './components/FeedbackWidget';
 import { t as translate, getCurrentLanguage, setLanguage, type Language } from './utils/i18n';
+import { isAdmin } from './utils/api';
 import LoadingSpinner from './components/LoadingSpinner';
 
 // Lazy-loaded route components for code-splitting
@@ -83,6 +85,8 @@ function App() {
           setLang={setLang}
         />
 
+        {token && <FeedbackWidget token={token} />}
+
         {/* Suspense boundary with glass LoadingSpinner */}
         <Suspense fallback={<LoadingSpinner />}>
           <Routes>
@@ -100,7 +104,11 @@ function App() {
             />
             <Route
               path="/admin"
-              element={token ? <AdminPage t={tObj} /> : <Navigate to="/login" />}
+              element={
+                !token ? <Navigate to="/login" replace /> :
+                !isAdmin() ? <Navigate to="/" replace /> :
+                <AdminPage t={tObj} />
+              }
             />
             <Route
               path="*"

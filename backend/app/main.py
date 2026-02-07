@@ -16,6 +16,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func as sql_func, desc, or_
 from typing import List, Optional
+from pydantic import BaseModel
 import os
 import uuid
 
@@ -23,13 +24,15 @@ from .database import get_db, engine, Base
 from .models import (
     User, University, Faculty, FieldOfStudy, Subject,
     Note, NoteImage, NoteHistory, Review, Comment, ImageRequest,
+    UserFavorite, Notification, Report, Tag, NoteTag, Feedback,
 )
 from .schemas import (
     UserCreate, UserOut, UserResponse, UniversityOut, FacultyOut,
-    FieldOfStudyOut, SubjectOut, NoteOut, NoteHistoryOut, NoteImageOut,
+    FieldOfStudyOut, SubjectOut, NoteOut, NoteHistoryOut, NoteImageOut, TagOut,
     ReviewCreate, ReviewOut, CommentCreate, CommentOut,
     ImageRequestOut, PendingItemsResponse, RegisterRequest,
     FieldOfStudyCreate, SubjectCreate, Token,
+    NotificationOut, ReportCreate, ReportOut, FeedbackCreate, FeedbackOut, TagCreate,
 )
 from .auth import (
     get_password_hash, verify_password, create_access_token,
@@ -552,37 +555,74 @@ async def create_note(
 @app.get("/notes", response_model=List[NoteOut])
 async def get_notes(
     university_id: Optional[int] = None,
+    subject_id: Optional[int] = None,
+    semester: Optional[int] = None,
+    tag_ids: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
     search: Optional[str] = None,
+    sort: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
-    """Get notes with optional filtering by university and search query."""
+    """Get notes with filters: university, subject, semester, tags, date range, full-text search (title/content), sort (date|score|views)."""
     query = db.query(Note).options(
         joinedload(Note.author),
         joinedload(Note.subject),
         joinedload(Note.images),
-    )
+        joinedload(Note.tags),
+    ).filter(Note.is_approved == True)
     if university_id:
         query = query.filter(Note.university_id == university_id)
-    if search:
+    if subject_id:
+        query = query.filter(Note.subject_id == subject_id)
+    if semester is not None:
+        query = query.join(Note.subject).filter(Subject.semester == semester)
+    if tag_ids:
+        ids = [int(x) for x in tag_ids.split(",") if x.strip().isdigit()]
+        if ids:
+            query = query.join(NoteTag).filter(NoteTag.tag_id.in_(ids))
+    if date_from:
+        try:
+            from datetime import datetime
+            query = query.filter(Note.created_at >= datetime.fromisoformat(date_from.replace("Z", "+00:00")))
+        except Exception:
+            pass
+    if date_to:
+        try:
+            from datetime import datetime
+            query = query.filter(Note.created_at <= datetime.fromisoformat(date_to.replace("Z", "+00:00")))
+        except Exception:
+            pass
+    if search and search.strip():
+        q = f"%{search.strip()}%"
         query = query.filter(
             or_(
-                Note.title.ilike(f"%{search}%"),
-                Note.content.ilike(f"%{search}%"),
+                Note.title.ilike(q),
+                Note.content.ilike(q),
             )
         )
-    return query.order_by(desc(Note.created_at)).all()
+    if sort == "score":
+        query = query.order_by(desc(Note.score), desc(Note.created_at))
+    elif sort == "views":
+        query = query.order_by(desc(Note.view_count), desc(Note.created_at))
+    else:
+        query = query.order_by(desc(Note.created_at))
+    return query.distinct().all()
 
 
 @app.get("/notes/{note_id}", response_model=NoteOut)
 async def get_note(note_id: int, db: Session = Depends(get_db)):
-    """Get a single note by ID with all relationships loaded."""
+    """Get a single note by ID; increments view_count."""
     note = db.query(Note).options(
         joinedload(Note.author),
         joinedload(Note.subject),
         joinedload(Note.images),
+        joinedload(Note.tags),
     ).filter(Note.id == note_id).first()
     if not note:
         raise HTTPException(status_code=404, detail="Note not found")
+    note.view_count = (note.view_count or 0) + 1
+    db.commit()
     return note
 
 
@@ -718,11 +758,44 @@ async def toggle_favorite(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Toggle favorite status for a note (stub - returns toggled state)."""
+    """Toggle favorite: add if not favorited, remove if already favorited."""
     note = db.query(Note).filter(Note.id == note_id).first()
     if not note:
         raise HTTPException(status_code=404, detail="Note not found")
-    return {"msg": "Toggled", "is_favorited": True}
+    existing = db.query(UserFavorite).filter(
+        UserFavorite.user_id == current_user.id,
+        UserFavorite.note_id == note_id,
+    ).first()
+    if existing:
+        db.delete(existing)
+        db.commit()
+        return {"msg": "Removed from favorites", "is_favorited": False}
+    fav = UserFavorite(user_id=current_user.id, note_id=note_id)
+    db.add(fav)
+    db.commit()
+    return {"msg": "Added to favorites", "is_favorited": True}
+
+
+@app.get("/users/me/favorites", response_model=List[NoteOut])
+async def get_my_favorites(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List current user's favorite notes."""
+    notes = (
+        db.query(Note)
+        .options(
+            joinedload(Note.author),
+            joinedload(Note.subject),
+            joinedload(Note.images),
+            joinedload(Note.tags),
+        )
+        .join(UserFavorite, UserFavorite.note_id == Note.id)
+        .filter(UserFavorite.user_id == current_user.id)
+        .order_by(desc(UserFavorite.created_at))
+        .all()
+    )
+    return notes
 
 
 # =============================================================================
@@ -794,9 +867,160 @@ async def add_comment(
         raise HTTPException(status_code=404, detail="Note not found")
     comment = Comment(content=payload.content, user_id=current_user.id, note_id=note_id)
     db.add(comment)
+    if note.user_id != current_user.id:
+        msg = f"{current_user.nickname} commented on your note: {(note.title or 'Untitled')[:50]}"
+        db.add(Notification(user_id=note.user_id, type="comment", message=msg, related_id=note_id))
     db.commit()
     db.refresh(comment)
     return comment
+
+
+# =============================================================================
+# NOTIFICATIONS
+# =============================================================================
+
+@app.get("/notifications", response_model=List[NotificationOut])
+async def get_notifications(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    unread_only: bool = False,
+):
+    """List current user's notifications, newest first."""
+    q = db.query(Notification).filter(Notification.user_id == current_user.id)
+    if unread_only:
+        q = q.filter(Notification.read_at.is_(None))
+    return q.order_by(desc(Notification.created_at)).limit(50).all()
+
+
+@app.patch("/notifications/{notification_id}/read")
+async def mark_notification_read(
+    notification_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Mark a notification as read."""
+    from datetime import datetime, timezone
+    n = db.query(Notification).filter(Notification.id == notification_id, Notification.user_id == current_user.id).first()
+    if not n:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    n.read_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"msg": "Marked as read"}
+
+
+@app.patch("/notifications/read-all")
+async def mark_all_notifications_read(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Mark all notifications as read."""
+    from datetime import datetime, timezone
+    db.query(Notification).filter(Notification.user_id == current_user.id, Notification.read_at.is_(None)).update({Notification.read_at: datetime.now(timezone.utc)})
+    db.commit()
+    return {"msg": "All marked as read"}
+
+
+# =============================================================================
+# REPORTS
+# =============================================================================
+
+@app.post("/reports", response_model=ReportOut)
+async def create_report(
+    payload: ReportCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Report a note or user (spam, abuse, etc.)."""
+    if not payload.note_id and not payload.reported_user_id:
+        raise HTTPException(status_code=400, detail="Provide note_id or reported_user_id")
+    if payload.note_id:
+        note = db.query(Note).filter(Note.id == payload.note_id).first()
+        if not note:
+            raise HTTPException(status_code=404, detail="Note not found")
+    if payload.reported_user_id:
+        u = db.query(User).filter(User.id == payload.reported_user_id).first()
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+    r = Report(reporter_id=current_user.id, note_id=payload.note_id, reported_user_id=payload.reported_user_id, reason=payload.reason[:100])
+    db.add(r)
+    db.commit()
+    db.refresh(r)
+    return r
+
+
+# =============================================================================
+# TAGS
+# =============================================================================
+
+@app.get("/tags", response_model=List[TagOut])
+async def list_tags(db: Session = Depends(get_db)):
+    """List all tags."""
+    return db.query(Tag).order_by(Tag.name).all()
+
+
+@app.post("/tags", response_model=TagOut)
+async def create_tag(
+    payload: TagCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Create a tag (any logged-in user). Body: { \"name\": \"egzamin\" }."""
+    name = (payload.name or "").strip()[:80]
+    if not name:
+        raise HTTPException(status_code=400, detail="Tag name required")
+    existing = db.query(Tag).filter(Tag.name == name).first()
+    if existing:
+        return existing
+    tag = Tag(name=name or "untitled")
+    db.add(tag)
+    db.commit()
+    db.refresh(tag)
+    return tag
+
+
+class NoteTagsUpdate(BaseModel):
+    tag_ids: List[int] = []
+
+
+@app.put("/notes/{note_id}/tags")
+async def set_note_tags(
+    note_id: int,
+    payload: NoteTagsUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Set tags for a note (owner or admin). Body: { \"tag_ids\": [1, 2, 3] }."""
+    note = db.query(Note).filter(Note.id == note_id).first()
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    if note.user_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    db.query(NoteTag).filter(NoteTag.note_id == note_id).delete()
+    for tid in payload.tag_ids:
+        if db.query(Tag).filter(Tag.id == tid).first():
+            db.add(NoteTag(note_id=note_id, tag_id=tid))
+    db.commit()
+    return {"msg": "Tags updated", "tag_ids": payload.tag_ids}
+
+
+# =============================================================================
+# FEEDBACK
+# =============================================================================
+
+@app.post("/feedback", response_model=FeedbackOut)
+async def submit_feedback(
+    payload: FeedbackCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Submit user feedback (1-5 rating + optional comment)."""
+    if not (1 <= payload.rating <= 5):
+        raise HTTPException(status_code=400, detail="Rating must be 1-5")
+    f = Feedback(user_id=current_user.id, rating=payload.rating, comment=(payload.comment[:2000] if payload.comment else None))
+    db.add(f)
+    db.commit()
+    db.refresh(f)
+    return f
 
 
 # =============================================================================
@@ -1045,6 +1269,32 @@ async def admin_get_users(
     return db.query(User).order_by(User.created_at.desc()).all()
 
 
+class BanUserBody(BaseModel):
+    banned: bool
+
+
+@app.patch("/admin/users/{user_id}/ban")
+async def admin_ban_user(
+    user_id: int,
+    body: BanUserBody,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Ban or unban a user (admin only). Cannot ban self or another admin."""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target.id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot ban yourself")
+    if target.is_admin:
+        raise HTTPException(status_code=400, detail="Cannot ban an admin")
+    target.is_banned = body.banned
+    db.commit()
+    return {"msg": "User banned" if body.banned else "User unbanned", "user_id": user_id}
+
+
 @app.post("/admin/approve/{item_type}/{item_id}")
 async def approve_item(
     item_type: str,
@@ -1071,6 +1321,8 @@ async def approve_item(
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
     item.is_approved = True
+    if item_type == "note" and hasattr(item, "user_id"):
+        db.add(Notification(user_id=item.user_id, type="note_approved", message="Your note was approved.", related_id=item_id))
     db.commit()
     return {"msg": f"{item_type} approved"}
 
@@ -1103,6 +1355,52 @@ async def reject_item(
     db.delete(item)
     db.commit()
     return {"msg": f"{item_type} rejected"}
+
+
+@app.get("/admin/reports", response_model=List[ReportOut])
+async def admin_list_reports(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    status_filter: Optional[str] = None,
+):
+    """List all reports (admin only)."""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    q = db.query(Report).order_by(desc(Report.created_at))
+    if status_filter in ("pending", "resolved", "dismissed"):
+        q = q.filter(Report.status == status_filter)
+    return q.all()
+
+
+@app.patch("/admin/reports/{report_id}")
+async def admin_update_report(
+    report_id: int,
+    status: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Set report status to resolved or dismissed (admin only)."""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    if status not in ("resolved", "dismissed"):
+        raise HTTPException(status_code=400, detail="Status must be resolved or dismissed")
+    r = db.query(Report).filter(Report.id == report_id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Report not found")
+    r.status = status
+    db.commit()
+    return {"msg": "Report updated", "status": status}
+
+
+@app.get("/admin/feedback", response_model=List[FeedbackOut])
+async def admin_list_feedback(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List all user feedback (admin only)."""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return db.query(Feedback).order_by(desc(Feedback.created_at)).all()
 
 
 @app.post("/universities/{uni_id}/image_request")

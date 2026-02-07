@@ -1,8 +1,6 @@
 """
-Pydantic schemas for Colloq API.
-Defines request/response models for all endpoints.
-CRITICAL FIX: UniversityOut now accurately reflects the DB model to prevent 422 errors.
-All schemas use from_attributes = True for SQLAlchemy ORM compatibility.
+Legacy Pydantic schemas for main.py (Colloq API v2).
+Re-exported from app.schemas so "from app.schemas import UserCreate" etc. works.
 """
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
@@ -27,6 +25,7 @@ class UserOut(BaseModel):
     bio: Optional[str] = None
     avatar_url: Optional[str] = None
     is_admin: bool = False
+    is_banned: bool = False
     is_verified: bool = False
     reputation_points: int = 0
     uploads_count: int = 0
@@ -37,7 +36,6 @@ class UserOut(BaseModel):
         from_attributes = True
 
 
-# Legacy alias for backward compatibility
 UserResponse = UserOut
 
 
@@ -50,11 +48,6 @@ class RegisterRequest(BaseModel):
 # =============================================================================
 
 class UniversityOut(BaseModel):
-    """
-    Output schema for University.
-    CRITICAL FIX: Every field here must match the University model columns exactly.
-    Optional fields have defaults to prevent validation errors when columns are NULL.
-    """
     id: int
     name: str
     name_en: Optional[str] = None
@@ -156,11 +149,10 @@ class CommentOut(BaseModel):
 
 
 # =============================================================================
-# NOTE IMAGE SCHEMAS (Rich Notes Feature)
+# NOTE SCHEMAS
 # =============================================================================
 
 class NoteImageOut(BaseModel):
-    """Output schema for individual note images."""
     id: int
     note_id: int
     image_url: str
@@ -172,16 +164,19 @@ class NoteImageOut(BaseModel):
         from_attributes = True
 
 
-# =============================================================================
-# NOTE SCHEMAS
-# =============================================================================
+class TagOut(BaseModel):
+    id: int
+    name: str
+
+    class Config:
+        from_attributes = True
+
+
+class TagCreate(BaseModel):
+    name: str
+
 
 class NoteOut(BaseModel):
-    """
-    Output schema for notes.
-    Includes the new 'images' list for multi-image rich notes,
-    plus legacy image_url for backward compatibility.
-    """
     id: int
     title: Optional[str] = None
     content: Optional[str] = None
@@ -195,9 +190,12 @@ class NoteOut(BaseModel):
     subject_id: Optional[int] = None
     user_id: Optional[int] = None
     is_approved: bool = True
+    view_count: int = 0
+    download_count: int = 0
     author: Optional[UserOut] = None
     subject: Optional[SubjectOut] = None
     images: List[NoteImageOut] = []
+    tags: List[TagOut] = []
 
     class Config:
         from_attributes = True
@@ -226,7 +224,7 @@ class ImageRequestOut(BaseModel):
     status: str
     submitted_by_id: int
     created_at: Optional[datetime] = None
-    university_name: Optional[str] = None  # Populated when loaded for admin UI
+    university_name: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -240,10 +238,6 @@ class PendingItemsResponse(BaseModel):
     subjects: List[SubjectOut] = []
     image_requests: List[ImageRequestOut] = []
 
-
-# =============================================================================
-# INTERACTION SCHEMAS
-# =============================================================================
 
 class VoteResponse(BaseModel):
     msg: str
@@ -265,3 +259,51 @@ class UserDashboard(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+
+
+class NotificationOut(BaseModel):
+    id: int
+    user_id: int
+    type: str
+    message: str
+    related_id: Optional[int] = None
+    read_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ReportCreate(BaseModel):
+    note_id: Optional[int] = None
+    reported_user_id: Optional[int] = None
+    reason: str
+
+
+class ReportOut(BaseModel):
+    id: int
+    reporter_id: int
+    note_id: Optional[int] = None
+    reported_user_id: Optional[int] = None
+    reason: str
+    status: str
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackCreate(BaseModel):
+    rating: int  # 1-5
+    comment: Optional[str] = None
+
+
+class FeedbackOut(BaseModel):
+    id: int
+    user_id: int
+    rating: int
+    comment: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True

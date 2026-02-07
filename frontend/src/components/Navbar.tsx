@@ -10,9 +10,10 @@
  */
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { LogOut, Sun, Moon, Search, Shield, User as UserIcon } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { LogOut, Sun, Moon, Search, Shield, User as UserIcon, Bell } from 'lucide-react';
 import { jwtDecode } from 'jwt-decode';
-import { resolveUrl, getCurrentUser } from '../utils/api';
+import { resolveUrl, getCurrentUser, getNotifications, markNotificationRead, markAllNotificationsRead } from '../utils/api';
 import type { User } from '../utils/types';
 
 interface NavbarProps {
@@ -28,7 +29,17 @@ interface NavbarProps {
 export function Navbar({ token, theme, toggleTheme, logout, t, lang, setLang }: NavbarProps) {
   const [user, setUser] = useState<User | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const notifRef = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
+
+  const { data: notifications = [] } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: () => getNotifications(false),
+    enabled: !!token,
+  });
+  const unreadCount = notifications.filter((n: any) => !n.read_at).length;
 
   // Fetch current user data when token is available
   useEffect(() => {
@@ -41,12 +52,12 @@ export function Navbar({ token, theme, toggleTheme, logout, t, lang, setLang }: 
     }
   }, [token]);
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setDropdownOpen(false);
-      }
+      const target = e.target as Node;
+      if (dropdownRef.current && !dropdownRef.current.contains(target)) setDropdownOpen(false);
+      if (notifRef.current && !notifRef.current.contains(target)) setNotifOpen(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -138,8 +149,78 @@ export function Navbar({ token, theme, toggleTheme, logout, t, lang, setLang }: 
           </button>
         </div>
 
-        {/* Right Side: Theme Toggle & User */}
+        {/* Right Side: Notifications, Theme, User */}
         <div className="flex items-center gap-2">
+          {/* Notifications Bell (logged in only) */}
+          {token && (
+            <div className="relative" ref={notifRef}>
+              <button
+                onClick={() => setNotifOpen(!notifOpen)}
+                className={`p-2 rounded-full transition-colors relative ${itemHover}`}
+                aria-label="Notifications"
+              >
+                <Bell size={18} />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+              </button>
+              {notifOpen && (
+                <div
+                  className={`absolute right-0 mt-2 w-80 max-h-[360px] overflow-y-auto rounded-2xl border z-50 ${
+                    isDark ? 'bg-[#1e293b]/95 border-white/10' : 'bg-white/95 border-black/5'
+                  }`}
+                  style={{ backdropFilter: 'blur(40px)' }}
+                >
+                  <div className={`px-4 py-2 border-b ${isDark ? 'border-white/10' : 'border-black/5'} flex justify-between items-center`}>
+                    <span className="font-semibold text-sm">Notifications</span>
+                    {unreadCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await markAllNotificationsRead();
+                          queryClient.invalidateQueries({ queryKey: ['notifications'] });
+                        }}
+                        className="text-xs opacity-70 hover:opacity-100"
+                      >
+                        Mark all read
+                      </button>
+                    )}
+                  </div>
+                  <div className="py-1">
+                    {notifications.length === 0 ? (
+                      <p className={`px-4 py-6 text-sm ${isDark ? 'text-white/50' : 'text-slate-500'}`}>No notifications</p>
+                    ) : (
+                      notifications.slice(0, 20).map((n: any) => (
+                        <div
+                          key={n.id}
+                          className={`px-4 py-2.5 text-sm border-b ${isDark ? 'border-white/5' : 'border-black/5'} ${!n.read_at ? (isDark ? 'bg-white/5' : 'bg-black/5') : ''}`}
+                        >
+                          {n.related_id && n.type === 'comment' ? (
+                            <Link to={`/note/${n.related_id}`} onClick={() => setNotifOpen(false)} className="block">
+                              <p className="font-medium">{n.message}</p>
+                              <p className={`text-xs mt-0.5 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
+                                {n.created_at ? new Date(n.created_at).toLocaleString() : ''}
+                              </p>
+                            </Link>
+                          ) : (
+                            <div>
+                              <p className="font-medium">{n.message}</p>
+                              <p className={`text-xs mt-0.5 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
+                                {n.created_at ? new Date(n.created_at).toLocaleString() : ''}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Theme Toggle */}
           <button
             onClick={toggleTheme}

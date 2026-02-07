@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check, X, Shield, FileText, Image as ImageIcon, Building2, AlertCircle, Users, GraduationCap, BookOpen } from 'lucide-react';
+import { Check, X, Shield, FileText, Image as ImageIcon, Building2, AlertCircle, Users, GraduationCap, BookOpen, Flag, MessageSquare, Ban, Pencil, Trash2 } from 'lucide-react';
 import {
   getPendingItems, approveItem, rejectItem, approveImageRequest, rejectImageRequest,
-  getAllUsers, getNotes, resolveUrl,
+  getAllUsers, getNotes, getReports, getFeedback, updateReportStatus, resolveUrl,
+  banUser as apiBanUser, deleteNote,
 } from '../utils/api';
 import { Link } from 'react-router-dom';
 
-type AdminTab = 'users' | 'notes' | 'pending-notes' | 'pending-universities' | 'pending-faculties' | 'pending-fields' | 'pending-subjects' | 'images';
+type AdminTab = 'users' | 'notes' | 'pending-notes' | 'pending-universities' | 'pending-faculties' | 'pending-fields' | 'pending-subjects' | 'images' | 'reports' | 'feedback';
 
 export function AdminPage({ t }: { t: any }) {
   const [activeTab, setActiveTab] = useState<AdminTab>('users');
@@ -25,7 +26,34 @@ export function AdminPage({ t }: { t: any }) {
 
   const { data: notes, isLoading: notesLoading } = useQuery({
     queryKey: ['admin', 'notes'],
-    queryFn: () => getNotes(),
+    queryFn: () => getNotes({}),
+  });
+
+  const { data: reports = [], isLoading: reportsLoading } = useQuery({
+    queryKey: ['admin', 'reports'],
+    queryFn: () => getReports(),
+  });
+
+  const { data: feedbackList = [], isLoading: feedbackLoading } = useQuery({
+    queryKey: ['admin', 'feedback'],
+    queryFn: getFeedback,
+  });
+
+  const reportStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: 'resolved' | 'dismissed' }) => updateReportStatus(id, status),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'reports'] }),
+  });
+
+  const banUserMutation = useMutation({
+    mutationFn: ({ userId, banned }: { userId: number; banned: boolean }) => apiBanUser(userId, banned),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'users'] }),
+  });
+
+  const deleteNoteMutation = useMutation({
+    mutationFn: (noteId: number) => deleteNote(noteId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'notes'] });
+    },
   });
 
   const approveMutation = useMutation({
@@ -51,7 +79,7 @@ export function AdminPage({ t }: { t: any }) {
   const pendingSubjects = pendingData?.subjects || [];
   const pendingImages = pendingData?.image_requests || [];
 
-  const isLoading = pendingLoading || (activeTab === 'users' && usersLoading) || (activeTab === 'notes' && notesLoading);
+  const isLoading = pendingLoading || (activeTab === 'users' && usersLoading) || (activeTab === 'notes' && notesLoading) || (activeTab === 'reports' && reportsLoading) || (activeTab === 'feedback' && feedbackLoading);
 
   if (isLoading && activeTab === 'users') {
     return <div className="flex justify-center pt-40"><span className="loading-spinner" /></div>;
@@ -60,6 +88,9 @@ export function AdminPage({ t }: { t: any }) {
     return <div className="flex justify-center pt-40"><span className="loading-spinner" /></div>;
   }
   if (pendingLoading && ['pending-notes', 'pending-universities', 'pending-faculties', 'pending-fields', 'pending-subjects', 'images'].includes(activeTab)) {
+    return <div className="flex justify-center pt-40"><span className="loading-spinner" /></div>;
+  }
+  if ((activeTab === 'reports' && reportsLoading) || (activeTab === 'feedback' && feedbackLoading)) {
     return <div className="flex justify-center pt-40"><span className="loading-spinner" /></div>;
   }
 
@@ -84,6 +115,8 @@ export function AdminPage({ t }: { t: any }) {
         <TabBtn active={activeTab === 'pending-fields'} onClick={() => setActiveTab('pending-fields')} icon={<BookOpen size={18} />} label={`Oczekujące kierunki (${pendingFields.length})`} />
         <TabBtn active={activeTab === 'pending-subjects'} onClick={() => setActiveTab('pending-subjects')} icon={<BookOpen size={18} />} label={`Oczekujące przedmioty (${pendingSubjects.length})`} />
         <TabBtn active={activeTab === 'images'} onClick={() => setActiveTab('images')} icon={<ImageIcon size={18} />} label={`Zmiany obrazów (${pendingImages.length})`} />
+        <TabBtn active={activeTab === 'reports'} onClick={() => setActiveTab('reports')} icon={<Flag size={18} />} label={`Zgłoszenia (${reports?.length ?? 0})`} />
+        <TabBtn active={activeTab === 'feedback'} onClick={() => setActiveTab('feedback')} icon={<MessageSquare size={18} />} label={`Feedback (${feedbackList?.length ?? 0})`} />
       </div>
 
       <div className="grid grid-cols-1 gap-6">
@@ -102,8 +135,20 @@ export function AdminPage({ t }: { t: any }) {
                     <p className="text-xs text-white/40">ID: {u.id} • {u.reputation_points} pkt • {u.uploads_count} uploadów</p>
                   </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center flex-wrap">
                   {u.is_admin && <span className="badge badge-primary bg-[#5e5ce6]/30 text-[#5e5ce6] border-none">Admin</span>}
+                  {u.is_banned && <span className="badge bg-red-500/30 text-red-400 border-none">Zbanowany</span>}
+                  {!u.is_admin && (
+                    <button
+                      type="button"
+                      onClick={() => banUserMutation.mutate({ userId: u.id, banned: !u.is_banned })}
+                      disabled={banUserMutation.isPending}
+                      className={`btn gap-2 rounded-xl ${u.is_banned ? 'btn-ghost text-green-400 hover:bg-green-500/20' : 'btn-ghost text-red-400 hover:bg-red-500/20'}`}
+                    >
+                      <Ban size={16} />
+                      {u.is_banned ? 'Odbanuj' : 'Zbanuj'}
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -114,19 +159,30 @@ export function AdminPage({ t }: { t: any }) {
           notes?.length === 0 ? <EmptyState msg="Brak notatek." /> :
           <div className="space-y-3">
             {notes?.map((n: any) => (
-              <Link key={n.id} to={`/note/${n.id}`} className="block">
-                <div className="glass-panel p-5 hover:border-[#5e5ce6]/50 transition-colors">
-                  <div className="flex gap-4 items-start">
-                    <div className="p-3 bg-white/5 rounded-xl text-[#32ade6] shrink-0">
-                      <FileText size={24} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <h3 className="font-bold text-white truncate">{n.title || 'Bez tytułu'}</h3>
-                      <p className="text-white/60 text-sm">{n.author?.nickname || 'Anonim'} • {n.university_id} • score: {n.score?.toFixed(1) || '0'}</p>
-                    </div>
+              <div key={n.id} className="glass-panel p-5 hover:border-[#5e5ce6]/50 transition-colors flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                <Link to={`/note/${n.id}`} className="flex gap-4 items-start min-w-0 flex-1">
+                  <div className="p-3 bg-white/5 rounded-xl text-[#32ade6] shrink-0">
+                    <FileText size={24} />
                   </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-bold text-white truncate">{n.title || 'Bez tytułu'}</h3>
+                    <p className="text-white/60 text-sm">{n.author?.nickname || 'Anonim'} • {n.university_id} • score: {n.score?.toFixed(1) || '0'}</p>
+                  </div>
+                </Link>
+                <div className="flex gap-2 shrink-0">
+                  <Link to={`/note/${n.id}`} className="btn btn-ghost gap-2 rounded-xl" onClick={(e) => e.stopPropagation()}>
+                    <Pencil size={16} /> Edytuj
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => window.confirm('Usunąć tę notatkę?') && deleteNoteMutation.mutate(n.id)}
+                    disabled={deleteNoteMutation.isPending}
+                    className="btn btn-ghost text-red-400 hover:bg-red-500/20 gap-2 rounded-xl"
+                  >
+                    <Trash2 size={16} /> Usuń
+                  </button>
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
         )}
@@ -243,6 +299,43 @@ export function AdminPage({ t }: { t: any }) {
               </div>
             </div>
           ))
+        )}
+
+        {activeTab === 'reports' && (
+          reports?.length === 0 ? <EmptyState msg="Brak zgłoszeń." /> :
+          <div className="space-y-3">
+            {reports?.map((r: any) => (
+              <div key={r.id} className="glass-panel p-5 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                <div>
+                  <p className="text-white/80 text-sm">Powód: <span className="text-white font-medium">{r.reason}</span></p>
+                  <p className="text-white/50 text-xs mt-1">Status: {r.status} • Zgłaszający ID: {r.reporter_id}</p>
+                  {r.note_id && <Link to={`/note/${r.note_id}`} className="text-[#5e5ce6] hover:underline text-sm">Notatka #{r.note_id}</Link>}
+                  {r.reported_user_id && <span className="text-white/50 text-sm ml-2">Użytkownik ID: {r.reported_user_id}</span>}
+                </div>
+                {r.status === 'pending' && (
+                  <div className="flex gap-2">
+                    <button onClick={() => reportStatusMutation.mutate({ id: r.id, status: 'dismissed' })} className="btn btn-ghost hover:bg-red-500/20 text-red-400 rounded-xl">Odrzuć</button>
+                    <button onClick={() => reportStatusMutation.mutate({ id: r.id, status: 'resolved' })} className="btn bg-[#5e5ce6] text-white border-none rounded-xl">Rozwiąż</button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === 'feedback' && (
+          feedbackList?.length === 0 ? <EmptyState msg="Brak opinii." /> :
+          <div className="space-y-3">
+            {feedbackList?.map((f: any) => (
+              <div key={f.id} className="glass-panel p-5">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-yellow-400 font-bold">{'★'.repeat(f.rating)}{'☆'.repeat(5 - f.rating)}</span>
+                  <span className="text-white/50 text-sm">Użytkownik ID: {f.user_id}</span>
+                </div>
+                {f.comment && <p className="text-white/80 text-sm">{f.comment}</p>}
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </div>

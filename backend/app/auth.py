@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+import jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 from . import database, models
@@ -26,7 +26,7 @@ def get_password_hash(password):
 def create_access_token(data: dict):
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
+    to_encode["exp"] = int(expire.timestamp())  # PyJWT expects numeric timestamp
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(database.get_db)):
@@ -35,11 +35,12 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
         if email is None: raise exception
-    except JWTError:
+    except jwt.PyJWTError:
         raise exception
 
     user = db.query(models.User).filter(models.User.email == email).first()
-    if user is None or not user.is_active: raise exception
+    if user is None or not user.is_active or getattr(user, "is_banned", False):
+        raise exception
     return user
 
 async def get_current_user_optional(token: Optional[str] = Depends(oauth2_scheme_optional), db: Session = Depends(database.get_db)):
@@ -52,10 +53,10 @@ async def get_current_user_optional(token: Optional[str] = Depends(oauth2_scheme
         if not email:
             return None
         user = db.query(models.User).filter(models.User.email == email).first()
-        if user is None or not user.is_active:
+        if user is None or not user.is_active or getattr(user, "is_banned", False):
             return None
         return user
-    except JWTError:
+    except jwt.PyJWTError:
         return None
 
 async def get_current_active_admin(user: models.User = Depends(get_current_user)):

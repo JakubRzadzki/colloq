@@ -207,16 +207,32 @@ export const getFields = async (id: number): Promise<FieldOfStudy[]> =>
 export const getSubjects = async (id: number): Promise<Subject[]> =>
   (await api.get(`/fields/${id}/subjects`)).data;
 
-/** Get notes with optional filtering. */
-export const getNotes = async (
-  uniId?: number,
-  search?: string
-): Promise<Note[]> => {
-  const params = new URLSearchParams();
-  if (uniId) params.append('university_id', uniId.toString());
-  if (search) params.append('search', search);
-  return (await api.get(`/notes?${params.toString()}`)).data;
+/** Get notes with optional filtering (university, subject, semester, tags, date range, search, sort). */
+export const getNotes = async (params: {
+  university_id?: number;
+  subject_id?: number;
+  semester?: number;
+  tag_ids?: number[];
+  date_from?: string;
+  date_to?: string;
+  search?: string;
+  sort?: 'date' | 'score' | 'views';
+} = {}): Promise<Note[]> => {
+  const q = new URLSearchParams();
+  if (params.university_id != null) q.append('university_id', params.university_id.toString());
+  if (params.subject_id != null) q.append('subject_id', params.subject_id.toString());
+  if (params.semester != null) q.append('semester', params.semester.toString());
+  if (params.tag_ids?.length) q.append('tag_ids', params.tag_ids.join(','));
+  if (params.date_from) q.append('date_from', params.date_from);
+  if (params.date_to) q.append('date_to', params.date_to);
+  if (params.search) q.append('search', params.search);
+  if (params.sort) q.append('sort', params.sort);
+  return (await api.get(`/notes?${q.toString()}`)).data;
 };
+
+/** Get current user's favorite notes. */
+export const getMyFavorites = async (): Promise<Note[]> =>
+  (await api.get('/users/me/favorites')).data;
 
 /** Get a single note by ID. */
 export const getNote = async (id: number): Promise<Note> =>
@@ -297,8 +313,8 @@ export const createSubject = async (data: {
 export const voteNote = async (id: number) =>
   (await api.post(`/notes/${id}/vote`)).data;
 
-/** Toggle favorite status for a note. */
-export const toggleFavorite = async (id: number) =>
+/** Toggle favorite status for a note. Returns { is_favorited: boolean }. */
+export const toggleFavorite = async (id: number): Promise<{ is_favorited: boolean }> =>
   (await api.post(`/notes/${id}/favorite`)).data;
 
 /** Get university reviews. */
@@ -349,6 +365,64 @@ export const deleteNote = async (id: number) =>
   await api.delete(`/notes/${id}`);
 
 // =============================================================================
+// NOTIFICATIONS
+// =============================================================================
+
+export interface NotificationItem {
+  id: number;
+  user_id: number;
+  type: string;
+  message: string;
+  related_id: number | null;
+  read_at: string | null;
+  created_at: string | null;
+}
+
+export const getNotifications = async (unreadOnly = false): Promise<NotificationItem[]> =>
+  (await api.get(`/notifications?unread_only=${unreadOnly}`)).data;
+
+export const markNotificationRead = async (id: number) =>
+  (await api.patch(`/notifications/${id}/read`)).data;
+
+export const markAllNotificationsRead = async () =>
+  (await api.patch('/notifications/read-all')).data;
+
+// =============================================================================
+// REPORTS
+// =============================================================================
+
+export const createReport = async (data: {
+  note_id?: number;
+  reported_user_id?: number;
+  reason: string;
+}) => (await api.post('/reports', data)).data;
+
+// =============================================================================
+// TAGS
+// =============================================================================
+
+export interface TagItem {
+  id: number;
+  name: string;
+}
+
+export const getTags = async (): Promise<TagItem[]> =>
+  (await api.get('/tags')).data;
+
+export const createTag = async (name: string) =>
+  (await api.post('/tags', { name })).data;
+
+export const setNoteTags = async (noteId: number, tagIds: number[]) =>
+  (await api.put(`/notes/${noteId}/tags`, { tag_ids: tagIds })).data;
+
+// =============================================================================
+// FEEDBACK
+// =============================================================================
+
+export const submitFeedback = async (rating: number, comment?: string) =>
+  (await api.post('/feedback', { rating, comment })).data;
+
+// =============================================================================
 // ADMIN FUNCTIONS
 // =============================================================================
 
@@ -359,6 +433,10 @@ export const getPendingItems = async (): Promise<PendingItems> =>
 /** Get all users (admin only). */
 export const getAllUsers = async (): Promise<User[]> =>
   (await api.get('/admin/users')).data;
+
+/** Ban or unban user (admin only). */
+export const banUser = async (userId: number, banned: boolean) =>
+  (await api.patch(`/admin/users/${userId}/ban`, { banned })).data;
 
 /** Approve a pending item. */
 export const approveItem = async (type: string, id: number) =>
@@ -382,6 +460,20 @@ export const updateUniversityImage = async (id: number, file: File) => {
   fd.append('image', file);
   return (await api.patch(`/admin/universities/${id}/image`, fd)).data;
 };
+
+/** List reports (admin only). */
+export const getReports = async (status?: string): Promise<any[]> => {
+  const q = status ? `?status_filter=${status}` : '';
+  return (await api.get(`/admin/reports${q}`)).data;
+};
+
+/** Update report status (admin only). */
+export const updateReportStatus = async (reportId: number, status: 'resolved' | 'dismissed') =>
+  (await api.patch(`/admin/reports/${reportId}?status=${status}`)).data;
+
+/** List feedback (admin only). */
+export const getFeedback = async (): Promise<any[]> =>
+  (await api.get('/admin/feedback')).data;
 
 /** Update university details (admin only). */
 export const updateUniversity = async (id: number, data: any) => {

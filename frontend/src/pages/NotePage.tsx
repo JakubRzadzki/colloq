@@ -13,10 +13,11 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Download, Star, Lock, Upload, FileText, Pencil, Clock } from 'lucide-react';
-import { getNote, getCurrentUser, getNoteHistory, API_URL, resolveUrl, type NoteHistoryEntry } from '../utils/api';
+import { ArrowLeft, Star, Lock, Upload, FileText, Pencil, Clock, Share2, Flag } from 'lucide-react';
+import { getNote, getCurrentUser, getNoteHistory, resolveUrl, createReport, type NoteHistoryEntry } from '../utils/api';
 import { AddNoteModal } from '../components/addNoteModal';
 import { EditNoteModal } from '../components/EditNoteModal';
+import { FilePreview } from '../components/FilePreview';
 import { t } from '../utils/i18n';
 
 export default function NotePage() {
@@ -26,6 +27,10 @@ export default function NotePage() {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState('spam');
+  const [reportStatus, setReportStatus] = useState<'idle' | 'sending' | 'ok' | 'error'>('idle');
   const token = localStorage.getItem('token');
 
   // Fetch note data
@@ -54,13 +59,13 @@ export default function NotePage() {
     enabled: showHistory && !!token && !!noteId && !!canEdit,
   });
 
-  // Upload-to-Unlock barrier logic
+  // Blur note when: not logged in, OR (logged in with 0 uploads and not the author)
   const isBlocked =
-    token &&
-    currentUser &&
     note &&
-    currentUser.uploads_count === 0 &&
-    currentUser.id !== note.author?.id;
+    (!token ||
+      (currentUser &&
+        currentUser.uploads_count === 0 &&
+        currentUser.id !== note.author?.id));
 
   if (noteLoading) {
     return (
@@ -153,10 +158,38 @@ export default function NotePage() {
                   <Star size={14} className="text-[#f59e0b]" />
                   <span>{note.score?.toFixed(1) || '0.0'}</span>
                 </div>
+
+                {/* Share & Report (when not editing) */}
+                {!canEdit && (
+                  <div className="flex items-center gap-2 ml-auto">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(window.location.href);
+                        setLinkCopied(true);
+                        setTimeout(() => setLinkCopied(false), 2000);
+                      }}
+                      className="p-2 rounded-lg glass-panel hover:bg-white/15 transition-colors flex items-center gap-1.5 text-sm"
+                      title="Copy link"
+                    >
+                      <Share2 size={16} /> {linkCopied ? 'Copied!' : 'Share'}
+                    </button>
+                    {token && (
+                      <button
+                        type="button"
+                        onClick={() => setShowReportModal(true)}
+                        className="p-2 rounded-lg glass-panel hover:bg-red-500/10 transition-colors flex items-center gap-1.5 text-sm opacity-70 hover:opacity-100"
+                        title="Report"
+                      >
+                        <Flag size={16} /> Report
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Note Image */}
+            {/* Note Image (legacy single) */}
             {note.image_url && (
               <div className="mb-8 rounded-xl overflow-hidden">
                 <img
@@ -164,6 +197,24 @@ export default function NotePage() {
                   alt={note.title || 'Note'}
                   className="w-full max-h-[500px] object-contain bg-black/5 rounded-xl"
                 />
+              </div>
+            )}
+
+            {/* Note Images (multiple) */}
+            {note.images?.length > 0 && (
+              <div className="mb-8 space-y-4">
+                {note.images.map((img: { id: number; image_url: string; caption?: string }) => (
+                  <div key={img.id} className="rounded-xl overflow-hidden">
+                    <img
+                      src={resolveUrl(img.image_url)}
+                      alt={img.caption || note.title || 'Note'}
+                      className="w-full max-h-[500px] object-contain bg-black/5 rounded-xl"
+                    />
+                    {img.caption && (
+                      <p className="text-sm opacity-60 mt-2">{img.caption}</p>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
 
@@ -176,17 +227,11 @@ export default function NotePage() {
               </div>
             )}
 
-            {/* Download Button */}
+            {/* File attachment: preview + download */}
             {note.file_url && (
               <div className="mt-8">
-                <a
-                  href={resolveUrl(note.file_url)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn-primary px-6 py-3 rounded-xl inline-flex items-center gap-2 no-underline"
-                >
-                  <Download size={18} /> {t('download')}
-                </a>
+                <h3 className="font-bold text-lg mb-3">{t('attachment')}</h3>
+                <FilePreview fileUrl={note.file_url} title={note.title} className="mb-4" />
               </div>
             )}
 
@@ -228,45 +273,52 @@ export default function NotePage() {
           </div>
 
           {/* ============================================================
-              UPLOAD-TO-UNLOCK BARRIER OVERLAY
-              Non-dismissible glass modal shown when user has 0 uploads.
+              BARRIER OVERLAY: not logged in OR 0 uploads → blur + CTA
+              Message: "You need to upload at least one note to access other users' notes..."
               ============================================================ */}
           {isBlocked && (
             <div className="barrier-overlay">
-              <div className="text-center max-w-sm">
+              <div className="text-center max-w-md">
                 <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-[#5e5ce6] to-[#bf5af2] flex items-center justify-center shadow-lg">
                   <Lock size={36} className="text-white" />
                 </div>
 
                 <h2 className="text-2xl font-black mb-3">{t('upload_barrier_title')}</h2>
 
-                <p className="opacity-70 mb-8 leading-relaxed">{t('upload_barrier_message')}</p>
+                <p className="opacity-90 mb-6 leading-relaxed text-sm">
+                  {t('upload_barrier_desc')}
+                </p>
 
-                <button
-                  onClick={() => setShowUploadModal(true)}
-                  className="bg-gradient-to-r from-[#5e5ce6] to-[#bf5af2] text-white px-8 py-4 rounded-xl font-bold text-lg shadow-lg shadow-[#5e5ce6]/30 hover:scale-105 transition-all flex items-center gap-3 mx-auto"
-                >
-                  <Upload size={22} /> {t('unlock_with_upload')}
-                </button>
-
-                <p className="text-xs opacity-40 mt-6">{t('upload_barrier_desc')}</p>
+                {!token ? (
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
+                    <Link
+                      to="/login"
+                      className="bg-gradient-to-r from-[#5e5ce6] to-[#bf5af2] text-white px-8 py-4 rounded-xl font-bold text-lg shadow-lg shadow-[#5e5ce6]/30 hover:scale-105 transition-all flex items-center gap-3 no-underline"
+                    >
+                      {t('login')}
+                    </Link>
+                    <Link
+                      to="/register"
+                      className="glass-panel border border-white/20 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-white/10 transition-all flex items-center gap-3 no-underline"
+                    >
+                      {t('register')}
+                    </Link>
+                  </div>
+                ) : (
+                  <>
+                    <p className="opacity-70 mb-4 text-sm">{t('upload_barrier_message')}</p>
+                    <button
+                      onClick={() => setShowUploadModal(true)}
+                      className="bg-gradient-to-r from-[#5e5ce6] to-[#bf5af2] text-white px-8 py-4 rounded-xl font-bold text-lg shadow-lg shadow-[#5e5ce6]/30 hover:scale-105 transition-all flex items-center gap-3 mx-auto"
+                    >
+                      <Upload size={22} /> {t('unlock_with_upload')}
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           )}
         </div>
-
-        {/* Not logged in prompt */}
-        {!token && (
-          <div className="mt-8 glass-panel p-8 rounded-xl text-center">
-            <p className="opacity-60 mb-4">{t('upload_barrier_desc')}</p>
-            <Link
-              to="/login"
-              className="btn-primary px-6 py-3 rounded-xl inline-block no-underline"
-            >
-              {t('login')}
-            </Link>
-          </div>
-        )}
       </div>
 
       {/* Upload Modal - Triggered by barrier CTA */}
@@ -286,6 +338,42 @@ export default function NotePage() {
           onClose={() => setShowEditModal(false)}
           onSuccess={() => { queryClient.invalidateQueries({ queryKey: ['note', noteId] }); }}
         />
+      )}
+
+      {showReportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => { setShowReportModal(false); setReportStatus('idle'); }}>
+          <div className="glass-panel p-6 rounded-2xl max-w-sm w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-bold text-lg mb-3">Report this note</h3>
+            {reportStatus === 'ok' && <p className="text-green-400 text-sm mb-3">Report submitted. Thank you.</p>}
+            {reportStatus === 'error' && <p className="text-red-400 text-sm mb-3">Failed to submit. Try again.</p>}
+            <select value={reportReason} onChange={(e) => setReportReason(e.target.value)} className="glass-input w-full py-2 px-3 rounded-xl mb-4" disabled={reportStatus === 'sending'}>
+              <option value="spam">Spam</option>
+              <option value="inappropriate">Inappropriate content</option>
+              <option value="copyright">Copyright violation</option>
+              <option value="other">Other</option>
+            </select>
+            <div className="flex gap-2 justify-end">
+              <button type="button" onClick={() => { setShowReportModal(false); setReportStatus('idle'); }} className="btn btn-ghost">Cancel</button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setReportStatus('sending');
+                  try {
+                    await createReport({ note_id: noteId, reason: reportReason });
+                    setReportStatus('ok');
+                    setTimeout(() => { setShowReportModal(false); setReportStatus('idle'); }, 1500);
+                  } catch {
+                    setReportStatus('error');
+                  }
+                }}
+                disabled={reportStatus === 'sending'}
+                className="btn btn-primary"
+              >
+                {reportStatus === 'sending' ? 'Sending…' : 'Submit'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
