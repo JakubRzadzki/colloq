@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, Building2, MapPin, Upload } from 'lucide-react';
+import { X, Building2, Upload } from 'lucide-react';
 import { createUniversity } from '../utils/api';
+import { POLISH_REGIONS } from '../utils/constants';
 
 interface Props { isOpen: boolean; onClose: () => void; }
 
@@ -10,23 +11,47 @@ export function AddUniversityModal({ isOpen, onClose }: Props) {
   const [error, setError] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
 
+  useEffect(() => { if (isOpen) setError(''); }, [isOpen]);
+
   const mutation = useMutation({
     mutationFn: createUniversity,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['universities'] });
+      queryClient.invalidateQueries({ queryKey: ['home'] });
       onClose();
+      alert('University added successfully! ✅');
     },
-    onError: (err: any) => setError(err.response?.data?.detail || "Error creating university")
+    onError: (err: any) => {
+      const status = err.response?.status;
+      const detail = err.response?.data?.detail;
+      let msg = "Error creating university";
+      if (status === 401 || status === 403) {
+        msg = "Please log in to add a university.";
+      } else if (typeof detail === "string") {
+        msg = detail;
+      } else if (Array.isArray(detail) && detail[0]?.msg) {
+        msg = detail.map((d: any) => d.msg).join("; ");
+      } else if (detail?.message) {
+        msg = detail.message;
+      } else if (err.message) {
+        msg = err.message;
+      }
+      setError(msg);
+    }
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     const form = e.target as HTMLFormElement;
     const formData = new FormData(form);
+    const region = formData.get('region');
+    const desc = formData.get('description');
     mutation.mutate({
-      name: formData.get('name') as string,
-      city: formData.get('city') as string,
-      region: formData.get('region') as string,
+      name: String(formData.get('name') || '').trim(),
+      city: String(formData.get('city') || '').trim(),
+      region: typeof region === 'string' ? region : '',
+      description: desc && String(desc).trim() ? String(desc).trim() : undefined,
       image: imageFile || undefined
     });
   };
@@ -44,13 +69,13 @@ export function AddUniversityModal({ isOpen, onClose }: Props) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <input name="name" placeholder="University Name" className="input input-bordered w-full" required />
           <input name="city" placeholder="City" className="input input-bordered w-full" required />
-          {/* FIX: Use defaultValue instead of selected attribute on options */}
           <select name="region" className="select select-bordered w-full" defaultValue="" required>
-            <option value="" disabled>Select Region</option>
-            <option value="Małopolskie">Małopolskie</option>
-            <option value="Mazowieckie">Mazowieckie</option>
-            <option value="Dolnośląskie">Dolnośląskie</option>
+            <option value="" disabled>Wybierz województwo</option>
+            {POLISH_REGIONS.map((r) => (
+              <option key={r} value={r}>{r}</option>
+            ))}
           </select>
+          <input name="description" placeholder="Description (optional)" className="input input-bordered w-full" />
           <div className="form-control">
             <label className="label cursor-pointer justify-start gap-4 border-2 border-dashed rounded-xl p-4">
               <Upload className="text-base-content/50"/>

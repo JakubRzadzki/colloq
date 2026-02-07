@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { X, MessageSquare, Maximize2, Minimize2, ChevronRight, ChevronLeft, Edit, Trash2 } from 'lucide-react';
-import { API_URL, addComment, getNoteComments, voteNote, toggleFavorite, updateNote, deleteNote } from '../utils/api';
+import { API_URL, resolveUrl, addComment, getNoteComments, voteNote, toggleFavorite, updateNote, deleteNote } from '../utils/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { jwtDecode } from 'jwt-decode';
 
@@ -272,7 +272,7 @@ export function NoteModal({ note, onClose, token }: { note: any; onClose: () => 
                  </div>
                  
                  {note.image_url && (
-                   <img src={`${API_URL}${note.image_url}`} className="w-full rounded-2xl mb-8 border border-white/10 shadow-lg" alt="Note"/>
+                   <img src={resolveUrl(note.image_url)} className="w-full rounded-2xl mb-8 border border-white/10 shadow-lg" alt="Note"/>
                  )}
                  
                  <div className="prose prose-invert max-w-none text-white/80 leading-relaxed">

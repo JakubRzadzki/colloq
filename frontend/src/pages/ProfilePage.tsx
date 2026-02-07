@@ -1,20 +1,22 @@
 import React, { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Camera, Save } from 'lucide-react';
-import { getCurrentUser, updateProfile, API_URL, type User } from '../utils/api';
+import { Camera, Save, AlertCircle } from 'lucide-react';
+import { getCurrentUser, updateProfile, API_URL, resolveUrl, type User } from '../utils/api';
+import { t } from '../utils/i18n';
 
 /**
  * User Profile Page Component
  * Allows users to update their profile information including avatar, username, and bio
- * @param t - Translation object
+ * NOTE: We use the imported `t` function, NOT the prop (which is a Proxy object and not callable).
  */
-const ProfilePage: React.FC<{ t: any }> = ({ t }) => {
+const ProfilePage: React.FC<{ t: any }> = (_props) => {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { data: user, isLoading } = useQuery<User>({
+  const { data: user, isLoading, error: userError } = useQuery<User>({
     queryKey: ['currentUser'],
     queryFn: getCurrentUser,
+    retry: 1,
   });
 
   const [username, setUsername] = useState('');
@@ -26,7 +28,7 @@ const ProfilePage: React.FC<{ t: any }> = ({ t }) => {
     if (user) {
       setUsername(user.nickname);
       setBio(user.bio || '');
-      setAvatarPreview(user.avatar_url ? `${API_URL}${user.avatar_url}` : null);
+      setAvatarPreview(user.avatar_url ? resolveUrl(user.avatar_url) : null);
     }
   }, [user]);
 
@@ -34,14 +36,14 @@ const ProfilePage: React.FC<{ t: any }> = ({ t }) => {
     mutationFn: updateProfile,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['currentUser'] });
-      alert('Zapisano zmiany! ✅');
+      alert(`${t('profile_updated')} ✅`);
       setAvatarFile(null);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
     },
     onError: (error: any) => {
-      alert(`Błąd: ${error.response?.data?.detail || 'Nie udało się zaktualizować profilu'}`);
+      alert(`${t('error')}: ${error.response?.data?.detail || t('something_went_wrong')}`);
     },
   });
 
@@ -77,10 +79,22 @@ const ProfilePage: React.FC<{ t: any }> = ({ t }) => {
   }
 
   if (!user) {
+    const is401 = (userError as any)?.response?.status === 401;
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-base-200 to-base-300">
-        <div className="card bg-error/20 backdrop-blur-xl shadow-xl p-8">
-          <h2 className="text-2xl font-bold text-error">Error loading profile</h2>
+      <div className="min-h-screen flex items-center justify-center pt-24 px-4">
+        <div className="glass-panel p-8 text-center max-w-md">
+          <AlertCircle size={48} className="mx-auto mb-4 text-red-400 opacity-70" />
+          <h2 className="text-2xl font-bold mb-2">{t('error')}</h2>
+          <p className="opacity-60 mb-6">
+            {is401
+              ? 'Your session has expired. Please log in again.'
+              : 'Could not load profile. Make sure the backend is running.'}
+          </p>
+          {is401 && (
+            <a href="/login" className="btn-squircle inline-block px-6 py-3 no-underline">
+              {t('login')}
+            </a>
+          )}
         </div>
       </div>
     );
@@ -130,7 +144,7 @@ const ProfilePage: React.FC<{ t: any }> = ({ t }) => {
 
                 <div className="grid gap-4">
                     <div className="form-control">
-                        <label className="label uppercase text-xs font-bold opacity-60 text-white">Nazwa Użytkownika</label>
+                        <label className="label uppercase text-xs font-bold opacity-60 text-white">{t('nickname')}</label>
                         <input 
                             value={username} 
                             onChange={e => setUsername(e.target.value)} 
@@ -150,7 +164,7 @@ const ProfilePage: React.FC<{ t: any }> = ({ t }) => {
 
                 <div className="flex justify-end">
                     <button className="btn-squircle flex items-center gap-2" disabled={updateMutation.isPending}>
-                        <Save size={18}/> {updateMutation.isPending ? 'Zapisywanie...' : 'Zapisz Zmiany'}
+                        <Save size={18}/> {updateMutation.isPending ? t('saving') : t('save_changes')}
                     </button>
                 </div>
             </form>

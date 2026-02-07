@@ -15,6 +15,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # Fix: Use absolute path for tokenUrl to prevent issues in nested routes or swagger
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/token", auto_error=False)
 
 def verify_password(plain, hashed):
     return pwd_context.verify(plain, hashed)
@@ -40,6 +41,22 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     user = db.query(models.User).filter(models.User.email == email).first()
     if user is None or not user.is_active: raise exception
     return user
+
+async def get_current_user_optional(token: Optional[str] = Depends(oauth2_scheme_optional), db: Session = Depends(database.get_db)):
+    """Return current user if valid token present, else None. Use for endpoints that work with or without login."""
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email = payload.get("sub")
+        if not email:
+            return None
+        user = db.query(models.User).filter(models.User.email == email).first()
+        if user is None or not user.is_active:
+            return None
+        return user
+    except JWTError:
+        return None
 
 async def get_current_active_admin(user: models.User = Depends(get_current_user)):
     if not user.is_admin: raise HTTPException(403, "Admin privileges required")

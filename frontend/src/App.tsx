@@ -1,42 +1,46 @@
-import { useState, useEffect } from 'react';
+/**
+ * App.tsx - Root Application Component
+ * Handles routing with React.lazy + Suspense for code-splitting,
+ * theme management, language state, and persistent Navbar.
+ */
+import { useState, useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
-import { translations, Language } from './translations';
-import { LoginPage } from './pages/LoginPage';
-import { RegisterPage } from './pages/RegisterPage';
-import HomePage from './pages/HomePage';
-import { TermPage } from './pages/TermPage';
-import { UniversityPage } from './pages/UniversityPage';
-import { RegionPage } from './pages/RegionPage';
-import ProfilePage from './pages/ProfilePage';
-import { AdminPage } from './pages/AdminPage';
+import { t as translate, getCurrentLanguage, setLanguage, type Language } from './utils/i18n';
+import LoadingSpinner from './components/LoadingSpinner';
+
+// Lazy-loaded route components for code-splitting
+const HomePage = lazy(() => import('./pages/HomePage'));
+const LoginPage = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
+const RegisterPage = lazy(() => import('./pages/RegisterPage').then(m => ({ default: m.RegisterPage })));
+const TermPage = lazy(() => import('./pages/TermPage').then(m => ({ default: m.TermPage })));
+const UniversityPage = lazy(() => import('./pages/UniversityPage').then(m => ({ default: m.UniversityPage })));
+const RegionPage = lazy(() => import('./pages/RegionPage').then(m => ({ default: m.RegionPage })));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const AdminPage = lazy(() => import('./pages/AdminPage').then(m => ({ default: m.AdminPage })));
+const NotePage = lazy(() => import('./pages/NotePage'));
 
 function App() {
-  const [lang, setLang] = useState<Language>(() =>
-    (localStorage.getItem('lang') as Language) || 'pl'
-  );
+  // Language state - synced with localStorage
+  const [lang, setLang] = useState<Language>(() => getCurrentLanguage());
 
-  const [theme, setTheme] = useState(() =>
-    localStorage.getItem('theme') || 'dark'
-  );
+  // Theme state - dark mode by default
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
 
-  const [token, setToken] = useState<string | null>(
-    localStorage.getItem('token')
-  );
+  // Authentication token
+  const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
 
-  const tObj = translations[lang];
+  // Translation function that uses current lang state
+  const tFunc = (key: string): string => translate(key, lang);
 
-  const tFunc = (key: string) => {
-    return (tObj as any)[key] || key;
-  };
-
+  // Sync language to localStorage
   useEffect(() => {
-    localStorage.setItem('lang', lang);
+    setLanguage(lang);
   }, [lang]);
 
+  // Apply theme class to document root
   useEffect(() => {
     const root = document.documentElement;
-    // Zarządzanie motywem dla CSS (index.css) i Tailwind
     if (theme === 'dark') {
       root.classList.add('dark');
     } else {
@@ -46,41 +50,71 @@ function App() {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
+  // Toggle between light and dark theme
   const toggleTheme = () => {
-    setTheme(prev => prev === 'light' ? 'dark' : 'light');
+    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
   };
 
+  // Handle user logout
   const handleLogout = () => {
     localStorage.removeItem('token');
     setToken(null);
   };
 
+  // Build a translations-like object for legacy component compatibility
+  const tObj: any = new Proxy(
+    {},
+    {
+      get: (_target, prop: string) => translate(prop, lang),
+    }
+  );
+
   return (
     <BrowserRouter>
-      {/* Usunięto sztywne bg-base-200. Tło jest w body (index.css) */}
       <div className="min-h-screen font-sans transition-colors duration-500">
+        {/* Persistent Navbar - always rendered outside Suspense */}
         <Navbar
           token={token}
           theme={theme}
           toggleTheme={toggleTheme}
           logout={handleLogout}
-          t={tObj}
+          t={tFunc}
           lang={lang}
           setLang={setLang}
         />
 
-        <Routes>
-          <Route path="/" element={<HomePage t={tFunc} />} />
-          <Route path="/login" element={<LoginPage setToken={setToken} t={tObj} />} />
-          <Route path="/register" element={<RegisterPage t={tObj} />} />
-          <Route path="/term" element={<TermPage t={tObj} />} />
-          <Route path="/university/:id" element={<UniversityPage t={tObj} />} />
-          <Route path="/universities/:id" element={<UniversityPage t={tObj} />} />
-          <Route path="/region/:regionName" element={<RegionPage t={tObj} />} />
-          <Route path="/profile" element={token ? <ProfilePage t={tObj} /> : <Navigate to="/login" />} />
-          <Route path="/admin" element={token ? <AdminPage t={tObj} /> : <Navigate to="/login" />} />
-          <Route path="*" element={<div className="p-20 text-center opacity-50">404 - Page Not Found</div>} />
-        </Routes>
+        {/* Suspense boundary with glass LoadingSpinner */}
+        <Suspense fallback={<LoadingSpinner />}>
+          <Routes>
+            <Route path="/" element={<HomePage t={tFunc} />} />
+            <Route path="/login" element={<LoginPage setToken={setToken} t={tObj} />} />
+            <Route path="/register" element={<RegisterPage t={tObj} />} />
+            <Route path="/term" element={<TermPage t={tObj} />} />
+            <Route path="/university/:id" element={<UniversityPage t={tObj} />} />
+            <Route path="/universities/:id" element={<UniversityPage t={tObj} />} />
+            <Route path="/note/:id" element={<NotePage />} />
+            <Route path="/region/:regionName" element={<RegionPage t={tObj} />} />
+            <Route
+              path="/profile"
+              element={token ? <ProfilePage t={tObj} /> : <Navigate to="/login" />}
+            />
+            <Route
+              path="/admin"
+              element={token ? <AdminPage t={tObj} /> : <Navigate to="/login" />}
+            />
+            <Route
+              path="*"
+              element={
+                <div className="min-h-screen flex items-center justify-center">
+                  <div className="glass-panel p-12 text-center max-w-md">
+                    <h1 className="text-6xl font-black text-gradient mb-4">404</h1>
+                    <p className="text-lg opacity-60">Page not found</p>
+                  </div>
+                </div>
+              }
+            />
+          </Routes>
+        </Suspense>
       </div>
     </BrowserRouter>
   );

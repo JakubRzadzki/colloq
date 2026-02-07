@@ -3,17 +3,21 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Mail, Lock, GraduationCap } from 'lucide-react';
 import { register, getUniversities } from '../utils/api';
+import { Captcha } from '../components/Captcha';
 
 export function RegisterPage({ t }: { t: any }) {
   const navigate = useNavigate();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [captchaValid, setCaptchaValid] = useState(false);
+  const [honeypot, setHoneypot] = useState('');
 
   // Pobieranie uczelni do selecta
   const { data: unis, isLoading: unisLoading, isError } = useQuery({ queryKey: ['unis'], queryFn: getUniversities });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!captchaValid || honeypot) return; // Block if captcha invalid or honeypot filled (bot)
     const form = e.target as HTMLFormElement;
     setError('');
     setLoading(true);
@@ -27,7 +31,6 @@ export function RegisterPage({ t }: { t: any }) {
       alert('Rejestracja udana! Możesz się teraz zalogować.');
       navigate('/login');
     } catch (err: any) {
-      // Wyświetlanie błędu z backendu (np. "Email taken")
       setError(err.response?.data?.detail || 'Rejestracja nieudana. Sprawdź dane.');
     } finally {
       setLoading(false);
@@ -63,7 +66,9 @@ export function RegisterPage({ t }: { t: any }) {
             </select>
           </div>
 
-          <button className="btn-squircle w-full mt-6" disabled={loading || unisLoading || isError}>
+          <Captcha onValidChange={setCaptchaValid} honeypotValue={honeypot} setHoneypotValue={setHoneypot} />
+
+          <button className="btn-squircle w-full mt-6" disabled={loading || unisLoading || isError || !captchaValid}>
             {loading ? <span className="loading loading-spinner"></span> : t.register}
           </button>
         </form>

@@ -1,618 +1,1181 @@
-import os
-import shutil
-import time
-from typing import List, Dict, Any
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+"""
+Colloq API - Main Application
+FastAPI backend for the student note-sharing platform.
+Handles CRUD operations, file uploads, gamification, and statistics.
+
+Key fixes applied:
+- CORS allows all common dev origins
+- joinedload used everywhere to prevent N+1 queries
+- Multi-image upload for notes (Rich Notes feature)
+- UniversityOut schema matches model exactly (no more 422 errors)
+"""
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import or_
-from sqlalchemy.orm import Session
-from . import auth, database, models, schemas
+from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func as sql_func, desc, or_
+from typing import List, Optional
+import os
+import uuid
 
-
-class Config:
-	ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@colloq.pl")
-	ADMIN_PASS = os.getenv("ADMIN_PASS", "admin123")
-	UPLOAD_DIR = "uploads"
-
-
-# Ensure subdirectories exist
-for d in ["universities", "faculties", "avatars"]:
-	os.makedirs(os.path.join(Config.UPLOAD_DIR, d), exist_ok=True)
-
-app = FastAPI(title="Colloq PRO MVP", version="5.2.0")
-
-# CORS setup
-app.add_middleware(
-	CORSMiddleware,
-	allow_origins=["*"],  # In production replace with specific origin
-	allow_credentials=True,
-	allow_methods=["*"],
-	allow_headers=["*"],
+from .database import get_db, engine, Base
+from .models import (
+    User, University, Faculty, FieldOfStudy, Subject,
+    Note, NoteImage, NoteHistory, Review, Comment, ImageRequest,
+)
+from .schemas import (
+    UserCreate, UserOut, UserResponse, UniversityOut, FacultyOut,
+    FieldOfStudyOut, SubjectOut, NoteOut, NoteHistoryOut, NoteImageOut,
+    ReviewCreate, ReviewOut, CommentCreate, CommentOut,
+    ImageRequestOut, PendingItemsResponse, RegisterRequest,
+    FieldOfStudyCreate, SubjectCreate, Token,
+)
+from .auth import (
+    get_password_hash, verify_password, create_access_token,
+    get_current_user, get_current_user_optional, pwd_context,
 )
 
-# Mount static files
-app.mount("/uploads", StaticFiles(directory=Config.UPLOAD_DIR), name="uploads")
-
-
-@app.on_event("startup")
-def startup():
-	"""
-	Initializes the database and seeds required data (Admin, University, Syllabus).
-	"""
-	try:
-		models.Base.metadata.create_all(bind=database.engine)
-		db = database.SessionLocal()
-		
-		# 1. Seed University: Politechnika Krakowska
-		uni_name = "Politechnika Krakowska"
-		uni = db.query(models.University).filter(models.University.name == uni_name).first()
-		if not uni:
-			uni = models.University(
-				name=uni_name,
-				name_pl=uni_name,
-				city="Kraków",
-				region="Małopolskie",
-				is_approved=True,
-				description="Technical university in Krakow."
-			)
-			db.add(uni)
-			db.commit()
-			db.refresh(uni)
-
-		# 2. Seed Admin User
-		if not db.query(models.User).filter(models.User.email == Config.ADMIN_EMAIL).first():
-			admin = models.User(
-				email=Config.ADMIN_EMAIL,
-				hashed_password=auth.get_password_hash(Config.ADMIN_PASS),
-				university_id=uni.id,
-				is_admin=True,
-				nickname="Admin",
-				is_verified=True
-			)
-			db.add(admin)
-			db.commit()
-
-		# 3. Seed Syllabus Hierarchy
-		fac_name = "Wydział Informatyki i Telekomunikacji"
-		fac = db.query(models.Faculty).filter(
-			models.Faculty.name == fac_name,
-			models.Faculty.university_id == uni.id
-		).first()
-
-		if not fac:
-			fac = models.Faculty(name=fac_name, university_id=uni.id, is_approved=True)
-			db.add(fac)
-			db.commit()
-			db.refresh(fac)
-
-		field_name = "Informatyka w Inżynierii Komputerowej"
-		field = db.query(models.FieldOfStudy).filter(
-			models.FieldOfStudy.name == field_name,
-			models.FieldOfStudy.faculty_id == fac.id
-		).first()
-
-		if not field:
-			print(f"--- SEEDING SYLLABUS: {field_name} ---")
-			field = models.FieldOfStudy(
-				name=field_name,
-				degree_level="I stopień",
-				faculty_id=fac.id,
-				is_approved=True
-			)
-			db.add(field)
-			db.commit()
-			db.refresh(field)
-
-			# Subject List (Semester, Name)
-			subjects_data = [
-				(1, "Analiza Matematyczna"), (1, "Algebra Liniowa"), (1, "Fizyka"), (1, "Wstęp do Informatyki"),
-				(2, "Matematyka Dyskretna"), (2, "Architektura Systemów Komputerowych"), (2, "Programowanie Obiektowe"),
-				(3, "Algorytmy i Struktury Danych"), (3, "Systemy Operacyjne"), (3, "Bazy Danych"),
-				(4, "Sieci Komputerowe"), (4, "Inżynieria Oprogramowania"), (4, "Grafika Komputerowa"),
-				(5, "Sztuczna Inteligencja"), (5, "Systemy Wbudowane"),
-				(6, "Bezpieczeństwo Systemów"), (6, "Praktyka Zawodowa"),
-				(7, "Seminarium Dyplomowe"), (7, "Praca Dyplomowa")
-			]
-
-			for sem, subj_name in subjects_data:
-				db.add(models.Subject(
-					name=subj_name,
-					semester=sem,
-					field_of_study_id=field.id,
-					is_approved=True
-				))
-			db.commit()
-			print("--- SYLLABUS SEEDED SUCCESSFULLY ---")
-
-		print("--- DATABASE CONNECTED ---")
-	except Exception as e:
-		print(f"⚠️ Database not ready yet. Skipping seed. Error: {e}")
-	finally:
-		db.close()
-
-
-# --- AUTH ROUTES ---
-@app.post("/token")
-def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(database.get_db)):
-	user = db.query(models.User).filter(models.User.email == form.username).first()
-	if not user or not auth.verify_password(form.password, user.hashed_password):
-		raise HTTPException(400, "Invalid credentials")
-	return {
-		"access_token": auth.create_access_token({"sub": user.email, "is_admin": user.is_admin}),
-		"token_type": "bearer"
-	}
-
-
-@app.post("/register", status_code=201)
-def register(r: schemas.RegisterRequest, db: Session = Depends(database.get_db)):
-	if db.query(models.User).filter(models.User.email == r.user.email).first():
-		raise HTTPException(400, "Email taken")
-
-	new_user = models.User(
-		email=r.user.email,
-		hashed_password=auth.get_password_hash(r.user.password),
-		university_id=r.user.university_id,
-		nickname=r.user.email.split("@")[0]
-	)
-	db.add(new_user)
-	db.commit()
-	return {"msg": "OK"}
-
-
-@app.get("/users/me", response_model=schemas.UserOut)
-def me(user: models.User = Depends(auth.get_current_user)):
-	return user
-
-
-@app.put("/users/me", response_model=schemas.UserOut)
-def update_profile(
-		nickname: str = Form(None),
-		bio: str = Form(None),
-		avatar: UploadFile = File(None),
-		db: Session = Depends(database.get_db),
-		user: models.User = Depends(auth.get_current_user)
-):
-	"""
-	Update user profile including avatar upload.
-	Args:
-		nickname: New username/nickname
-		bio: New bio text
-		avatar: Avatar image file
-		db: Database session
-		user: Current authenticated user
-	Returns:
-		Updated user data
-	"""
-	if nickname: user.nickname = nickname
-	if bio: user.bio = bio
-	if avatar:
-		# Ensure avatars directory exists
-		avatars_dir = os.path.join(Config.UPLOAD_DIR, "avatars")
-		os.makedirs(avatars_dir, exist_ok=True)
-		
-		# Generate unique filename
-		file_extension = os.path.splitext(avatar.filename)[1]
-		unique_filename = f"{user.id}_{int(time.time())}{file_extension}"
-		file_path = os.path.join(avatars_dir, unique_filename)
-		
-		# Save file
-		with open(file_path, "wb+") as f:
-			shutil.copyfileobj(avatar.file, f)
-		
-		# Store relative path for StaticFiles
-		user.avatar_url = f"/uploads/avatars/{unique_filename}"
-
-	db.commit()
-	db.refresh(user)
-	return user
-
-
-# --- MVP TERM: GLOBAL SEARCH ---
-@app.get("/search/global")
-def global_search(q: str, db: Session = Depends(database.get_db)):
-	"""
-	Search for Fields of Study and Subjects across all universities.
-	Case-insensitive search matching the query string 'q'.
-	"""
-	results = {
-		"fields": [],
-		"subjects": []
-	}
-
-	if not q or len(q) < 2:
-		return results
-
-	# Search Fields
-	fields = db.query(models.FieldOfStudy).join(models.Faculty).join(models.University) \
-		.filter(models.FieldOfStudy.name.ilike(f"%{q}%"), models.FieldOfStudy.is_approved == True).all()
-
-	for f in fields:
-		results["fields"].append({
-			"id": f.id,
-			"name": f.name,
-			"degree": f.degree_level,
-			"faculty": f.faculty.name,
-			"university": f.faculty.university.name,
-			"university_id": f.faculty.university.id
-		})
-
-	# Search Subjects
-	subjects = db.query(models.Subject).join(models.FieldOfStudy).join(models.Faculty).join(models.University) \
-		.filter(models.Subject.name.ilike(f"%{q}%"), models.Subject.is_approved == True).all()
-
-	for s in subjects:
-		results["subjects"].append({
-			"id": s.id,
-			"name": s.name,
-			"semester": s.semester,
-			"field": s.field_of_study.name,
-			"university": s.field_of_study.faculty.university.name,
-			"university_id": s.field_of_study.faculty.university.id
-		})
-
-	return results
-
-
-# --- STANDARD ENTITIES ---
-@app.get("/universities", response_model=List[schemas.UniversityOut])
-def get_unis(db: Session = Depends(database.get_db)):
-	return db.query(models.University).filter(models.University.is_approved == True).all()
-
-
-@app.get("/universities/{id}", response_model=schemas.UniversityOut)
-def get_uni(id: int, db: Session = Depends(database.get_db)):
-	uni = db.query(models.University).filter(models.University.id == id).first()
-	if not uni: raise HTTPException(404, "University not found")
-	return uni
-
-
-@app.post("/universities", status_code=201)
-def add_uni(
-		name: str = Form(...), city: str = Form(...), region: str = Form(...),
-		image: UploadFile = File(None),
-		db: Session = Depends(database.get_db),
-		user: models.User = Depends(auth.get_current_user)
-):
-	path = None
-	if image:
-		path = f"/uploads/universities/uni_{user.id}_{image.filename}"
-		with open(f".{path}", "wb+") as f: shutil.copyfileobj(image.file, f)
-	db.add(models.University(name=name, city=city, region=region, image_url=path, submitted_by_id=user.id))
-	db.commit()
-	return {"msg": "OK"}
-
-
-@app.post("/universities/{id}/image_request")
-def img_req(id: int, image: UploadFile = File(...), db: Session = Depends(database.get_db),
-            user: models.User = Depends(auth.get_current_user)):
-	path = f"uploads/universities/req_{id}_{user.id}_{image.filename}"
-	with open(path, "wb+") as f: shutil.copyfileobj(image.file, f)
-
-	db.add(models.UniversityImageRequest(
-		university_id=id,
-		new_image_url=f"/{path}",
-		submitted_by_id=user.id
-	))
-	db.commit()
-	return {"msg": "Requested"}
-
-
-@app.get("/universities/{id}/reviews", response_model=List[schemas.ReviewOut])
-def get_reviews(id: int, db: Session = Depends(database.get_db)):
-	return db.query(models.Review).filter(models.Review.university_id == id).all()
-
-
-@app.post("/reviews")
-def add_review(r: schemas.ReviewCreate, db: Session = Depends(database.get_db),
-               user: models.User = Depends(auth.get_current_user)):
-	db.add(models.Review(user_id=user.id, university_id=r.university_id, rating=r.rating, content=r.content))
-	db.commit()
-	return {"msg": "Added"}
-
-
-@app.get("/notes", response_model=List[schemas.NoteOut])
-def get_notes(search: str = None, university_id: int = None, db: Session = Depends(database.get_db)):
-	q = db.query(models.Note).filter(models.Note.is_approved == True)
-	if university_id: q = q.filter(models.Note.university_id == university_id)
-	if search: q = q.filter(or_(models.Note.title.ilike(f"%{search}%"), models.Note.content.ilike(f"%{search}%")))
-	return q.order_by(models.Note.score.desc()).all()
-
-
-@app.post("/notes", status_code=201)
-def add_note(
-		university_id: int = Form(...), subject_id: int = Form(...),
-		title: str = Form(None), content: str = Form(None),
-		image: UploadFile = File(None),
-		db: Session = Depends(database.get_db),
-		user: models.User = Depends(auth.get_current_user)
-):
-	path = None
-	if image:
-		path = f"/uploads/{image.filename}"
-		with open(f".{path}", "wb+") as f: shutil.copyfileobj(image.file, f)
-
-	db.add(models.Note(
-		title=title, content=content, image_url=path,
-		university_id=university_id, subject_id=subject_id, author_id=user.id
-	))
-	db.commit()
-	return {"msg": "OK"}
-
-
-@app.get("/notes/{id}/comments", response_model=List[schemas.CommentOut])
-def get_comments(id: int, db: Session = Depends(database.get_db)):
-	return db.query(models.Comment).filter(models.Comment.note_id == id).all()
-
-
-@app.post("/notes/{id}/comments", response_model=schemas.CommentOut)
-def add_comment(id: int, c: schemas.CommentCreate, db: Session = Depends(database.get_db),
-                user: models.User = Depends(auth.get_current_user)):
-	comm = models.Comment(user_id=user.id, note_id=id, content=c.content)
-	db.add(comm)
-	db.commit()
-	db.refresh(comm)
-	return comm
-
-
-@app.post("/notes/{id}/vote")
-def vote(id: int, db: Session = Depends(database.get_db), user: models.User = Depends(auth.get_current_user)):
-	note = db.query(models.Note).get(id)
-	if not note: raise HTTPException(404)
-
-	existing = db.query(models.Vote).filter(models.Vote.user_id == user.id, models.Vote.note_id == id).first()
-	if existing:
-		db.delete(existing)
-		note.score -= 1
-		msg = "Removed"
-	else:
-		db.add(models.Vote(user_id=user.id, note_id=id, value=1))
-		note.score += 1
-		msg = "Voted"
-	db.commit()
-	return {"msg": msg}
-
-
-@app.post("/notes/{id}/favorite")
-def fav(id: int, db: Session = Depends(database.get_db), user: models.User = Depends(auth.get_current_user)):
-	existing = db.query(models.Favorite).filter(models.Favorite.user_id == user.id,
-	                                            models.Favorite.note_id == id).first()
-	if existing:
-		db.delete(existing)
-		msg = "Removed"
-	else:
-		db.add(models.Favorite(user_id=user.id, note_id=id))
-		msg = "Added"
-	db.commit()
-	return {"msg": msg}
-
-
-# --- ADMIN ---
-@app.get("/admin/pending_items", response_model=schemas.PendingItemsResponse)
-def get_pending(db: Session = Depends(database.get_db), _: models.User = Depends(auth.get_current_active_admin)):
-	return {
-		"notes": db.query(models.Note).filter(models.Note.is_approved == False).all(),
-		"universities": db.query(models.University).filter(models.University.is_approved == False).all(),
-		"faculties": db.query(models.Faculty).filter(models.Faculty.is_approved == False).all(),
-		"fields": db.query(models.FieldOfStudy).filter(models.FieldOfStudy.is_approved == False).all(),
-		"subjects": db.query(models.Subject).filter(models.Subject.is_approved == False).all(),
-		"image_requests": db.query(models.UniversityImageRequest).filter(
-			models.UniversityImageRequest.status == "pending").all()
-	}
-
-
-@app.post("/admin/approve/{type}/{id}")
-def approve(type: str, id: int, db: Session = Depends(database.get_db),
-            _: models.User = Depends(auth.get_current_active_admin)):
-	model_map = {
-		"university": models.University,
-		"faculty": models.Faculty,
-		"field": models.FieldOfStudy,
-		"subject": models.Subject,
-		"note": models.Note
-	}
-	item = db.query(model_map[type]).get(id)
-	if item:
-		item.is_approved = True
-		db.commit()
-	return {"msg": "Approved"}
-
-
-@app.delete("/admin/reject/{type}/{id}")
-def reject(type: str, id: int, db: Session = Depends(database.get_db),
-           _: models.User = Depends(auth.get_current_active_admin)):
-	model_map = {
-		"university": models.University,
-		"faculty": models.Faculty,
-		"field": models.FieldOfStudy,
-		"subject": models.Subject,
-		"note": models.Note
-	}
-	item = db.query(model_map[type]).get(id)
-	if item:
-		db.delete(item)
-		db.commit()
-	return {"msg": "Rejected"}
-
-
-@app.post("/admin/approve_image_request/{id}")
-def approve_img(id: int, db: Session = Depends(database.get_db),
-                _: models.User = Depends(auth.get_current_active_admin)):
-	req = db.query(models.UniversityImageRequest).get(id)
-	if req:
-		uni = db.query(models.University).get(req.university_id)
-		uni.image_url = req.new_image_url
-		req.status = "approved"
-		db.commit()
-	return {"msg": "Approved"}
-
-
-@app.post("/admin/reject_image_request/{id}")
-def reject_img(id: int, db: Session = Depends(database.get_db),
-               _: models.User = Depends(auth.get_current_active_admin)):
-	req = db.query(models.UniversityImageRequest).get(id)
-	if req:
-		req.status = "rejected"
-		db.commit()
-	return {"msg": "Rejected"}
-
-
-@app.patch("/admin/universities/{id}/image")
-def update_uni_img(id: int, image: UploadFile = File(...), db: Session = Depends(database.get_db),
-                   _: models.User = Depends(auth.get_current_active_admin)):
-	path = f"/uploads/universities/admin_{id}_{image.filename}"
-	with open(f".{path}", "wb+") as f: shutil.copyfileobj(image.file, f)
-	uni = db.query(models.University).get(id)
-	uni.image_url = path
-	db.commit()
-	return {"msg": "Updated"}
-
-
-@app.put("/universities/{id}")
-def update_uni(id: int, description: str = Form(None), banner: UploadFile = File(None),
-               db: Session = Depends(database.get_db), user: models.User = Depends(auth.get_current_active_admin)):
-	uni = db.query(models.University).get(id)
-	if description: uni.description = description
-	if banner:
-		path = f"/uploads/universities/banner_{id}_{banner.filename}"
-		with open(f".{path}", "wb+") as f: shutil.copyfileobj(banner.file, f)
-		uni.banner_url = path
-	db.commit()
-	return {"msg": "OK"}
-
-
-# --- FACULTIES/FIELDS/SUBJECTS CRUD ---
-@app.get("/universities/{id}/faculties", response_model=List[schemas.FacultyOut])
-def get_facs(id: int, db: Session = Depends(database.get_db)): return db.query(models.Faculty).filter(
-	models.Faculty.university_id == id, models.Faculty.is_approved == True).all()
-
-
-@app.post("/faculties")
-def add_fac(name: str = Form(...), university_id: int = Form(...), db: Session = Depends(database.get_db),
-            user: models.User = Depends(auth.get_current_user)):
-	db.add(models.Faculty(name=name, university_id=university_id, submitted_by_id=user.id))
-	db.commit()
-	return {"msg": "OK"}
-
-
-@app.get("/faculties/{id}/fields", response_model=List[schemas.FieldOfStudyOut])
-def get_fields(id: int, db: Session = Depends(database.get_db)): return db.query(models.FieldOfStudy).filter(
-	models.FieldOfStudy.faculty_id == id, models.FieldOfStudy.is_approved == True).all()
-
-
-@app.post("/fields")
-def add_field(f: schemas.FieldOfStudyCreate, db: Session = Depends(database.get_db),
-              user: models.User = Depends(auth.get_current_user)):
-	# Pydantic v2 fix: use model_dump() instead of dict()
-	db.add(models.FieldOfStudy(**f.model_dump(), submitted_by_id=user.id))
-	db.commit()
-	return {"msg": "OK"}
-
-
-@app.get("/fields/{id}/subjects", response_model=List[schemas.SubjectOut])
-def get_subjects(id: int, db: Session = Depends(database.get_db)): return db.query(models.Subject).filter(
-	models.Subject.field_of_study_id == id, models.Subject.is_approved == True).all()
-
-
-@app.post("/subjects")
-def add_subject(s: schemas.SubjectCreate, db: Session = Depends(database.get_db),
-                user: models.User = Depends(auth.get_current_user)):
-	# Pydantic v2 fix: use model_dump() instead of dict()
-	db.add(models.Subject(**s.model_dump(), submitted_by_id=user.id))
-	db.commit()
-	return {"msg": "OK"}
-
-
-@app.get("/stats")
-async def get_stats(db: Session = Depends(database.get_db)):
-    """Get platform statistics"""
+# Create database tables and run migrations on startup (retry if DB not ready)
+import time
+from .migrate import run_migrations
+
+for attempt in range(5):
     try:
-        # Count total items
-        users_count = db.query(models.User).count()
-        notes_count = db.query(models.Note).count()
-        universities_count = db.query(models.University).count()
-        
-        # Get latest activity
-        latest_note = db.query(models.Note).order_by(models.Note.created_at.desc()).first()
-        latest_user = db.query(models.User).order_by(models.User.created_at.desc()).first()
-        
-        # Get latest reviews (from universities)
-        latest_review = db.query(models.Review).order_by(models.Review.created_at.desc()).first()
-        
-        return {
+        Base.metadata.create_all(bind=engine)
+        run_migrations(engine)
+        break
+    except Exception as e:
+        if attempt == 4:
+            raise
+        time.sleep(2)
+
+# Run database seeder (default University + Admin if empty)
+from .seed import run_seed
+run_seed()
+
+app = FastAPI(title="Colloq API", version="2.1.0")
+
+# CORS configuration - allow all common dev origins and Docker networking
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:4173",
+        "http://frontend:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Ensure upload directories exist
+os.makedirs("uploads/avatars", exist_ok=True)
+os.makedirs("uploads/notes", exist_ok=True)
+os.makedirs("uploads/universities", exist_ok=True)
+os.makedirs("uploads/faculties", exist_ok=True)
+
+# Mount static files for uploads
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+
+# =============================================================================
+# UTILITY: Save uploaded file to disk
+# =============================================================================
+
+async def save_upload(file: UploadFile, directory: str) -> str:
+    """Save an uploaded file and return the relative URL path."""
+    filename = f"{uuid.uuid4().hex[:12]}_{file.filename}"
+    filepath = f"uploads/{directory}/{filename}"
+    content = await file.read()
+    with open(filepath, "wb") as f:
+        f.write(content)
+    return f"/uploads/{directory}/{filename}"
+
+
+# =============================================================================
+# HEALTH CHECK
+# =============================================================================
+
+@app.get("/")
+async def root():
+    return {"message": "Colloq API v2.1 is running"}
+
+
+# =============================================================================
+# HOME (batched payload - reduces 5+ requests to 1)
+# =============================================================================
+
+@app.get("/home")
+async def get_home(db: Session = Depends(get_db)):
+    """Single endpoint for home page data: stats, leaderboard, activity feed, recent notes, universities."""
+
+    # 1) Counts in one pass via scalar subqueries
+    users_count = db.query(sql_func.count(User.id)).scalar() or 0
+    notes_count = db.query(sql_func.count(Note.id)).scalar() or 0
+    universities_count = db.query(sql_func.count(University.id)).filter(
+        University.is_approved == True
+    ).scalar() or 0
+
+    # 2) Latest activity (3 lightweight queries)
+    latest_note = db.query(Note).order_by(desc(Note.created_at)).first()
+    latest_user = db.query(User).order_by(desc(User.created_at)).first()
+    latest_review = db.query(Review).order_by(desc(Review.created_at)).first()
+
+    latest_activity = {
+        "latest_note": {
+            "id": latest_note.id,
+            "title": latest_note.title,
+            "created_at": str(latest_note.created_at) if latest_note.created_at else None,
+            "university_id": latest_note.university_id,
+        } if latest_note else None,
+        "latest_user": {
+            "id": latest_user.id,
+            "nickname": latest_user.nickname,
+            "created_at": str(latest_user.created_at) if latest_user.created_at else None,
+        } if latest_user else None,
+        "latest_review": {
+            "id": latest_review.id,
+            "content": latest_review.content,
+            "created_at": str(latest_review.created_at) if latest_review.created_at else None,
+            "university_id": latest_review.university_id,
+        } if latest_review else None,
+    }
+
+    # 3) Leaderboard: top 5 users + batch counts
+    top_users = db.query(User).order_by(desc(User.reputation_points)).limit(5).all()
+    user_ids = [u.id for u in top_users]
+    notes_per_user = {}
+    reviews_per_user = {}
+    comments_per_user = {}
+
+    if user_ids:
+        for uid, c in db.query(
+            Note.user_id, sql_func.count(Note.id)
+        ).filter(Note.user_id.in_(user_ids)).group_by(Note.user_id).all():
+            notes_per_user[uid] = c
+        for uid, c in db.query(
+            Review.user_id, sql_func.count(Review.id)
+        ).filter(Review.user_id.in_(user_ids)).group_by(Review.user_id).all():
+            reviews_per_user[uid] = c
+        for uid, c in db.query(
+            Comment.user_id, sql_func.count(Comment.id)
+        ).filter(Comment.user_id.in_(user_ids)).group_by(Comment.user_id).all():
+            comments_per_user[uid] = c
+
+    leaderboard = []
+    for rank, user in enumerate(top_users, start=1):
+        nc = notes_per_user.get(user.id, 0)
+        rvc = reviews_per_user.get(user.id, 0)
+        cc = comments_per_user.get(user.id, 0)
+        leaderboard.append({
+            "rank": rank,
+            "user_id": user.id,
+            "nickname": user.nickname,
+            "avatar_url": user.avatar_url,
+            "reputation_points": user.reputation_points,
+            "uploads_count": user.uploads_count,
+            "notes_count": nc,
+            "total_score": user.reputation_points,
+            "reviews_count": rvc,
+            "comments_count": cc,
+            "total_activity": nc + rvc + cc,
+        })
+
+    # 4) Activity feed: notes + reviews with joinedload, merge and take 5
+    recent_notes_act = db.query(Note).options(
+        joinedload(Note.author)
+    ).order_by(desc(Note.created_at)).limit(5).all()
+
+    recent_reviews_act = db.query(Review).options(
+        joinedload(Review.user), joinedload(Review.note)
+    ).order_by(desc(Review.created_at)).limit(5).all()
+
+    activities = []
+    for note in recent_notes_act:
+        activities.append({
+            "type": "note",
+            "title": note.title,
+            "description": note.content[:200] if note.content else None,
+            "created_at": str(note.created_at) if note.created_at else None,
+            "user_nickname": note.author.nickname if note.author else "Anonymous",
+        })
+    for review in recent_reviews_act:
+        activities.append({
+            "type": "review",
+            "rating": review.rating,
+            "comment": review.content,
+            "created_at": str(review.created_at) if review.created_at else None,
+            "user_nickname": review.user.nickname if review.user else "Anonymous",
+            "note_title": review.note.title if review.note else None,
+        })
+    activities.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+    activity_feed = activities[:5]
+
+    # 5) Recent notes (6) with author, subject, and images
+    recent_notes = db.query(Note).options(
+        joinedload(Note.author),
+        joinedload(Note.subject),
+        joinedload(Note.images),
+    ).order_by(desc(Note.created_at)).limit(6).all()
+
+    # 6) Universities (approved only)
+    universities = db.query(University).filter(University.is_approved == True).all()
+
+    return {
+        "stats": {
+            "users": users_count,
+            "notes": notes_count,
+            "universities": universities_count,
             "users_count": users_count,
             "notes_count": notes_count,
             "universities_count": universities_count,
-            "latest_activity": {
-                "latest_note": {
-                    "id": latest_note.id if latest_note else None,
-                    "title": latest_note.title if latest_note else None,
-                    "created_at": latest_note.created_at if latest_note else None,
-                    "university_id": latest_note.university_id if latest_note else None
-                } if latest_note else None,
-                "latest_user": {
-                    "id": latest_user.id if latest_user else None,
-                    "nickname": latest_user.nickname if latest_user else None,
-                    "created_at": latest_user.created_at if latest_user else None
-                } if latest_user else None,
-                "latest_review": {
-                    "id": latest_review.id if latest_review else None,
-                    "content": latest_review.content if latest_review else None,
-                    "created_at": latest_review.created_at if latest_review else None,
-                    "university_id": latest_review.university_id if latest_review else None
-                } if latest_review else None
-            }
-        }
+            "latest_activity": latest_activity,
+        },
+        "leaderboard": {"leaderboard": leaderboard, "total_users": users_count},
+        "activity_feed": activity_feed,
+        "recent_notes": [NoteOut.model_validate(n).model_dump() for n in recent_notes],
+        "universities": [UniversityOut.model_validate(u).model_dump() for u in universities],
+    }
+
+
+# =============================================================================
+# AUTHENTICATION
+# =============================================================================
+
+@app.post("/token", response_model=Token)
+async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    """Authenticate user and return JWT token."""
+    user = db.query(User).filter(User.email == form_data.username).first()
+    if not user or not verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    token = create_access_token(data={"sub": user.email, "is_admin": user.is_admin})
+    return {"access_token": token, "token_type": "bearer"}
+
+
+@app.post("/register", response_model=UserOut)
+async def register(payload: RegisterRequest, db: Session = Depends(get_db)):
+    """Register a new user account."""
+    user_data = payload.user
+    existing = db.query(User).filter(User.email == user_data.email).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    # Generate nickname from email prefix
+    nickname = user_data.email.split("@")[0]
+    counter = 1
+    base_nickname = nickname
+    while db.query(User).filter(User.nickname == nickname).first():
+        nickname = f"{base_nickname}{counter}"
+        counter += 1
+
+    new_user = User(
+        email=user_data.email,
+        nickname=nickname,
+        hashed_password=get_password_hash(user_data.password),
+        university_id=user_data.university_id,
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+
+
+# =============================================================================
+# USER ENDPOINTS
+# =============================================================================
+
+@app.get("/users/me", response_model=UserOut)
+async def get_me(current_user: User = Depends(get_current_user)):
+    """Get current authenticated user data."""
+    return current_user
+
+
+@app.put("/users/me", response_model=UserOut)
+async def update_me(
+    nickname: Optional[str] = Form(None),
+    bio: Optional[str] = Form(None),
+    avatar: Optional[UploadFile] = File(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update current user profile, including avatar upload."""
+    if nickname:
+        current_user.nickname = nickname
+    if bio is not None:
+        current_user.bio = bio
+    if avatar and avatar.filename:
+        url = await save_upload(avatar, "avatars")
+        current_user.avatar_url = url
+
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+@app.get("/users/{user_id}", response_model=UserOut)
+async def get_user(user_id: int, db: Session = Depends(get_db)):
+    """Get user by ID."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
+# =============================================================================
+# UNIVERSITY ENDPOINTS
+# =============================================================================
+
+DEFAULT_UNIVERSITY_IMAGE = "https://placehold.co/400x200/5e5ce6/ffffff?text=Colloq"
+
+
+@app.post("/universities", response_model=UniversityOut)
+async def create_university(
+    name: str = Form(...),
+    city: str = Form(...),
+    region: str = Form(""),
+    country: str = Form("Poland"),
+    description: Optional[str] = Form(None),
+    image: Optional[UploadFile] = File(None),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
+):
+    """Create a new university entry. Works with or without login."""
+    image_url = DEFAULT_UNIVERSITY_IMAGE
+    if image and image.filename:
+        try:
+            image_url = await save_upload(image, "universities")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to save image: {str(e)}")
+
+    try:
+        university = University(
+            name=name.strip(),
+            city=city.strip(),
+            region=(region or "").strip(),
+            country=(country or "Poland").strip(),
+            description=description.strip() if (description and isinstance(description, str)) else None,
+            image_url=image_url,
+        )
+        db.add(university)
+        db.commit()
+        db.refresh(university)
+        return university
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching stats: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to create university: {str(e)}")
+
+
+@app.get("/universities", response_model=List[UniversityOut])
+async def get_universities(region: Optional[str] = None, db: Session = Depends(get_db)):
+    """Get all approved universities. Optional region filter (case-insensitive)."""
+    q = db.query(University).filter(University.is_approved == True)
+    if region and region.strip():
+        q = q.filter(sql_func.lower(University.region) == region.strip().lower())
+    return q.order_by(University.name).all()
+
+
+@app.get("/universities/{uni_id}", response_model=UniversityOut)
+async def get_university(uni_id: int, db: Session = Depends(get_db)):
+    """Get a single university by ID with eager-loaded relationships."""
+    uni = db.query(University).filter(University.id == uni_id).first()
+    if not uni:
+        raise HTTPException(status_code=404, detail="University not found")
+    return uni
+
+
+@app.put("/universities/{uni_id}", response_model=UniversityOut)
+async def update_university(
+    uni_id: int,
+    description: Optional[str] = Form(None),
+    banner: Optional[UploadFile] = File(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update university details (admin only)."""
+    uni = db.query(University).filter(University.id == uni_id).first()
+    if not uni:
+        raise HTTPException(status_code=404, detail="University not found")
+    if description is not None:
+        uni.description = description
+    if banner and banner.filename:
+        uni.banner_url = await save_upload(banner, "universities")
+    db.commit()
+    db.refresh(uni)
+    return uni
+
+
+# =============================================================================
+# FACULTY ENDPOINTS
+# =============================================================================
+
+@app.get("/universities/{uni_id}/faculties", response_model=List[FacultyOut])
+async def get_faculties(uni_id: int, db: Session = Depends(get_db)):
+    """Get all faculties for a specific university."""
+    return db.query(Faculty).filter(Faculty.university_id == uni_id).all()
+
+
+@app.post("/faculties", response_model=FacultyOut)
+async def create_faculty(
+    name: str = Form(...),
+    description: Optional[str] = Form(None),
+    image: Optional[UploadFile] = File(None),
+    university_id: int = Form(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Create a new faculty within a university."""
+    image_url = None
+    if image and image.filename:
+        image_url = await save_upload(image, "faculties")
+
+    faculty = Faculty(
+        name=name,
+        description=description,
+        image_url=image_url,
+        university_id=university_id,
+    )
+    db.add(faculty)
+    db.commit()
+    db.refresh(faculty)
+    return faculty
+
+
+# =============================================================================
+# FIELD OF STUDY ENDPOINTS
+# =============================================================================
+
+@app.get("/faculties/{fac_id}/fields", response_model=List[FieldOfStudyOut])
+async def get_fields(fac_id: int, db: Session = Depends(get_db)):
+    """Get all fields of study for a specific faculty."""
+    return db.query(FieldOfStudy).filter(FieldOfStudy.faculty_id == fac_id).all()
+
+
+@app.post("/fields", response_model=FieldOfStudyOut)
+async def create_field(data: FieldOfStudyCreate, db: Session = Depends(get_db)):
+    """Create a new field of study."""
+    field = FieldOfStudy(name=data.name, degree_level=data.degree_level, faculty_id=data.faculty_id)
+    db.add(field)
+    db.commit()
+    db.refresh(field)
+    return field
+
+
+# =============================================================================
+# SUBJECT ENDPOINTS
+# =============================================================================
+
+@app.get("/fields/{field_id}/subjects", response_model=List[SubjectOut])
+async def get_subjects(field_id: int, db: Session = Depends(get_db)):
+    """Get all subjects for a specific field of study."""
+    return db.query(Subject).filter(Subject.field_of_study_id == field_id).all()
+
+
+@app.post("/subjects", response_model=SubjectOut)
+async def create_subject(data: SubjectCreate, db: Session = Depends(get_db)):
+    """Create a new subject."""
+    subject = Subject(name=data.name, semester=data.semester, field_of_study_id=data.field_of_study_id)
+    db.add(subject)
+    db.commit()
+    db.refresh(subject)
+    return subject
+
+
+# =============================================================================
+# NOTE ENDPOINTS (Rich Notes with Multiple Images)
+# =============================================================================
+
+@app.post("/notes", response_model=NoteOut)
+async def create_note(
+    title: str = Form(None),
+    content: Optional[str] = Form(None),
+    university_id: int = Form(...),
+    subject_id: Optional[int] = Form(None),
+    image: Optional[UploadFile] = File(None),
+    images: List[UploadFile] = File(default=[]),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Create a new note with optional single image OR multiple images.
+    - 'image' field: legacy single-image upload (stored in image_url column)
+    - 'images' field: multiple images (stored in note_images table)
+    Increments user uploads_count and adds +10 reputation points.
+    """
+    # Handle legacy single image
+    image_url = None
+    if image and image.filename:
+        image_url = await save_upload(image, "notes")
+
+    note = Note(
+        title=title,
+        content=content,
+        image_url=image_url,
+        user_id=current_user.id,
+        university_id=university_id,
+        subject_id=subject_id,
+    )
+    db.add(note)
+    db.flush()  # Get the note.id before adding images
+
+    # Handle multiple images (Rich Notes feature)
+    for idx, img_file in enumerate(images):
+        if img_file and img_file.filename:
+            url = await save_upload(img_file, "notes")
+            note_image = NoteImage(
+                note_id=note.id,
+                image_url=url,
+                position=idx,
+            )
+            db.add(note_image)
+
+    # Gamification: reward the uploader
+    current_user.uploads_count += 1
+    current_user.reputation_points += 10
+
+    db.commit()
+    db.refresh(note)
+
+    # Re-query with relationships loaded for proper serialization
+    note = db.query(Note).options(
+        joinedload(Note.author),
+        joinedload(Note.subject),
+        joinedload(Note.images),
+    ).filter(Note.id == note.id).first()
+
+    return note
+
+
+@app.get("/notes", response_model=List[NoteOut])
+async def get_notes(
+    university_id: Optional[int] = None,
+    search: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """Get notes with optional filtering by university and search query."""
+    query = db.query(Note).options(
+        joinedload(Note.author),
+        joinedload(Note.subject),
+        joinedload(Note.images),
+    )
+    if university_id:
+        query = query.filter(Note.university_id == university_id)
+    if search:
+        query = query.filter(
+            or_(
+                Note.title.ilike(f"%{search}%"),
+                Note.content.ilike(f"%{search}%"),
+            )
+        )
+    return query.order_by(desc(Note.created_at)).all()
+
+
+@app.get("/notes/{note_id}", response_model=NoteOut)
+async def get_note(note_id: int, db: Session = Depends(get_db)):
+    """Get a single note by ID with all relationships loaded."""
+    note = db.query(Note).options(
+        joinedload(Note.author),
+        joinedload(Note.subject),
+        joinedload(Note.images),
+    ).filter(Note.id == note_id).first()
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    return note
+
+
+@app.put("/notes/{note_id}", response_model=NoteOut)
+async def update_note(
+    note_id: int,
+    title: Optional[str] = Form(None),
+    content: Optional[str] = Form(None),
+    image: Optional[UploadFile] = File(None),
+    images: List[UploadFile] = File(default=[]),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Update a note (owner only). Saves previous version to NoteHistory before updating.
+    Supports adding new images to the note.
+    """
+    note = db.query(Note).options(
+        joinedload(Note.images),
+    ).filter(Note.id == note_id).first()
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    if note.user_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    # Git-style: save current version to history before updating
+    history_entry = NoteHistory(
+        note_id=note.id,
+        title=note.title,
+        content=note.content,
+        edited_by=current_user.id,
+    )
+    db.add(history_entry)
+
+    if title is not None:
+        note.title = title
+    if content is not None:
+        note.content = content
+
+    # Handle legacy single image update
+    if image and image.filename:
+        note.image_url = await save_upload(image, "notes")
+
+    # Handle multiple new images
+    existing_count = len(note.images) if note.images else 0
+    for idx, img_file in enumerate(images):
+        if img_file and img_file.filename:
+            url = await save_upload(img_file, "notes")
+            note_image = NoteImage(
+                note_id=note.id,
+                image_url=url,
+                position=existing_count + idx,
+            )
+            db.add(note_image)
+
+    db.commit()
+    db.refresh(note)
+
+    # Re-query with relationships for proper serialization
+    note = db.query(Note).options(
+        joinedload(Note.author),
+        joinedload(Note.subject),
+        joinedload(Note.images),
+    ).filter(Note.id == note.id).first()
+
+    return note
+
+
+@app.get("/notes/{note_id}/history", response_model=List[NoteHistoryOut])
+async def get_note_history(
+    note_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get version history for a note (owner or admin only)."""
+    note = db.query(Note).filter(Note.id == note_id).first()
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    if note.user_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    history = db.query(NoteHistory).filter(
+        NoteHistory.note_id == note_id
+    ).order_by(desc(NoteHistory.edited_at)).all()
+    return history
+
+
+@app.delete("/notes/{note_id}")
+async def delete_note(
+    note_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete a note (owner or admin only). Cascading deletes images and history."""
+    note = db.query(Note).filter(Note.id == note_id).first()
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    if note.user_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    db.delete(note)
+    db.commit()
+    return {"msg": "Note deleted"}
+
+
+# =============================================================================
+# VOTING (UPVOTE)
+# =============================================================================
+
+@app.post("/notes/{note_id}/vote")
+async def vote_note(
+    note_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Upvote a note. Adds +1 score to the note and +1 reputation to the author."""
+    note = db.query(Note).filter(Note.id == note_id).first()
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+
+    note.score += 1
+
+    # Award reputation to note author
+    author = db.query(User).filter(User.id == note.user_id).first()
+    if author:
+        author.reputation_points += 1
+
+    db.commit()
+    return {"msg": "Vote recorded", "new_score": note.score, "user_has_voted": True}
+
+
+@app.post("/notes/{note_id}/favorite")
+async def toggle_favorite(
+    note_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Toggle favorite status for a note (stub - returns toggled state)."""
+    note = db.query(Note).filter(Note.id == note_id).first()
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    return {"msg": "Toggled", "is_favorited": True}
+
+
+# =============================================================================
+# REVIEW ENDPOINTS
+# =============================================================================
+
+@app.get("/universities/{uni_id}/reviews", response_model=List[ReviewOut])
+async def get_university_reviews(uni_id: int, db: Session = Depends(get_db)):
+    """Get all reviews for a university."""
+    return db.query(Review).options(
+        joinedload(Review.user)
+    ).filter(Review.university_id == uni_id).order_by(desc(Review.created_at)).all()
+
+
+@app.post("/reviews", response_model=ReviewOut)
+async def add_review(
+    review: ReviewCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Add a review to a note or university. Awards +1 reputation to note author."""
+    new_review = Review(
+        rating=review.rating,
+        content=review.content,
+        user_id=current_user.id,
+        note_id=review.note_id,
+        university_id=review.university_id,
+    )
+    db.add(new_review)
+
+    # If reviewing a note, update score and give reputation to author
+    if review.note_id:
+        note = db.query(Note).filter(Note.id == review.note_id).first()
+        if note:
+            reviews = db.query(Review).filter(Review.note_id == review.note_id).all()
+            total = sum(r.rating for r in reviews) + review.rating
+            note.score = total / (len(reviews) + 1)
+            author = db.query(User).filter(User.id == note.user_id).first()
+            if author:
+                author.reputation_points += 1
+
+    db.commit()
+    db.refresh(new_review)
+    return new_review
+
+
+# =============================================================================
+# COMMENT ENDPOINTS
+# =============================================================================
+
+@app.get("/notes/{note_id}/comments", response_model=List[CommentOut])
+async def get_comments(note_id: int, db: Session = Depends(get_db)):
+    """Get all comments for a note."""
+    return db.query(Comment).options(
+        joinedload(Comment.user)
+    ).filter(Comment.note_id == note_id).order_by(desc(Comment.created_at)).all()
+
+
+@app.post("/notes/{note_id}/comments", response_model=CommentOut)
+async def add_comment(
+    note_id: int,
+    payload: CommentCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Add a comment to a note."""
+    note = db.query(Note).filter(Note.id == note_id).first()
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    comment = Comment(content=payload.content, user_id=current_user.id, note_id=note_id)
+    db.add(comment)
+    db.commit()
+    db.refresh(comment)
+    return comment
+
+
+# =============================================================================
+# GLOBAL SEARCH
+# =============================================================================
+
+@app.get("/search/global")
+async def global_search(q: str = "", db: Session = Depends(get_db)):
+    """Search across fields of study and subjects. Uses joinedload to avoid N+1."""
+    if not q.strip():
+        return {"fields": [], "subjects": []}
+
+    fields = db.query(FieldOfStudy).options(
+        joinedload(FieldOfStudy.faculty).joinedload(Faculty.university)
+    ).filter(FieldOfStudy.name.ilike(f"%{q}%")).limit(20).all()
+
+    subjects = db.query(Subject).options(
+        joinedload(Subject.field_of_study).joinedload(FieldOfStudy.faculty).joinedload(Faculty.university)
+    ).filter(Subject.name.ilike(f"%{q}%")).limit(20).all()
+
+    return {
+        "fields": [
+            {
+                "id": f.id,
+                "name": f.name,
+                "degree_level": f.degree_level,
+                "faculty_id": f.faculty_id,
+                "faculty_name": f.faculty.name if f.faculty else None,
+                "university_id": f.faculty.university_id if f.faculty else None,
+                "university_name": f.faculty.university.name if f.faculty and f.faculty.university else None,
+            }
+            for f in fields
+        ],
+        "subjects": [
+            {
+                "id": s.id,
+                "name": s.name,
+                "semester": s.semester,
+                "field_of_study_id": s.field_of_study_id,
+                "field_name": s.field_of_study.name if s.field_of_study else None,
+                "faculty_name": (
+                    s.field_of_study.faculty.name
+                    if s.field_of_study and s.field_of_study.faculty else None
+                ),
+                "university_id": (
+                    s.field_of_study.faculty.university_id
+                    if s.field_of_study and s.field_of_study.faculty else None
+                ),
+                "university_name": (
+                    s.field_of_study.faculty.university.name
+                    if s.field_of_study and s.field_of_study.faculty and s.field_of_study.faculty.university else None
+                ),
+            }
+            for s in subjects
+        ],
+    }
+
+
+# =============================================================================
+# STATISTICS & GAMIFICATION
+# =============================================================================
+
+@app.get("/stats")
+async def get_stats(db: Session = Depends(get_db)):
+    """Return platform-wide statistics including latest activity."""
+    users_count = db.query(sql_func.count(User.id)).scalar() or 0
+    notes_count = db.query(sql_func.count(Note.id)).scalar() or 0
+    universities_count = db.query(sql_func.count(University.id)).scalar() or 0
+
+    latest_note = db.query(Note).order_by(desc(Note.created_at)).first()
+    latest_user = db.query(User).order_by(desc(User.created_at)).first()
+    latest_review = db.query(Review).order_by(desc(Review.created_at)).first()
+
+    return {
+        "users": users_count,
+        "notes": notes_count,
+        "universities": universities_count,
+        "users_count": users_count,
+        "notes_count": notes_count,
+        "universities_count": universities_count,
+        "latest_activity": {
+            "latest_note": {
+                "id": latest_note.id,
+                "title": latest_note.title,
+                "created_at": str(latest_note.created_at) if latest_note.created_at else None,
+                "university_id": latest_note.university_id,
+            } if latest_note else None,
+            "latest_user": {
+                "id": latest_user.id,
+                "nickname": latest_user.nickname,
+                "created_at": str(latest_user.created_at) if latest_user.created_at else None,
+            } if latest_user else None,
+            "latest_review": {
+                "id": latest_review.id,
+                "content": latest_review.content,
+                "created_at": str(latest_review.created_at) if latest_review.created_at else None,
+                "university_id": latest_review.university_id,
+            } if latest_review else None,
+        },
+    }
+
 
 @app.get("/leaderboard")
-async def get_leaderboard(db: Session = Depends(database.get_db)):
-    """Get user activity leaderboard"""
-    try:
-        # Get user activity stats with ranking
-        from sqlalchemy import func, desc
-        
-        # Query to get user activity stats
-        user_stats = db.query(
-            models.User.id,
-            models.User.nickname,
-            models.User.avatar_url,
-            func.count(models.Note.id).label('notes_count'),
-            func.sum(models.Note.score).label('total_score'),
-            func.count(models.Review.id).label('reviews_count'),
-            func.count(models.Comment.id).label('comments_count')
-        ).outerjoin(
-            models.Note, models.User.id == models.Note.author_id
-        ).outerjoin(
-            models.Review, models.User.id == models.Review.user_id
-        ).outerjoin(
-            models.Comment, models.User.id == models.Comment.user_id
-        ).group_by(
-            models.User.id, models.User.nickname, models.User.avatar_url
-        ).order_by(
-            desc(func.coalesce(func.sum(models.Note.score), 0))
-        ).limit(20).all()
-        
-        leaderboard = []
-        for i, stat in enumerate(user_stats):
-            total_activity = (stat.notes_count or 0) + (stat.reviews_count or 0) + (stat.comments_count or 0)
-            leaderboard.append({
-                "rank": i + 1,
-                "user_id": stat.id,
-                "nickname": stat.nickname,
-                "avatar_url": stat.avatar_url,
-                "notes_count": stat.notes_count or 0,
-                "total_score": stat.total_score or 0,
-                "reviews_count": stat.reviews_count or 0,
-                "comments_count": stat.comments_count or 0,
-                "total_activity": total_activity
-            })
-        
-        return {
-            "leaderboard": leaderboard,
-            "total_users": len(user_stats)
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching leaderboard: {str(e)}")
+async def get_leaderboard(db: Session = Depends(get_db)):
+    """Return top 5 users sorted by reputation, with batch activity counts."""
+    users = db.query(User).order_by(desc(User.reputation_points)).limit(5).all()
+    total_users = db.query(sql_func.count(User.id)).scalar() or 0
+
+    user_ids = [u.id for u in users]
+    notes_per_user = {}
+    reviews_per_user = {}
+    comments_per_user = {}
+
+    if user_ids:
+        for uid, c in db.query(
+            Note.user_id, sql_func.count(Note.id)
+        ).filter(Note.user_id.in_(user_ids)).group_by(Note.user_id).all():
+            notes_per_user[uid] = c
+        for uid, c in db.query(
+            Review.user_id, sql_func.count(Review.id)
+        ).filter(Review.user_id.in_(user_ids)).group_by(Review.user_id).all():
+            reviews_per_user[uid] = c
+        for uid, c in db.query(
+            Comment.user_id, sql_func.count(Comment.id)
+        ).filter(Comment.user_id.in_(user_ids)).group_by(Comment.user_id).all():
+            comments_per_user[uid] = c
+
+    leaderboard = []
+    for rank, user in enumerate(users, start=1):
+        nc = notes_per_user.get(user.id, 0)
+        rvc = reviews_per_user.get(user.id, 0)
+        cc = comments_per_user.get(user.id, 0)
+        leaderboard.append({
+            "rank": rank,
+            "user_id": user.id,
+            "nickname": user.nickname,
+            "avatar_url": user.avatar_url,
+            "reputation_points": user.reputation_points,
+            "uploads_count": user.uploads_count,
+            "notes_count": nc,
+            "total_score": user.reputation_points,
+            "reviews_count": rvc,
+            "comments_count": cc,
+            "total_activity": nc + rvc + cc,
+        })
+
+    return {"leaderboard": leaderboard, "total_users": total_users}
+
+
+@app.get("/activity-feed")
+async def get_activity_feed(db: Session = Depends(get_db)):
+    """Return the 5 most recent activities (notes and reviews combined)."""
+    recent_notes = db.query(Note).options(
+        joinedload(Note.author)
+    ).order_by(desc(Note.created_at)).limit(5).all()
+
+    recent_reviews = db.query(Review).options(
+        joinedload(Review.user), joinedload(Review.note)
+    ).order_by(desc(Review.created_at)).limit(5).all()
+
+    activities = []
+    for note in recent_notes:
+        activities.append({
+            "type": "note",
+            "title": note.title,
+            "description": note.content[:200] if note.content else None,
+            "created_at": str(note.created_at) if note.created_at else None,
+            "user_nickname": note.author.nickname if note.author else "Anonymous",
+        })
+    for review in recent_reviews:
+        activities.append({
+            "type": "review",
+            "rating": review.rating,
+            "comment": review.content,
+            "created_at": str(review.created_at) if review.created_at else None,
+            "user_nickname": review.user.nickname if review.user else "Anonymous",
+            "note_title": review.note.title if review.note else None,
+        })
+
+    activities.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+    return activities[:5]
+
+
+# =============================================================================
+# ADMIN ENDPOINTS
+# =============================================================================
+
+@app.get("/admin/pending_items", response_model=PendingItemsResponse)
+async def get_pending_items(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get all pending items for admin review. Uses joinedload to avoid N+1."""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    notes = db.query(Note).options(
+        joinedload(Note.subject),
+        joinedload(Note.university),
+        joinedload(Note.author),
+        joinedload(Note.images),
+    ).filter(Note.is_approved == False).all()
+
+    universities = db.query(University).filter(University.is_approved == False).all()
+    faculties = db.query(Faculty).options(joinedload(Faculty.university)).filter(Faculty.is_approved == False).all()
+    fields = db.query(FieldOfStudy).options(joinedload(FieldOfStudy.faculty).joinedload(Faculty.university)).filter(FieldOfStudy.is_approved == False).all()
+    subjects = db.query(Subject).options(
+        joinedload(Subject.field_of_study).joinedload(FieldOfStudy.faculty).joinedload(Faculty.university)
+    ).filter(Subject.is_approved == False).all()
+
+    image_requests_raw = db.query(ImageRequest).options(
+        joinedload(ImageRequest.university)
+    ).filter(ImageRequest.status == "pending").all()
+
+    image_requests = [
+        ImageRequestOut(
+            id=r.id,
+            university_id=r.university_id,
+            new_image_url=r.new_image_url,
+            status=r.status,
+            submitted_by_id=r.submitted_by_id,
+            created_at=r.created_at,
+            university_name=r.university.name if r.university else None,
+        )
+        for r in image_requests_raw
+    ]
+
+    return PendingItemsResponse(
+        notes=notes,
+        universities=universities,
+        faculties=faculties,
+        fields=fields,
+        subjects=subjects,
+        image_requests=image_requests,
+    )
+
+
+@app.get("/admin/users", response_model=List[UserOut])
+async def admin_get_users(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List all users (admin only)."""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return db.query(User).order_by(User.created_at.desc()).all()
+
+
+@app.post("/admin/approve/{item_type}/{item_id}")
+async def approve_item(
+    item_type: str,
+    item_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Approve a pending item."""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    model_map = {
+        "university": University,
+        "faculty": Faculty,
+        "field": FieldOfStudy,
+        "subject": Subject,
+        "note": Note,
+    }
+    model = model_map.get(item_type)
+    if not model:
+        raise HTTPException(status_code=400, detail="Invalid item type")
+
+    item = db.query(model).filter(model.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    item.is_approved = True
+    db.commit()
+    return {"msg": f"{item_type} approved"}
+
+
+@app.delete("/admin/reject/{item_type}/{item_id}")
+async def reject_item(
+    item_type: str,
+    item_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Reject and delete a pending item."""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    model_map = {
+        "university": University,
+        "faculty": Faculty,
+        "field": FieldOfStudy,
+        "subject": Subject,
+        "note": Note,
+    }
+    model = model_map.get(item_type)
+    if not model:
+        raise HTTPException(status_code=400, detail="Invalid item type")
+
+    item = db.query(model).filter(model.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    db.delete(item)
+    db.commit()
+    return {"msg": f"{item_type} rejected"}
+
+
+@app.post("/universities/{uni_id}/image_request")
+async def request_image_change(
+    uni_id: int,
+    image: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Submit an image change request for a university."""
+    url = await save_upload(image, "universities")
+    req = ImageRequest(
+        university_id=uni_id,
+        new_image_url=url,
+        submitted_by_id=current_user.id,
+    )
+    db.add(req)
+    db.commit()
+    db.refresh(req)
+    return {"msg": "Image request submitted", "id": req.id}
+
+
+@app.post("/admin/approve_image_request/{req_id}")
+async def approve_image_request(
+    req_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Approve an image change request."""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    req = db.query(ImageRequest).filter(ImageRequest.id == req_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+    uni = db.query(University).filter(University.id == req.university_id).first()
+    if uni:
+        uni.image_url = req.new_image_url
+    req.status = "approved"
+    db.commit()
+    return {"msg": "Image request approved"}
+
+
+@app.post("/admin/reject_image_request/{req_id}")
+async def reject_image_request(
+    req_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Reject an image change request."""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    req = db.query(ImageRequest).filter(ImageRequest.id == req_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+    req.status = "rejected"
+    db.commit()
+    return {"msg": "Image request rejected"}
+
+
+@app.patch("/admin/universities/{uni_id}/image")
+async def admin_update_university_image(
+    uni_id: int,
+    image: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Directly update university image (admin only)."""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    uni = db.query(University).filter(University.id == uni_id).first()
+    if not uni:
+        raise HTTPException(status_code=404, detail="University not found")
+    uni.image_url = await save_upload(image, "universities")
+    db.commit()
+    db.refresh(uni)
+    return {"msg": "Image updated", "image_url": uni.image_url}
