@@ -1,6 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
-import { useState, useEffect } from 'react';
-import { getUniversities, API_URL } from '../utils/api';
+import { useQuery } from '@tanstack/react-query';
+import { getUniversities, resolveUrl } from '../utils/api';
 import { ArrowLeft, MapPin } from 'lucide-react';
 
 interface University {
@@ -11,31 +11,17 @@ interface University {
   city: string;
 }
 
-// Zmiana na 'export function' i dodanie prop 't'
 export function RegionPage({ t }: { t: any }) {
   const { regionName } = useParams<{ regionName: string }>();
-  const [universities, setUniversities] = useState<University[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchUniversities = async () => {
-      try {
-        const data = await getUniversities();
-        setUniversities(data);
-      } catch (error) {
-        console.error('Failed to fetch universities:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchUniversities();
-  }, []);
+  // Fetch only universities in this region (backend filter)
+  const { data: universities = [], isLoading: loading } = useQuery<University[]>({
+    queryKey: ['universities', 'region', regionName],
+    queryFn: () => getUniversities(regionName ?? ''),
+    enabled: !!regionName,
+  });
 
-  // FIX: Case-insensitive filtering (Malopolskie === malopolskie)
-  // FIXED: Case-insensitive filtering (Malopolskie === malopolskie)
-  const filteredUniversities = universities.filter(
-    (uni) => uni.region?.toLowerCase() === regionName?.toLowerCase()
-  );
+  const filteredUniversities = universities;
 
   if (loading) {
     return (
@@ -77,7 +63,7 @@ export function RegionPage({ t }: { t: any }) {
               <div className="h-48 overflow-hidden relative">
                  {/* Fallback image logic */}
                  <img 
-                  src={uni.image_url ? `${API_URL}${uni.image_url}` : "https://via.placeholder.com/400x200?text=No+Image"} 
+                  src={resolveUrl(uni.image_url, 'https://placehold.co/400x200/5e5ce6/ffffff?text=University')} 
                   alt={uni.name}
                   className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                 />

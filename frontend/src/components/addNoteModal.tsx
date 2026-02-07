@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, Plus } from 'lucide-react';
 import { getFaculties, getFields, getSubjects, createNote, createFieldOfStudy, createSubject } from '../utils/api';
+import { Captcha } from './Captcha';
 
 interface Props {
   universityId: number;
@@ -18,6 +19,8 @@ export function AddNoteModal({ universityId, isOpen, onClose }: Props) {
   // New Item States
   const [newFieldName, setNewFieldName] = useState('');
   const [newSubjectName, setNewSubjectName] = useState('');
+  const [captchaValid, setCaptchaValid] = useState(false);
+  const [honeypot, setHoneypot] = useState('');
 
   const { data: faculties } = useQuery({ queryKey: ['faculties', universityId], queryFn: () => getFaculties(universityId), enabled: isOpen });
   const { data: fields } = useQuery({ queryKey: ['fields', facultyId], queryFn: () => getFields(facultyId!), enabled: !!facultyId });
@@ -27,6 +30,7 @@ export function AddNoteModal({ universityId, isOpen, onClose }: Props) {
     mutationFn: createNote,
     onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['notes'] });
+        queryClient.invalidateQueries({ queryKey: ['home'] });
         onClose();
         alert("Note uploaded successfully!");
     },
@@ -52,6 +56,7 @@ export function AddNoteModal({ universityId, isOpen, onClose }: Props) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!subjectId) return alert("Please select a subject.");
+    if (!captchaValid || honeypot) return alert("Please complete the anti-spam challenge.");
     const form = e.target as HTMLFormElement;
     const fd = new FormData(form);
     fd.append('university_id', universityId.toString());
@@ -128,12 +133,14 @@ export function AddNoteModal({ universityId, isOpen, onClose }: Props) {
                  <label className="label"><span className="label-text font-semibold">Attachment (Image/PDF)</span></label>
                  <input type="file" name="image" className="file-input file-input-bordered w-full" />
               </div>
+
+              <Captcha onValidChange={setCaptchaValid} honeypotValue={honeypot} setHoneypotValue={setHoneypot} />
             </form>
           )}
         </div>
 
         <div className="p-4 border-t bg-base-100 rounded-b-2xl flex justify-end">
-          <button type="submit" form="note-form" className="btn btn-primary px-8" disabled={!subjectId || noteMutation.isPending}>
+          <button type="submit" form="note-form" className="btn btn-primary px-8" disabled={!subjectId || noteMutation.isPending || !captchaValid}>
             {noteMutation.isPending ? <span className="loading loading-spinner"></span> : "Upload Note"}
           </button>
         </div>

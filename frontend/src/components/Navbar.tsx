@@ -1,21 +1,59 @@
+/**
+ * Navbar Component
+ * Floating glassmorphism navigation bar with:
+ * - Logo link
+ * - Search shortcut
+ * - Language toggle (PL/EN)
+ * - Theme toggle (Light/Dark)
+ * - User avatar with dropdown menu
+ * - Graceful handling for missing avatars
+ */
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { LogOut, Sun, Moon, User as UserIcon, Search, Shield } from 'lucide-react';
-import { jwtDecode } from "jwt-decode";
-import { API_URL } from '../utils/api';
+import { LogOut, Sun, Moon, Search, Shield, User as UserIcon } from 'lucide-react';
+import { jwtDecode } from 'jwt-decode';
+import { resolveUrl, getCurrentUser } from '../utils/api';
+import type { User } from '../utils/types';
 
 interface NavbarProps {
   token: string | null;
   theme: string;
   toggleTheme: () => void;
   logout: () => void;
-  t: any;
+  t: (key: string) => string;
   lang: 'pl' | 'en';
   setLang: (lang: 'pl' | 'en') => void;
 }
 
 export function Navbar({ token, theme, toggleTheme, logout, t, lang, setLang }: NavbarProps) {
-  // Decode JWT token to check admin status
-  const isAdmin = (): boolean => {
+  const [user, setUser] = useState<User | null>(null);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Fetch current user data when token is available
+  useEffect(() => {
+    if (token) {
+      getCurrentUser()
+        .then(setUser)
+        .catch(() => setUser(null));
+    } else {
+      setUser(null);
+    }
+  }, [token]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Check admin status from JWT
+  const checkIsAdmin = (): boolean => {
     if (!token) return false;
     try {
       const decoded: any = jwtDecode(token);
@@ -24,73 +62,170 @@ export function Navbar({ token, theme, toggleTheme, logout, t, lang, setLang }: 
       return false;
     }
   };
-  // Style zależne od motywu (Glassmorphism Light/Dark)
-  const glassClass = theme === 'light'
-    ? 'bg-white/70 border-black/5 text-gray-900 shadow-[0_8px_32px_rgba(0,0,0,0.1)]'
-    : 'bg-[#1e1e23]/60 border-white/10 text-white shadow-[0_8px_32px_rgba(0,0,0,0.5)]';
 
-  const itemHoverClass = theme === 'light'
-    ? 'hover:bg-black/5'
-    : 'hover:bg-white/10';
+  // Dynamic glass styling based on theme
+  const isDark = theme === 'dark';
+
+  const navGlass = isDark
+    ? 'bg-[#0f172a]/70 border-white/[0.08] text-white shadow-[0_8px_40px_rgba(0,0,0,0.5)]'
+    : 'bg-white/70 border-black/[0.05] text-slate-900 shadow-[0_8px_40px_rgba(0,0,0,0.08)]';
+
+  const itemHover = isDark ? 'hover:bg-white/10' : 'hover:bg-black/5';
+
+  const pillBg = isDark
+    ? 'bg-white/[0.04] border-white/[0.06]'
+    : 'bg-black/[0.03] border-black/[0.05]';
+
+  const dividerBg = isDark ? 'bg-white/10' : 'bg-black/10';
+
+  // Avatar placeholder - gradient with first initial
+  const renderAvatar = (size: string = 'w-10 h-10', textSize: string = 'text-lg') => {
+    if (user?.avatar_url) {
+      return (
+        <img
+          src={resolveUrl(user.avatar_url)}
+          alt={user.nickname || 'User'}
+          className={`${size} rounded-full object-cover`}
+          onError={(e) => {
+            // Graceful fallback if avatar image fails to load
+            (e.target as HTMLImageElement).style.display = 'none';
+            (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+          }}
+        />
+      );
+    }
+    return (
+      <div className={`${size} rounded-full bg-gradient-to-br from-[#5e5ce6] to-[#32ade6] flex items-center justify-center text-white font-bold ${textSize}`}>
+        {user?.nickname?.charAt(0)?.toUpperCase() || 'U'}
+      </div>
+    );
+  };
 
   return (
-    <div className="fixed top-6 left-0 right-0 flex justify-center z-50 pointer-events-none px-4">
-      <div className={`${glassClass} backdrop-blur-xl border rounded-full px-6 py-3 flex items-center gap-4 md:gap-6 pointer-events-auto transition-all duration-300`}>
-
+    <div className="fixed top-5 left-0 right-0 flex justify-center z-50 pointer-events-none px-4">
+      <nav
+        className={`${navGlass} backdrop-blur-2xl border rounded-full px-5 py-2.5 flex items-center gap-3 md:gap-5 pointer-events-auto transition-all duration-300`}
+      >
         {/* Logo */}
-        <Link to="/" className="text-xl font-black tracking-tight hover:opacity-80 transition-opacity">
-          Colloq
+        <Link
+          to="/"
+          className="text-xl font-black tracking-tight hover:opacity-80 transition-opacity"
+        >
+          <span className="text-gradient">Colloq</span>
         </Link>
 
-        {/* Nawigacja */}
-        <div className={`hidden md:flex items-center gap-1 rounded-full p-1 border ${theme === 'light' ? 'bg-black/5 border-black/5' : 'bg-white/5 border-white/5'}`}>
-          <Link to="/term" className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all flex gap-2 items-center ${itemHoverClass}`}>
-            <Search size={14} /> {t.findTerm || 'Szukaj'}
+        {/* Navigation Pills */}
+        <div className={`hidden md:flex items-center gap-1 rounded-full p-1 border ${pillBg}`}>
+          <Link
+            to="/term"
+            className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-all flex gap-2 items-center ${itemHover}`}
+          >
+            <Search size={14} /> {t('findTerm')}
           </Link>
 
-          <div className={`w-px h-4 mx-1 ${theme === 'light' ? 'bg-black/10' : 'bg-white/10'}`}></div>
+          <div className={`w-px h-4 mx-0.5 ${dividerBg}`} />
 
-          {/* Przełącznik Języka */}
+          {/* Language Toggle */}
           <button
-            onClick={() => setLang(lang === 'en' ? 'pl' : 'en')}
-            className={`px-3 py-1.5 text-xs font-bold transition-colors uppercase rounded-full ${itemHoverClass}`}
+            onClick={() => {
+              const newLang = lang === 'en' ? 'pl' : 'en';
+              setLang(newLang);
+              localStorage.setItem('lang', newLang);
+            }}
+            className={`px-3 py-1.5 text-xs font-bold transition-colors uppercase rounded-full ${itemHover}`}
           >
-            {lang}
+            {lang === 'en' ? 'EN' : 'PL'}
           </button>
         </div>
 
-        {/* Prawa strona: Motyw i User */}
-        <div className="flex items-center gap-3">
-          <button onClick={toggleTheme} className={`btn btn-circle btn-sm btn-ghost ${itemHoverClass}`}>
-            {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+        {/* Right Side: Theme Toggle & User */}
+        <div className="flex items-center gap-2">
+          {/* Theme Toggle */}
+          <button
+            onClick={toggleTheme}
+            className={`p-2 rounded-full transition-colors ${itemHover}`}
+            aria-label="Toggle theme"
+          >
+            {isDark ? <Sun size={18} /> : <Moon size={18} />}
           </button>
 
           {token ? (
-             <div className="dropdown dropdown-end">
-               <label tabIndex={0} className={`btn btn-circle btn-sm btn-ghost avatar border ${theme === 'light' ? 'border-black/10' : 'border-white/20'} hover:border-white/40 transition-all duration-300`}>
-                 {/* Avatar with fallback - IMPROVED: Better styling */}
-                 <div className="w-10 h-10 rounded-full overflow-hidden ring-2 ring-white/20 hover:ring-white/40 transition-all duration-300">
-                    {/* TODO: Add actual avatar logic here when API is ready */}
-                    <div className="w-full h-full bg-gradient-to-br from-[#5e5ce6] to-[#32ade6] flex items-center justify-center text-white font-bold text-lg shadow-lg">
-                       U
-                    </div>
-                 </div>
-               </label>
-               <ul tabIndex={0} className={`mt-4 p-2 shadow-2xl menu menu-sm dropdown-content rounded-2xl w-52 border backdrop-blur-xl ${theme === 'light' ? 'bg-white/90 border-black/5 text-gray-900' : 'bg-[#1e1e23]/90 border-white/10 text-white'}`}>
-                  <li><Link to="/profile" className={itemHoverClass}>{t.profile}</Link></li>
-                  {isAdmin() && (
-                    <li><Link to="/admin" className={itemHoverClass}><Shield size={14} className="text-[#ff2d92]"/> {t.admin}</Link></li>
-                  )}
-                  <li><button onClick={logout} className="text-red-500 hover:bg-red-500/10 flex gap-2"><LogOut size={14}/> {t.logout}</button></li>
-               </ul>
-             </div>
+            /* Logged-in User Avatar & Dropdown */
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                className={`rounded-full border-2 transition-all duration-300 overflow-hidden ${
+                  isDark ? 'border-white/15 hover:border-white/30' : 'border-black/10 hover:border-black/20'
+                }`}
+              >
+                <div className="w-9 h-9 rounded-full overflow-hidden">
+                  {renderAvatar('w-9 h-9', 'text-base')}
+                </div>
+              </button>
+
+              {/* Dropdown Menu */}
+              {dropdownOpen && (
+                <div
+                  className={`absolute right-0 mt-3 w-56 rounded-2xl border overflow-hidden z-50 transition-all scale-in ${
+                    isDark
+                      ? 'bg-[#1e293b]/95 border-white/10 text-white shadow-[0_16px_48px_rgba(0,0,0,0.5)]'
+                      : 'bg-white/95 border-black/5 text-slate-900 shadow-[0_16px_48px_rgba(0,0,0,0.12)]'
+                  }`}
+                  style={{ backdropFilter: 'blur(40px)' }}
+                >
+                  {/* User Info Header */}
+                  <div className={`px-4 py-3.5 border-b ${isDark ? 'border-white/10' : 'border-black/5'}`}>
+                    <p className="font-semibold text-sm truncate">{user?.nickname || 'User'}</p>
+                    <p className={`text-xs truncate ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
+                      {user?.reputation_points || 0} {t('reputation') || 'reputation'}
+                    </p>
+                  </div>
+
+                  <div className="py-1">
+                    <Link
+                      to="/profile"
+                      onClick={() => setDropdownOpen(false)}
+                      className={`flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${itemHover}`}
+                    >
+                      <UserIcon size={15} /> {t('profile')}
+                    </Link>
+
+                    {checkIsAdmin() && (
+                      <Link
+                        to="/admin"
+                        onClick={() => setDropdownOpen(false)}
+                        className={`flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${itemHover}`}
+                      >
+                        <Shield size={15} className="text-[#bf5af2]" /> {t('admin')}
+                      </Link>
+                    )}
+
+                    <div className={`mx-3 my-1 h-px ${isDark ? 'bg-white/10' : 'bg-black/5'}`} />
+
+                    <button
+                      onClick={() => {
+                        setDropdownOpen(false);
+                        logout();
+                      }}
+                      className="flex items-center gap-3 px-4 py-2.5 text-sm text-red-500 hover:bg-red-500/10 w-full text-left transition-colors"
+                    >
+                      <LogOut size={15} /> {t('logout')}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           ) : (
-            <Link to="/login" className="bg-gradient-to-r from-[#5e5ce6] to-[#bf5af2] text-white px-5 py-2 rounded-full text-sm font-semibold shadow-lg shadow-[#5e5ce6]/20 hover:scale-105 transition-all">
-              {t.login}
+            /* Login Button */
+            <Link
+              to="/login"
+              className="bg-gradient-to-r from-[#5e5ce6] to-[#bf5af2] text-white px-5 py-2 rounded-full text-sm font-semibold shadow-lg shadow-[#5e5ce6]/20 hover:scale-105 hover:shadow-xl hover:shadow-[#5e5ce6]/30 transition-all"
+            >
+              {t('login')}
             </Link>
           )}
         </div>
-      </div>
+      </nav>
     </div>
   );
 }

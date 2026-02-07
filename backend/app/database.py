@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# ✅ FIX #7: Updated default credentials to match docker-compose.yml
+# FIX #7: Updated default credentials to match docker-compose.yml
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "postgresql://colloq:colloq@db:5432/colloq"

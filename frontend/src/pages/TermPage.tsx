@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Search, BookOpen, GraduationCap, ArrowRight, Library, Building2 } from 'lucide-react';
 import { globalSearch } from '../utils/api';
 
@@ -41,8 +41,16 @@ interface TermPageProps {
 }
 
 export function TermPage({ t }: TermPageProps) {
-  const [query, setQuery] = useState("");
+  const [searchParams] = useSearchParams();
+  const initialQuery = searchParams.get('q') || '';
+  const [query, setQuery] = useState(initialQuery);
   const { debouncedValue, isSearching } = useImmediateSearch(query, 300);
+
+  // Sync query when URL ?q= changes (e.g. clicking a tag from homepage)
+  useEffect(() => {
+    const q = searchParams.get('q') || '';
+    if (q && q !== query) setQuery(q);
+  }, [searchParams]);
 
   const { data: results, isLoading } = useQuery({
     queryKey: ['globalSearch', debouncedValue],
@@ -111,8 +119,8 @@ export function TermPage({ t }: TermPageProps) {
                       </div>
                       <div className="h-px bg-white/10 my-4"></div>
                       <div className="text-sm text-white/60 space-y-1">
-                        <p className="flex items-center gap-2"><GraduationCap size={14} className="text-[#32ade6]"/> {sub.field}</p>
-                        <p className="flex items-center gap-2"><Building2 size={14} className="text-[#bf5af2]"/> {sub.university}</p>
+                        <p className="flex items-center gap-2"><GraduationCap size={14} className="text-[#32ade6]"/> {sub.field_name}</p>
+                        <p className="flex items-center gap-2"><Building2 size={14} className="text-[#bf5af2]"/> {sub.university_name}</p>
                       </div>
                     </div>
                   ))}
@@ -130,10 +138,10 @@ export function TermPage({ t }: TermPageProps) {
                   {results.fields.map((field: any) => (
                     <div key={field.id} className="card-spatial p-6 hover:border-[#32ade6]/40 group">
                       <h3 className="font-bold text-lg text-white group-hover:text-[#32ade6] transition-colors">{field.name}</h3>
-                      <p className="text-sm text-white/50 mb-3">{field.degree}</p>
+                      <p className="text-sm text-white/50 mb-3">{field.degree_level}</p>
                       <div className="flex items-center gap-2 text-sm text-white/70">
                         <Building2 size={14} className="text-[#5e5ce6]"/>
-                        <span>{field.university} ({field.faculty})</span>
+                        <span>{field.university_name} ({field.faculty_name})</span>
                       </div>
                       <div className="mt-4 flex justify-end">
                         <Link to={`/university/${field.university_id}`} className="text-sm font-bold text-[#32ade6] hover:text-white transition-colors flex items-center gap-1">

@@ -1,20 +1,103 @@
+/**
+ * Colloq API Client
+ * Centralized API functions for the student note-sharing platform.
+ *
+ * Features:
+ * - Global Axios interceptor for 401/403/500 error handling
+ * - Proper FormData handling for multi-file uploads (no manual Content-Type)
+ * - Token management with auto-cleanup on expiry
+ * - Rich Notes: multi-image upload support
+ */
 import axios from 'axios';
-import { jwtDecode } from "jwt-decode";
-import { University, Faculty, FieldOfStudy, Subject, Note, User, Review, Comment, PendingItems } from './types';
+import { jwtDecode } from 'jwt-decode';
+import {
+  University,
+  Faculty,
+  FieldOfStudy,
+  Subject,
+  Note,
+  NoteImage,
+  User,
+  Review,
+  Comment,
+  PendingItems,
+} from './types';
 
 export * from './types';
 
+export interface NoteHistoryEntry {
+  id: number;
+  note_id: number;
+  title: string | null;
+  content: string | null;
+  edited_at: string;
+  edited_by: number | null;
+}
+
 /**
- * API URL configuration
- * Uses environment variable VITE_API_URL or defaults to localhost
+ * API base URL - uses environment variable or defaults to localhost.
  */
-export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-
-// --- HELPER FUNCTIONS ---
+export const API_URL =
+  import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 /**
- * Get authorization header with Bearer token
- * @returns Object with Authorization header or empty object if no token
+ * Create a configured Axios instance with interceptors.
+ */
+const api = axios.create({
+  baseURL: API_URL,
+  timeout: 30000,
+});
+
+// Global response interceptor for error handling
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error.response?.status;
+    const detail = error.response?.data?.detail;
+
+    if (status === 401) {
+      // Token expired or invalid - clean up and let the app handle redirect
+      localStorage.removeItem('token');
+      console.warn('[API] Session expired. Token removed.');
+    } else if (status === 403) {
+      console.warn('[API] Forbidden:', detail || 'Access denied');
+    } else if (status >= 500) {
+      console.error('[API] Server error:', status, detail || 'Internal server error');
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+// Request interceptor to automatically attach auth header
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+/**
+ * Resolve an image/asset URL.
+ * If the URL is already absolute (http/https/data:), return as-is.
+ * If it's a relative path (e.g. /uploads/...), prepend API_URL.
+ * Returns a fallback placeholder when url is null/undefined.
+ */
+export const resolveUrl = (url?: string | null, fallback?: string): string => {
+  if (!url) return fallback || 'https://placehold.co/400x200/5e5ce6/ffffff?text=Colloq';
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+    return url;
+  }
+  return `${API_URL}${url}`;
+};
+
+// =============================================================================
+// HELPER FUNCTIONS
+// =============================================================================
+
+/**
+ * Get authorization header with Bearer token.
  */
 export const getAuthHeader = () => {
   const token = localStorage.getItem('token');
@@ -22,8 +105,7 @@ export const getAuthHeader = () => {
 };
 
 /**
- * Check if current user is admin
- * @returns Boolean indicating admin status
+ * Check if current user is admin by decoding JWT token.
  */
 export const isAdmin = (): boolean => {
   const token = localStorage.getItem('token');
@@ -37,361 +119,306 @@ export const isAdmin = (): boolean => {
 };
 
 /**
- * Logout user by removing token from localStorage
+ * Logout user by removing token from localStorage.
  */
 export const logout = () => localStorage.removeItem('token');
 
-// --- AUTHENTICATION ---
+// =============================================================================
+// AUTHENTICATION
+// =============================================================================
 
 /**
- * Login user with username and password
- * Uses URLSearchParams for proper OAuth2 form encoding
- * @param username - User email
- * @param password - User password
- * @returns Login response data
+ * Login user with email and password.
+ * Uses URLSearchParams for proper OAuth2 form encoding.
  */
 export const login = async (username: string, password: string) => {
   const params = new URLSearchParams();
   params.append('username', username);
   params.append('password', password);
-  return (await axios.post(`${API_URL}/token`, params)).data;
+  return (await api.post('/token', params)).data;
 };
 
 /**
- * Register new user
- * @param userData - User registration data
- * @returns Registration response
+ * Register a new user account.
  */
 export const register = async (userData: any) =>
-  (await axios.post(`${API_URL}/register`, { user: userData })).data;
+  (await api.post('/register', { user: userData })).data;
 
 /**
- * Get current user data
- * @returns Current user data with username alias
+ * Get current authenticated user data.
+ * The interceptor handles 401 cleanup automatically.
  */
 export const getCurrentUser = async (): Promise<User> => {
-  const res = await axios.get(`${API_URL}/users/me`, { headers: getAuthHeader() });
+  const res = await api.get('/users/me');
   return { ...res.data, username: res.data.nickname };
 };
 
 /**
- * Update user profile including avatar upload
- * @param data - Profile data including optional avatar file
- * @returns Updated user data
+ * Update user profile including avatar upload.
+ * Uses FormData - does NOT set Content-Type manually (browser handles boundary).
  */
 export const updateProfile = async (data: any) => {
   const fd = new FormData();
   if (data.username) fd.append('nickname', data.username);
-  if (data.bio) fd.append('bio', data.bio);
+  if (data.bio !== undefined) fd.append('bio', data.bio);
   if (data.avatar instanceof File) {
     fd.append('avatar', data.avatar);
   }
-  // DO NOT set Content-Type manually - browser will set it with boundary
-  // This is critical for file uploads to work properly
-  return await axios.put(`${API_URL}/users/me`, fd, { headers: { ...getAuthHeader() } });
+  return await api.put('/users/me', fd);
 };
 
-// --- DATA FETCHING ---
+// =============================================================================
+// DATA FETCHING
+// =============================================================================
 
-/**
- * Get all approved universities
- * @returns Array of universities
- */
-export const getUniversities = async (): Promise<University[]> => (await axios.get(`${API_URL}/universities`)).data;
+/** Get all approved universities. Optional region filter (case-insensitive). */
+export const getUniversities = async (region?: string): Promise<University[]> => {
+  const params = region ? `?region=${encodeURIComponent(region)}` : '';
+  return (await api.get(`/universities${params}`)).data;
+};
 
-/**
- * Get specific university by ID
- * @param id - University ID
- * @returns University data
- */
-export const getUniversity = async (id: number): Promise<University> => (await axios.get(`${API_URL}/universities/${id}`)).data;
+/** Single batched payload for home page. */
+export const getHome = async (): Promise<{
+  stats: {
+    users_count: number;
+    notes_count: number;
+    universities_count: number;
+    latest_activity: Record<string, unknown>;
+  };
+  leaderboard: { leaderboard: Array<Record<string, unknown>>; total_users: number };
+  activity_feed: Array<Record<string, unknown>>;
+  recent_notes: Note[];
+  universities: University[];
+}> => (await api.get('/home')).data;
 
-/**
- * Get faculties for specific university
- * @param id - University ID
- * @returns Array of faculties
- */
-export const getFaculties = async (id: number): Promise<Faculty[]> => (await axios.get(`${API_URL}/universities/${id}/faculties`)).data;
+/** Get specific university by ID. */
+export const getUniversity = async (id: number): Promise<University> =>
+  (await api.get(`/universities/${id}`)).data;
 
-/**
- * Get fields of study for specific faculty
- * @param id - Faculty ID
- * @returns Array of fields of study
- */
-export const getFields = async (id: number): Promise<FieldOfStudy[]> => (await axios.get(`${API_URL}/faculties/${id}/fields`)).data;
+/** Get faculties for a specific university. */
+export const getFaculties = async (id: number): Promise<Faculty[]> =>
+  (await api.get(`/universities/${id}/faculties`)).data;
 
-/**
- * Get subjects for specific field of study
- * @param id - Field of study ID
- * @returns Array of subjects
- */
-export const getSubjects = async (id: number): Promise<Subject[]> => (await axios.get(`${API_URL}/fields/${id}/subjects`)).data;
+/** Get fields of study for a specific faculty. */
+export const getFields = async (id: number): Promise<FieldOfStudy[]> =>
+  (await api.get(`/faculties/${id}/fields`)).data;
 
-/**
- * Get notes with optional filtering
- * @param uniId - Optional university ID filter
- * @param search - Optional search query
- * @returns Array of notes
- */
-export const getNotes = async (uniId?: number, search?: string): Promise<Note[]> => {
+/** Get subjects for a specific field of study. */
+export const getSubjects = async (id: number): Promise<Subject[]> =>
+  (await api.get(`/fields/${id}/subjects`)).data;
+
+/** Get notes with optional filtering. */
+export const getNotes = async (
+  uniId?: number,
+  search?: string
+): Promise<Note[]> => {
   const params = new URLSearchParams();
   if (uniId) params.append('university_id', uniId.toString());
   if (search) params.append('search', search);
-  return (await axios.get(`${API_URL}/notes?${params.toString()}`)).data;
+  return (await api.get(`/notes?${params.toString()}`)).data;
 };
 
-// --- GLOBAL SEARCH ---
+/** Get a single note by ID. */
+export const getNote = async (id: number): Promise<Note> =>
+  (await api.get(`/notes/${id}`)).data;
 
-/**
- * Search interface for fields and subjects
- */
+// =============================================================================
+// GLOBAL SEARCH
+// =============================================================================
+
 export interface SearchResult {
   fields: any[];
   subjects: any[];
 }
 
-/**
- * Global search across fields and subjects
- * @param query - Search query string
- * @returns Search results with fields and subjects
- */
-export const globalSearch = async (query: string): Promise<SearchResult> => {
-  return (await axios.get(`${API_URL}/search/global?q=${encodeURIComponent(query)}`)).data;
-};
+/** Global search across fields and subjects. */
+export const globalSearch = async (query: string): Promise<SearchResult> =>
+  (await api.get(`/search/global?q=${encodeURIComponent(query)}`)).data;
 
-// --- CREATION & UPLOADS ---
+// =============================================================================
+// CREATION & UPLOADS (FormData - no manual Content-Type!)
+// =============================================================================
 
 /**
- * Create new university with optional image
- * @param data - University data including optional image
- * @returns Creation response
+ * Create a new university with optional image.
  */
 export const createUniversity = async (data: any) => {
   const fd = new FormData();
   fd.append('name', data.name);
   fd.append('city', data.city);
-  fd.append('region', data.region);
-  if (data.image) fd.append('image', data.image);
-  // DO NOT set Content-Type manually - browser will set it with boundary
-  return (await axios.post(`${API_URL}/universities`, fd, { headers: { ...getAuthHeader() } })).data;
+  fd.append('region', data.region || '');
+  fd.append('country', data.country ?? 'Poland');
+  if (data.description) fd.append('description', data.description);
+  if (data.image instanceof File) fd.append('image', data.image);
+  return (await api.post('/universities', fd)).data;
 };
 
-/**
- * Request university image change
- * @param uniId - University ID
- * @param file - New image file
- * @returns Request response
- */
-export const requestUniversityImageChange = async (uniId: number, file: File) => {
-  const fd = new FormData(); fd.append('image', file);
-  // DO NOT set Content-Type manually - browser will set it with boundary
-  return (await axios.post(`${API_URL}/universities/${uniId}/image_request`, fd, { headers: { ...getAuthHeader() } })).data;
-};
-
-/**
- * Create new note with optional image
- * @param fd - FormData with note data and optional image
- * @returns Creation response
- */
-export const createNote = async (fd: FormData) => {
-  // DO NOT set Content-Type manually - browser will set it with boundary
-  return (await axios.post(`${API_URL}/notes`, fd, { headers: { ...getAuthHeader() } })).data;
-};
-
-/**
- * Create new faculty
- * @param fd - FormData with faculty data
- * @returns Creation response
- */
-export const createFaculty = async (fd: FormData) => {
-  // DO NOT set Content-Type manually - browser will set it with boundary
-  return (await axios.post(`${API_URL}/faculties`, fd, { headers: { ...getAuthHeader() } })).data;
-};
-
-/**
- * Create new field of study
- * @param data - Field of study data
- * @returns Creation response
- */
-export const createFieldOfStudy = async (data: { name: string, degree_level: string, faculty_id: number }) => 
-  (await axios.post(`${API_URL}/fields`, data, { headers: getAuthHeader() })).data;
-
-/**
- * Create new subject
- * @param data - Subject data
- * @returns Creation response
- */
-export const createSubject = async (data: { name: string, semester: number, field_of_study_id: number }) => 
-  (await axios.post(`${API_URL}/subjects`, data, { headers: getAuthHeader() })).data;
-
-// --- INTERACTIONS ---
-
-/**
- * Vote on note (upvote)
- * @param id - Note ID
- * @returns Vote response
- */
-export const voteNote = async (id: number) => (await axios.post(`${API_URL}/notes/${id}/vote`, {}, { headers: getAuthHeader() })).data;
-
-/**
- * Toggle note favorite status
- * @param id - Note ID
- * @returns Favorite toggle response
- */
-export const toggleFavorite = async (id: number) => (await axios.post(`${API_URL}/notes/${id}/favorite`, {}, { headers: getAuthHeader() })).data;
-
-/**
- * Get university reviews
- * @param id - University ID
- * @returns Array of reviews
- */
-export const getUniversityReviews = async (id: number): Promise<Review[]> => (await axios.get(`${API_URL}/universities/${id}/reviews`)).data;
-
-/**
- * Add review to university
- * @param data - Review data
- * @returns Add review response
- */
-export const addReview = async (data: any) => await axios.post(`${API_URL}/reviews`, data, { headers: getAuthHeader() });
-
-/**
- * Get comments for specific note
- * @param id - Note ID
- * @returns Array of comments
- */
-export const getNoteComments = async (id: number): Promise<Comment[]> => (await axios.get(`${API_URL}/notes/${id}/comments`)).data;
-
-/**
- * Add comment to note
- * @param id - Note ID
- * @param content - Comment content
- * @returns Add comment response
- */
-export const addComment = async (id: number, content: string) => await axios.post(`${API_URL}/notes/${id}/comments`, { content }, { headers: getAuthHeader() });
-
-/**
- * Update note (for owner only)
- * @param id - Note ID
- * @param data - Update data including optional image
- * @returns Update response
- */
-export const updateNote = async (id: number, data: any) => {
+/** Request university image change. */
+export const requestUniversityImageChange = async (
+  uniId: number,
+  file: File
+) => {
   const fd = new FormData();
-  if (data.title) fd.append('title', data.title);
-  if (data.content) fd.append('content', data.content);
+  fd.append('image', file);
+  return (await api.post(`/universities/${uniId}/image_request`, fd)).data;
+};
+
+/**
+ * Create a new note with file upload.
+ * Supports both legacy single-image and Rich Notes multi-image.
+ * Accepts raw FormData - caller is responsible for appending fields.
+ */
+export const createNote = async (fd: FormData) =>
+  (await api.post('/notes', fd)).data;
+
+/** Create a new faculty. */
+export const createFaculty = async (fd: FormData) =>
+  (await api.post('/faculties', fd)).data;
+
+/** Create a new field of study. */
+export const createFieldOfStudy = async (data: {
+  name: string;
+  degree_level: string;
+  faculty_id: number;
+}) => (await api.post('/fields', data)).data;
+
+/** Create a new subject. */
+export const createSubject = async (data: {
+  name: string;
+  semester: number;
+  field_of_study_id: number;
+}) => (await api.post('/subjects', data)).data;
+
+// =============================================================================
+// INTERACTIONS
+// =============================================================================
+
+/** Upvote a note. */
+export const voteNote = async (id: number) =>
+  (await api.post(`/notes/${id}/vote`)).data;
+
+/** Toggle favorite status for a note. */
+export const toggleFavorite = async (id: number) =>
+  (await api.post(`/notes/${id}/favorite`)).data;
+
+/** Get university reviews. */
+export const getUniversityReviews = async (id: number): Promise<Review[]> =>
+  (await api.get(`/universities/${id}/reviews`)).data;
+
+/** Add a review to a university or note. */
+export const addReview = async (data: any) =>
+  await api.post('/reviews', data);
+
+/** Get comments for a note. */
+export const getNoteComments = async (id: number): Promise<Comment[]> =>
+  (await api.get(`/notes/${id}/comments`)).data;
+
+/** Add a comment to a note. */
+export const addComment = async (id: number, content: string) =>
+  await api.post(`/notes/${id}/comments`, { content });
+
+/**
+ * Update a note (owner only).
+ * Supports adding new images via the 'images' field.
+ */
+export const updateNote = async (id: number, data: any): Promise<Note> => {
+  const fd = new FormData();
+  if (data.title !== undefined) fd.append('title', data.title);
+  if (data.content !== undefined) fd.append('content', data.content);
   if (data.image instanceof File) {
     fd.append('image', data.image);
   }
-  // DO NOT set Content-Type manually - browser will set it with boundary
-  return await axios.put(`${API_URL}/notes/${id}`, fd, { headers: { ...getAuthHeader() } });
+  // Support multiple new images
+  if (data.images && Array.isArray(data.images)) {
+    for (const img of data.images) {
+      if (img instanceof File) {
+        fd.append('images', img);
+      }
+    }
+  }
+  const res = await api.put(`/notes/${id}`, fd);
+  return res.data;
 };
 
-/**
- * Delete note (for owner only)
- * @param id - Note ID
- * @returns Delete response
- */
-export const deleteNote = async (id: number) => await axios.delete(`${API_URL}/notes/${id}`, { headers: getAuthHeader() });
+/** Get note version history (owner or admin only). */
+export const getNoteHistory = async (id: number): Promise<NoteHistoryEntry[]> =>
+  (await api.get(`/notes/${id}/history`)).data;
 
-// --- ADMIN FUNCTIONS ---
+/** Delete a note (owner only). */
+export const deleteNote = async (id: number) =>
+  await api.delete(`/notes/${id}`);
 
-/**
- * Get all pending items for admin approval
- * @returns Pending items including notes, universities, faculties, fields, subjects, and image requests
- */
-export const getPendingItems = async (): Promise<PendingItems> => (await axios.get(`${API_URL}/admin/pending_items`, { headers: getAuthHeader() })).data;
+// =============================================================================
+// ADMIN FUNCTIONS
+// =============================================================================
 
-/**
- * Approve pending item
- * @param type - Type of item (university, faculty, field, subject, note)
- * @param id - Item ID
- * @returns Approval response
- */
-export const approveItem = async (type: string, id: number) => (await axios.post(`${API_URL}/admin/approve/${type}/${id}`, {}, { headers: getAuthHeader() })).data;
+/** Get all pending items for admin approval. */
+export const getPendingItems = async (): Promise<PendingItems> =>
+  (await api.get('/admin/pending_items')).data;
 
-/**
- * Reject pending item
- * @param type - Type of item (university, faculty, field, subject, note)
- * @param id - Item ID
- * @returns Rejection response
- */
-export const rejectItem = async (type: string, id: number) => (await axios.delete(`${API_URL}/admin/reject/${type}/${id}`, { headers: getAuthHeader() })).data;
+/** Get all users (admin only). */
+export const getAllUsers = async (): Promise<User[]> =>
+  (await api.get('/admin/users')).data;
 
-/**
- * Approve university image request
- * @param id - Image request ID
- * @returns Approval response
- */
-export const approveImageRequest = async (id: number) => (await axios.post(`${API_URL}/admin/approve_image_request/${id}`, {}, { headers: getAuthHeader() })).data;
+/** Approve a pending item. */
+export const approveItem = async (type: string, id: number) =>
+  (await api.post(`/admin/approve/${type}/${id}`)).data;
 
-/**
- * Reject university image request
- * @param id - Image request ID
- * @returns Rejection response
- */
-export const rejectImageRequest = async (id: number) => (await axios.post(`${API_URL}/admin/reject_image_request/${id}`, {}, { headers: getAuthHeader() })).data;
+/** Reject a pending item. */
+export const rejectItem = async (type: string, id: number) =>
+  (await api.delete(`/admin/reject/${type}/${id}`)).data;
 
-/**
- * Update university image (admin only)
- * @param id - University ID
- * @param file - New image file
- * @returns Update response
- */
+/** Approve university image request. */
+export const approveImageRequest = async (id: number) =>
+  (await api.post(`/admin/approve_image_request/${id}`)).data;
+
+/** Reject university image request. */
+export const rejectImageRequest = async (id: number) =>
+  (await api.post(`/admin/reject_image_request/${id}`)).data;
+
+/** Directly update university image (admin only). */
 export const updateUniversityImage = async (id: number, file: File) => {
-  const fd = new FormData(); fd.append('image', file);
-  // DO NOT set Content-Type manually - browser will set it with boundary
-  return (await axios.patch(`${API_URL}/admin/universities/${id}/image`, fd, { headers: { ...getAuthHeader() } })).data;
+  const fd = new FormData();
+  fd.append('image', file);
+  return (await api.patch(`/admin/universities/${id}/image`, fd)).data;
 };
 
-/**
- * Update university details (admin only)
- * @param id - University ID
- * @param data - Update data including optional description and banner
- * @returns Update response
- */
+/** Update university details (admin only). */
 export const updateUniversity = async (id: number, data: any) => {
   const fd = new FormData();
   if (data.description) fd.append('description', data.description);
   if (data.banner) fd.append('banner', data.banner);
-  // DO NOT set Content-Type manually - browser will set it with boundary
-  return await axios.put(`${API_URL}/universities/${id}`, fd, { headers: { ...getAuthHeader() } });
+  return await api.put(`/universities/${id}`, fd);
 };
 
+// =============================================================================
+// STATISTICS & GAMIFICATION
+// =============================================================================
+
+/** Platform-wide statistics. */
 export const getStats = async (): Promise<{
+  users: number;
+  notes: number;
+  universities: number;
   users_count: number;
   notes_count: number;
   universities_count: number;
   latest_activity: {
-    latest_note: {
-      id: number;
-      title: string;
-      created_at: string;
-      university_id: number;
-    } | null;
-    latest_user: {
-      id: number;
-      nickname: string;
-      created_at: string;
-    } | null;
-    latest_review: {
-      id: number;
-      content: string;
-      created_at: string;
-      university_id: number;
-    } | null;
+    latest_note: { id: number; title: string; created_at: string; university_id: number } | null;
+    latest_user: { id: number; nickname: string; created_at: string } | null;
+    latest_review: { id: number; content: string; created_at: string; university_id: number } | null;
   };
-}> => {
-  const res = await fetch(`${API_URL}/stats`);
-  if (!res.ok) throw new Error("Failed to fetch stats");
-  return res.json();
-};
+}> => (await api.get('/stats')).data;
 
+/** Leaderboard - top 5 users by reputation. */
 export const getLeaderboard = async (): Promise<{
   leaderboard: Array<{
     rank: number;
     user_id: number;
     nickname: string;
     avatar_url: string | null;
+    reputation_points: number;
+    uploads_count: number;
     notes_count: number;
     total_score: number;
     reviews_count: number;
@@ -399,8 +426,18 @@ export const getLeaderboard = async (): Promise<{
     total_activity: number;
   }>;
   total_users: number;
-}> => {
-  const res = await fetch(`${API_URL}/leaderboard`);
-  if (!res.ok) throw new Error("Failed to fetch leaderboard");
-  return res.json();
-};
+}> => (await api.get('/leaderboard')).data;
+
+/** Activity feed - last 5 activities. */
+export const getActivityFeed = async (): Promise<
+  Array<{
+    type: string;
+    title?: string;
+    description?: string;
+    rating?: number;
+    comment?: string;
+    created_at: string;
+    user_nickname: string;
+    note_title?: string;
+  }>
+> => (await api.get('/activity-feed')).data;
