@@ -23,10 +23,11 @@ export function RegisterPage({ t }: { t: any }) {
     setLoading(true);
 
     try {
+      const rawUni = form.university?.value;
       await register({
         email: form.email.value,
         password: form.password.value,
-        university_id: Number(form.university.value)
+        ...(rawUni && rawUni !== '' ? { university_id: Number(rawUni) } : {}),
       });
       alert('Rejestracja udana! Możesz się teraz zalogować.');
       navigate('/login');
@@ -59,9 +60,10 @@ export function RegisterPage({ t }: { t: any }) {
           </div>
 
           <div className="form-control">
-            <label className="label pl-1"><span className="label-text opacity-70 flex gap-2"><GraduationCap size={16}/> Uczelnia</span></label>
-            <select name="university" className="select glass-input w-full" required disabled={unisLoading}>
-                <option value="">{unisLoading ? "Ładowanie uczelni..." : "Wybierz uczelnię"}</option>
+            <label className="label pl-1"><span className="label-text opacity-70 flex gap-2"><GraduationCap size={16}/> Uczelnia (opcjonalnie)</span></label>
+            <select name="university" className="select glass-input w-full" disabled={unisLoading}>
+                <option value="">{unisLoading ? "Ładowanie..." : "Nie wybieram / dodam później w profilu"}
+                </option>
                 {unis?.map((u: any) => <option key={u.id} value={u.id}>{u.name}</option>)}
             </select>
           </div>

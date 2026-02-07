@@ -1,45 +1,64 @@
 import { useState, useRef, useEffect } from 'react';
-import { X, MessageSquare, Maximize2, Minimize2, ChevronRight, ChevronLeft, Edit, Trash2 } from 'lucide-react';
-import { API_URL, resolveUrl, addComment, getNoteComments, voteNote, toggleFavorite, updateNote, deleteNote } from '../utils/api';
+import { Link } from 'react-router-dom';
+import { X, MessageSquare, Maximize2, Minimize2, ChevronRight, ChevronLeft, Edit, Trash2, Lock, Upload } from 'lucide-react';
+import { API_URL, resolveUrl, addComment, getNoteComments, getCurrentUser, voteNote, toggleFavorite, updateNote, deleteNote } from '../utils/api';
+import { FilePreview } from './FilePreview';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { jwtDecode } from 'jwt-decode';
+import { t } from '../utils/i18n';
 
 /**
  * Advanced Note Modal Component
  * Features: Drag & Drop, Resize Handle, Maximize, Toggle Comments, Edit/Delete for owner
- * @param note - Note data to display
- * @param onClose - Callback to close modal
- * @param token - User authentication token
+ * When user is not logged in or has 0 uploads (and not author): content is blurred + overlay CTA.
  */
-export function NoteModal({ note, onClose, token }: { note: any; onClose: () => void; token: string | null }) {
+export function NoteModal({
+  note,
+  onClose,
+  token,
+  onUnlockWithUpload,
+}: {
+  note: any;
+  onClose: () => void;
+  token: string | null;
+  onUnlockWithUpload?: () => void;
+}) {
   const queryClient = useQueryClient();
   const [newComment, setNewComment] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(note.title);
   const [editContent, setEditContent] = useState(note.content);
-  
-  // Stan okna
+
   const [isMaximized, setIsMaximized] = useState(false);
   const [showComments, setShowComments] = useState(true);
-  
-  // Stan pozycji i rozmiaru (dla trybu okienkowego)
+
   const [position, setPosition] = useState({ x: 100, y: 50 });
   const [size, setSize] = useState({ w: 900, h: 600 });
-  
-  // Stan przeciągania
+
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  
-  // Stan skalowania
   const [isResizing, setIsResizing] = useState(false);
 
-  const { data: comments } = useQuery({ 
-    queryKey: ['comments', note.id], 
-    queryFn: () => getNoteComments(note.id),
-    enabled: !!note 
+  const { data: currentUser } = useQuery({
+    queryKey: ['currentUser'],
+    queryFn: getCurrentUser,
+    enabled: !!token,
   });
 
-  // Check if current user is owner
+  const { data: comments } = useQuery({
+    queryKey: ['comments', note.id],
+    queryFn: () => getNoteComments(note.id),
+    enabled: !!note && !!token,
+  });
+
+  const isBlocked =
+    note &&
+    (!token ||
+      (currentUser &&
+        currentUser.uploads_count === 0 &&
+        currentUser.id !== note.author?.id &&
+        currentUser.id !== note.user_id));
+
   const isOwner = (): boolean => {
     if (!token || !note.author_id) return false;
     try {
@@ -167,8 +186,37 @@ export function NoteModal({ note, onClose, token }: { note: any; onClose: () => 
         {/* CONTENT AREA */}
         <div className="flex flex-1 overflow-hidden relative">
           
-          {/* LEFT: Note Content */}
-          <div className={`flex-1 overflow-y-auto p-8 custom-scrollbar transition-all duration-300 ${showComments ? 'mr-0' : ''}`}>
+          {/* LEFT: Note Content (blurred when blocked) */}
+          <div className={`flex-1 overflow-y-auto p-8 custom-scrollbar transition-all duration-300 relative ${showComments ? 'mr-0' : ''} ${isBlocked ? 'note-content blur' : ''}`}>
+             {isBlocked && (
+               <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 backdrop-blur-sm p-6">
+                 <div className="text-center max-w-sm">
+                   <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-[#5e5ce6] to-[#bf5af2] flex items-center justify-center shadow-lg">
+                     <Lock size={28} className="text-white" />
+                   </div>
+                   <h3 className="text-xl font-bold mb-2">{t('upload_barrier_title')}</h3>
+                   <p className="opacity-90 text-sm mb-4 leading-relaxed">{t('upload_barrier_desc')}</p>
+                   {!token ? (
+                     <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                       <Link to="/login" className="btn btn-primary btn-sm no-underline" onClick={onClose}>
+                         {t('login')}
+                       </Link>
+                       <Link to="/register" className="btn btn-ghost btn-sm border border-white/20 no-underline" onClick={onClose}>
+                         {t('register')}
+                       </Link>
+                     </div>
+                   ) : onUnlockWithUpload ? (
+                     <button type="button" onClick={onUnlockWithUpload} className="btn btn-primary gap-2">
+                       <Upload size={18} /> {t('unlock_with_upload')}
+                     </button>
+                   ) : (
+                     <Link to="/" className="btn btn-primary btn-sm no-underline" onClick={onClose}>
+                       {t('unlock_with_upload')}
+                     </Link>
+                   )}
+                 </div>
+               </div>
+             )}
              {isEditing ? (
                <div className="space-y-6">
                  <div className="space-y-4">
@@ -274,7 +322,18 @@ export function NoteModal({ note, onClose, token }: { note: any; onClose: () => 
                  {note.image_url && (
                    <img src={resolveUrl(note.image_url)} className="w-full rounded-2xl mb-8 border border-white/10 shadow-lg" alt="Note"/>
                  )}
-                 
+                 {note.images?.length > 0 && (
+                   <div className="space-y-4 mb-8">
+                     {note.images.map((img: { id: number; image_url: string }) => (
+                       <img key={img.id} src={resolveUrl(img.image_url)} className="w-full rounded-2xl border border-white/10 shadow-lg" alt="Note"/>
+                     ))}
+                   </div>
+                 )}
+                 {note.file_url && (
+                   <div className="mb-8">
+                     <FilePreview fileUrl={note.file_url} title={note.title} />
+                   </div>
+                 )}
                  <div className="prose prose-invert max-w-none text-white/80 leading-relaxed">
                    {note.content}
                  </div>

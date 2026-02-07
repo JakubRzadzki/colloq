@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import {
   resolveUrl,
-  getUniversity, getFaculties, getFields, getSubjects, getNotes, getUniversityReviews,
+  getUniversity, getFaculties, getFields, getSubjects, getNotes, getMyFavorites, getUniversityReviews, getTags,
   requestUniversityImageChange, voteNote, toggleFavorite, addReview,
   createFieldOfStudy, createSubject,
   type University, type Faculty, type FieldOfStudy, type Subject,
@@ -356,11 +356,29 @@ export function UniversityPage({ t }: { t: any }) {
     enabled: uniId > 0,
   });
 
+  const [notesSort, setNotesSort] = useState<'date' | 'score' | 'views'>('date');
+  const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
+  const { data: tags = [] } = useQuery({
+    queryKey: ['tags'],
+    queryFn: getTags,
+  });
   const { data: notes, isLoading: notesLoading } = useQuery({
-    queryKey: ['notes', uniId, debouncedSearch],
-    queryFn: () => getNotes(uniId, debouncedSearch),
+    queryKey: ['notes', uniId, debouncedSearch, notesSort, selectedTagIds],
+    queryFn: () => getNotes({
+      university_id: uniId,
+      search: debouncedSearch,
+      sort: notesSort,
+      ...(selectedTagIds.length > 0 && { tag_ids: selectedTagIds }),
+    }),
     enabled: uniId > 0,
   });
+
+  const { data: myFavorites = [] } = useQuery({
+    queryKey: ['myFavorites'],
+    queryFn: () => getMyFavorites(),
+    enabled: !!token,
+  });
+  const favoriteIds = new Set((myFavorites as any[]).map((n: any) => n.id));
 
   const { data: reviews } = useQuery({
     queryKey: ['reviews', uniId],
@@ -380,7 +398,10 @@ export function UniversityPage({ t }: { t: any }) {
 
   const favMutation = useMutation({
     mutationFn: toggleFavorite,
-    onSuccess: () => alert('Updated favorites'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['myFavorites'] });
+      queryClient.invalidateQueries({ queryKey: ['notes'] });
+    },
   });
 
   // CRITICAL FIX: Loading state with glass spinner
@@ -534,8 +555,38 @@ export function UniversityPage({ t }: { t: any }) {
               </div>
             )}
 
-            {/* Notes Grid */}
+            {/* Sort & Notes Grid */}
             {!notesLoading && notes && notes.length > 0 && (
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+                  {tags.length > 0 && (
+                    <div className="flex flex-wrap gap-2 items-center">
+                      <span className="text-sm opacity-60">Tags:</span>
+                      {tags.map((tag: { id: number; name: string }) => (
+                        <button
+                          key={tag.id}
+                          type="button"
+                          onClick={() => setSelectedTagIds((prev) => prev.includes(tag.id) ? prev.filter((id) => id !== tag.id) : [...prev, tag.id])}
+                          className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${selectedTagIds.includes(tag.id) ? 'bg-[#5e5ce6] text-white' : 'bg-white/10 text-white/70 hover:bg-white/20'}`}
+                        >
+                          {tag.name}
+                        </button>
+                      ))}
+                      {selectedTagIds.length > 0 && (
+                        <button type="button" onClick={() => setSelectedTagIds([])} className="text-xs opacity-60 hover:opacity-100">Clear</button>
+                      )}
+                    </div>
+                  )}
+                  <select
+                    value={notesSort}
+                    onChange={(e) => setNotesSort(e.target.value as 'date' | 'score' | 'views')}
+                    className="glass-input py-2 px-3 rounded-xl text-sm"
+                  >
+                    <option value="date">Newest first</option>
+                    <option value="score">Top rated</option>
+                    <option value="views">Most views</option>
+                  </select>
+                </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {notes.map((n: any) => (
                   <div
@@ -554,6 +605,14 @@ export function UniversityPage({ t }: { t: any }) {
                       <p className="text-sm opacity-60 line-clamp-3 mb-3">{n.content}</p>
                     )}
 
+                    {n.tags?.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-2">
+                        {n.tags.map((tag: { id: number; name: string }) => (
+                          <span key={tag.id} className="px-2 py-0.5 rounded-md bg-white/10 text-xs text-white/60">{tag.name}</span>
+                        ))}
+                      </div>
+                    )}
+
                     {/* Author info */}
                     <div className="flex items-center gap-2 text-xs opacity-40 mb-3">
                       <div className="w-5 h-5 rounded-full bg-gradient-to-br from-[#5e5ce6] to-[#32ade6] flex items-center justify-center text-white text-[10px] font-bold">
@@ -570,15 +629,16 @@ export function UniversityPage({ t }: { t: any }) {
                         <ThumbsUp size={13} /> Like
                       </button>
                       <button
-                        onClick={(e) => { e.stopPropagation(); favMutation.mutate(n.id); }}
-                        className="flex items-center gap-1 text-xs opacity-50 hover:opacity-100 hover:text-[#bf5af2] transition-all px-2 py-1 rounded-lg hover:bg-[#bf5af2]/10"
+                        onClick={(e) => { e.stopPropagation(); token && favMutation.mutate(n.id); }}
+                        className={`flex items-center gap-1 text-xs transition-all px-2 py-1 rounded-lg hover:bg-[#bf5af2]/10 ${favoriteIds.has(n.id) ? 'text-[#bf5af2]' : 'opacity-50 hover:opacity-100 hover:text-[#bf5af2]'}`}
                       >
-                        <Heart size={13} /> Save
+                        <Heart size={13} fill={favoriteIds.has(n.id) ? 'currentColor' : 'none'} /> Save
                       </button>
                     </div>
                   </div>
                 ))}
               </div>
+              </>
             )}
 
             {/* Empty State - Glass card */}
@@ -702,6 +762,10 @@ export function UniversityPage({ t }: { t: any }) {
           note={selectedNote}
           onClose={() => setSelectedNote(null)}
           token={token}
+          onUnlockWithUpload={() => {
+            setSelectedNote(null);
+            setNoteModalOpen(true);
+          }}
         />
       )}
     </div>

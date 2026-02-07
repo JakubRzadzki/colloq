@@ -1,8 +1,11 @@
 import React, { useState, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Camera, Save, AlertCircle } from 'lucide-react';
-import { getCurrentUser, updateProfile, API_URL, resolveUrl, type User } from '../utils/api';
+import { Camera, Save, AlertCircle, Heart, FileText, PlusCircle } from 'lucide-react';
+import { getCurrentUser, updateProfile, resolveUrl, getMyFavorites, type User } from '../utils/api';
+import type { Note } from '../utils/types';
 import { t } from '../utils/i18n';
+import { AddNoteModal } from '../components/addNoteModal';
 
 /**
  * User Profile Page Component
@@ -18,11 +21,17 @@ const ProfilePage: React.FC<{ t: any }> = (_props) => {
     queryFn: getCurrentUser,
     retry: 1,
   });
+  const { data: favorites = [] } = useQuery<Note[]>({
+    queryKey: ['myFavorites'],
+    queryFn: getMyFavorites,
+    enabled: !!user,
+  });
 
   const [username, setUsername] = useState('');
   const [bio, setBio] = useState('');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [addNoteOpen, setAddNoteOpen] = useState(false);
 
   React.useEffect(() => {
     if (user) {
@@ -137,9 +146,12 @@ const ProfilePage: React.FC<{ t: any }> = (_props) => {
 
             {/* FORM SECTION */}
             <form onSubmit={handleSubmit} className="flex-1 w-full space-y-6 pt-4">
-                <div>
+                <div className="flex flex-wrap items-center gap-3">
                     <h1 className="text-3xl font-black text-white">{user?.email}</h1>
-                    <div className="badge badge-outline mt-2 opacity-50 text-white">{user?.is_admin ? 'Administrator' : 'Student'}</div>
+                    <div className="badge badge-outline opacity-50 text-white">{user?.is_admin ? 'Administrator' : 'Student'}</div>
+                    <button type="button" onClick={() => setAddNoteOpen(true)} className="btn btn-sm gap-2 bg-[#5e5ce6] hover:bg-[#4d4ac9] border-none text-white">
+                      <PlusCircle size={16} /> Dodaj notatkę
+                    </button>
                 </div>
 
                 <div className="grid gap-4">
@@ -169,7 +181,34 @@ const ProfilePage: React.FC<{ t: any }> = (_props) => {
                 </div>
             </form>
         </div>
+
+        {/* My Favorites */}
+        <div className="mt-10 pt-8 border-t border-white/10">
+          <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-4">
+            <Heart size={22} className="text-[#bf5af2]" /> My Favorites
+          </h2>
+          {favorites.length === 0 ? (
+            <p className="text-white/50 text-sm">No favorite notes yet. Save notes from university pages with the heart icon.</p>
+          ) : (
+            <ul className="space-y-2">
+              {favorites.map((note: Note) => (
+                <li key={note.id}>
+                  <Link
+                    to={`/note/${note.id}`}
+                    className="flex items-center gap-3 p-3 rounded-xl glass-panel hover:border-[#5e5ce6]/40 transition-colors no-underline text-white"
+                  >
+                    <FileText size={18} className="opacity-60 shrink-0" />
+                    <span className="font-medium truncate">{note.title || 'Untitled'}</span>
+                    {note.subject && <span className="text-xs opacity-50 shrink-0">{note.subject.name}</span>}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
+
+      <AddNoteModal isOpen={addNoteOpen} onClose={() => setAddNoteOpen(false)} />
     </div>
   );
 };

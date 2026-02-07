@@ -3,8 +3,8 @@ Colloq Database Models
 SQLAlchemy ORM models for the student note-sharing platform.
 All relationships are explicitly defined with cascade rules for data integrity.
 """
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Float, Boolean, Text
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Float, Boolean, Text, UniqueConstraint
+from sqlalchemy.orm import relationship, backref
 from sqlalchemy.sql import func
 from .database import Base
 
@@ -22,6 +22,7 @@ class User(Base):
     reputation_points = Column(Integer, default=0)
     uploads_count = Column(Integer, default=0)
     is_active = Column(Boolean, default=True)
+    is_banned = Column(Boolean, default=False)
     is_admin = Column(Boolean, default=False)
     is_verified = Column(Boolean, default=False)
     university_id = Column(Integer, ForeignKey("universities.id"), nullable=True)
@@ -31,6 +32,10 @@ class User(Base):
     notes = relationship("Note", back_populates="author", cascade="all, delete-orphan", foreign_keys="Note.user_id")
     reviews = relationship("Review", back_populates="user", cascade="all, delete-orphan")
     comments = relationship("Comment", back_populates="user", cascade="all, delete-orphan")
+    favorites = relationship("UserFavorite", back_populates="user", cascade="all, delete-orphan")
+    notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan", order_by="Notification.created_at")
+    reports_submitted = relationship("Report", back_populates="reporter", foreign_keys="Report.reporter_id", cascade="all, delete-orphan")
+    feedback_entries = relationship("Feedback", back_populates="user", cascade="all, delete-orphan")
 
 
 class University(Base):
@@ -124,6 +129,8 @@ class Note(Base):
     subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=True)
     is_approved = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    view_count = Column(Integer, default=0)
+    download_count = Column(Integer, default=0)
 
     # Relationships
     author = relationship("User", back_populates="notes", foreign_keys=[user_id])
@@ -133,6 +140,10 @@ class Note(Base):
     comments = relationship("Comment", back_populates="note", cascade="all, delete-orphan")
     history = relationship("NoteHistory", back_populates="note", cascade="all, delete-orphan", order_by="NoteHistory.id")
     images = relationship("NoteImage", back_populates="note", cascade="all, delete-orphan", order_by="NoteImage.position")
+    favorited_by = relationship("UserFavorite", back_populates="note", cascade="all, delete-orphan")
+    reports = relationship("Report", back_populates="note", cascade="all, delete-orphan")
+    note_tags = relationship("NoteTag", back_populates="note", cascade="all, delete-orphan")
+    tags = relationship("Tag", secondary="note_tags", backref=backref("notes", overlaps="note_tags"), overlaps="note_tags")
 
 
 class NoteImage(Base):
@@ -216,3 +227,86 @@ class ImageRequest(Base):
 
     # Relationships
     university = relationship("University", backref="image_requests")
+
+
+class UserFavorite(Base):
+    """User's favorite notes (many-to-many)."""
+    __tablename__ = "user_favorites"
+    __table_args__ = (UniqueConstraint("user_id", "note_id", name="uq_user_favorite"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    note_id = Column(Integer, ForeignKey("notes.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="favorites")
+    note = relationship("Note", back_populates="favorited_by")
+
+
+class Notification(Base):
+    """In-app notifications (e.g. comment on your note, note approved)."""
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    type = Column(String(50), nullable=False)  # comment, note_approved, etc.
+    message = Column(Text, nullable=False)
+    related_id = Column(Integer, nullable=True)  # note_id or comment_id
+    read_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="notifications")
+
+
+class Report(Base):
+    """Reports: note or user (spam, abuse)."""
+    __tablename__ = "reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    reporter_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    note_id = Column(Integer, ForeignKey("notes.id", ondelete="CASCADE"), nullable=True, index=True)
+    reported_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    reason = Column(String(100), nullable=False)
+    status = Column(String(20), default="pending")  # pending, resolved, dismissed
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    reporter = relationship("User", back_populates="reports_submitted", foreign_keys=[reporter_id])
+    note = relationship("Note", back_populates="reports")
+    reported_user = relationship("User", foreign_keys=[reported_user_id])
+
+
+class Tag(Base):
+    """Tags for notes (e.g. egzamin, wykłady)."""
+    __tablename__ = "tags"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(80), unique=True, index=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    note_tags = relationship("NoteTag", back_populates="tag", cascade="all, delete-orphan", overlaps="notes,tags")
+
+
+class NoteTag(Base):
+    """Many-to-many: notes <-> tags."""
+    __tablename__ = "note_tags"
+
+    id = Column(Integer, primary_key=True, index=True)
+    note_id = Column(Integer, ForeignKey("notes.id", ondelete="CASCADE"), nullable=False, index=True)
+    tag_id = Column(Integer, ForeignKey("tags.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    note = relationship("Note", back_populates="note_tags", overlaps="notes,tags")
+    tag = relationship("Tag", back_populates="note_tags", overlaps="notes,tags")
+
+
+class Feedback(Base):
+    """User feedback (1-5 rating + optional comment)."""
+    __tablename__ = "feedback"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    rating = Column(Integer, nullable=False)  # 1-5
+    comment = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="feedback_entries")

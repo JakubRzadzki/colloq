@@ -1,20 +1,34 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, Plus } from 'lucide-react';
-import { getFaculties, getFields, getSubjects, createNote, createFieldOfStudy, createSubject } from '../utils/api';
+import { getUniversities, getFaculties, getFields, getSubjects, createNote, createFieldOfStudy, createSubject } from '../utils/api';
 import { Captcha } from './Captcha';
 
 interface Props {
-  universityId: number;
+  /** When provided (e.g. from University page), skip university step. When null/undefined, user picks university first (add note by subject). */
+  universityId?: number | null;
   isOpen: boolean;
   onClose: () => void;
 }
 
-export function AddNoteModal({ universityId, isOpen, onClose }: Props) {
+export function AddNoteModal({ universityId: propUniversityId, isOpen, onClose }: Props) {
   const queryClient = useQueryClient();
+  const [selectedUniversityId, setSelectedUniversityId] = useState<number | null>(null);
   const [facultyId, setFacultyId] = useState<number | null>(null);
   const [fieldId, setFieldId] = useState<number | null>(null);
   const [subjectId, setSubjectId] = useState<number | null>(null);
+
+  const universityId = propUniversityId ?? selectedUniversityId;
+  const showUniversityStep = propUniversityId == null;
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSelectedUniversityId(null);
+      setFacultyId(null);
+      setFieldId(null);
+      setSubjectId(null);
+    }
+  }, [isOpen]);
 
   // New Item States
   const [newFieldName, setNewFieldName] = useState('');
@@ -22,7 +36,8 @@ export function AddNoteModal({ universityId, isOpen, onClose }: Props) {
   const [captchaValid, setCaptchaValid] = useState(false);
   const [honeypot, setHoneypot] = useState('');
 
-  const { data: faculties } = useQuery({ queryKey: ['faculties', universityId], queryFn: () => getFaculties(universityId), enabled: isOpen });
+  const { data: universities } = useQuery({ queryKey: ['unis'], queryFn: getUniversities, enabled: isOpen && showUniversityStep });
+  const { data: faculties } = useQuery({ queryKey: ['faculties', universityId], queryFn: () => getFaculties(universityId!), enabled: isOpen && !!universityId });
   const { data: fields } = useQuery({ queryKey: ['fields', facultyId], queryFn: () => getFields(facultyId!), enabled: !!facultyId });
   const { data: subjects } = useQuery({ queryKey: ['subjects', fieldId], queryFn: () => getSubjects(fieldId!), enabled: !!fieldId });
 
@@ -31,10 +46,11 @@ export function AddNoteModal({ universityId, isOpen, onClose }: Props) {
     onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['notes'] });
         queryClient.invalidateQueries({ queryKey: ['home'] });
+        queryClient.invalidateQueries({ queryKey: ['currentUser'] });
         onClose();
-        alert("Note uploaded successfully!");
+        alert("Notatka dodana pomyślnie!");
     },
-    onError: () => alert("Failed to upload note.")
+    onError: () => alert("Nie udało się dodać notatki.")
   });
 
   const fieldMutation = useMutation({
@@ -55,8 +71,8 @@ export function AddNoteModal({ universityId, isOpen, onClose }: Props) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!subjectId) return alert("Please select a subject.");
-    if (!captchaValid || honeypot) return alert("Please complete the anti-spam challenge.");
+    if (!universityId || !subjectId) return alert("Wybierz przedmiot (i uczelnię, jeśli dodajesz notatkę spoza strony uczelni).");
+    if (!captchaValid || honeypot) return alert("Uzupełnij zabezpieczenie antyspamowe.");
     const form = e.target as HTMLFormElement;
     const fd = new FormData(form);
     fd.append('university_id', universityId.toString());
@@ -75,21 +91,32 @@ export function AddNoteModal({ universityId, isOpen, onClose }: Props) {
         </div>
 
         <div className="p-6 overflow-y-auto flex-1 space-y-6">
-          {/* HIERARCHY SELECTORS */}
+          {/* Step 0: University (only when not opened from a university page) */}
+          {showUniversityStep && (
+            <div className="form-control">
+              <label className="label"><span className="label-text font-semibold">1. Uczelnia</span></label>
+              <select className="select select-bordered w-full" value={selectedUniversityId ?? ''} onChange={e => { const v = e.target.value; setSelectedUniversityId(v ? Number(v) : null); setFacultyId(null); setFieldId(null); setSubjectId(null); }}>
+                <option value="">-- Wybierz uczelnię --</option>
+                {universities?.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+            </div>
+          )}
+
+          {/* HIERARCHY: Faculty → Field → Subject */}
           <div className="form-control">
-             <label className="label"><span className="label-text font-semibold">1. Select Faculty</span></label>
-             <select className="select select-bordered w-full" onChange={e => { setFacultyId(Number(e.target.value)); setFieldId(null); setSubjectId(null); }}>
-                <option value="">-- Choose Faculty --</option>
+             <label className="label"><span className="label-text font-semibold">{showUniversityStep ? '2' : '1'}. Wydział</span></label>
+             <select className="select select-bordered w-full" value={facultyId ?? ''} onChange={e => { setFacultyId(Number(e.target.value) || null); setFieldId(null); setSubjectId(null); }} disabled={!universityId}>
+                <option value="">-- Wybierz wydział --</option>
                 {faculties?.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
              </select>
           </div>
 
           {facultyId && (
             <div className="form-control">
-              <label className="label"><span className="label-text font-semibold">2. Select Field of Study</span></label>
+              <label className="label"><span className="label-text font-semibold">{showUniversityStep ? '3' : '2'}. Kierunek</span></label>
               <div className="flex gap-2">
-                <select className="select select-bordered w-full" onChange={e => { setFieldId(Number(e.target.value)); setSubjectId(null); }}>
-                    <option value="">-- Choose Field --</option>
+                <select className="select select-bordered w-full" value={fieldId ?? ''} onChange={e => { setFieldId(e.target.value ? Number(e.target.value) : null); setSubjectId(null); }}>
+                    <option value="">-- Wybierz kierunek --</option>
                     {fields?.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
                 </select>
                 <div className="join">
@@ -102,10 +129,10 @@ export function AddNoteModal({ universityId, isOpen, onClose }: Props) {
 
           {fieldId && (
             <div className="form-control">
-              <label className="label"><span className="label-text font-semibold">3. Select Subject</span></label>
+              <label className="label"><span className="label-text font-semibold">{showUniversityStep ? '4' : '3'}. Przedmiot</span></label>
               <div className="flex gap-2">
-                <select className="select select-bordered w-full" onChange={e => setSubjectId(Number(e.target.value))}>
-                    <option value="">-- Choose Subject --</option>
+                <select className="select select-bordered w-full" value={subjectId ?? ''} onChange={e => setSubjectId(e.target.value ? Number(e.target.value) : null)}>
+                    <option value="">-- Wybierz przedmiot --</option>
                     {subjects?.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
                 <div className="join">
@@ -140,8 +167,8 @@ export function AddNoteModal({ universityId, isOpen, onClose }: Props) {
         </div>
 
         <div className="p-4 border-t bg-base-100 rounded-b-2xl flex justify-end">
-          <button type="submit" form="note-form" className="btn btn-primary px-8" disabled={!subjectId || noteMutation.isPending || !captchaValid}>
-            {noteMutation.isPending ? <span className="loading loading-spinner"></span> : "Upload Note"}
+          <button type="submit" form="note-form" className="btn btn-primary px-8" disabled={!universityId || !subjectId || noteMutation.isPending || !captchaValid}>
+            {noteMutation.isPending ? <span className="loading loading-spinner"></span> : "Dodaj notatkę"}
           </button>
         </div>
       </div>

@@ -95,6 +95,7 @@ def run_migrations(engine):
         add_col("users", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
         add_col("users", "is_verified", "BOOLEAN NOT NULL DEFAULT FALSE"),
         add_col("users", "is_active", "BOOLEAN NOT NULL DEFAULT TRUE"),
+        add_col("users", "is_banned", "BOOLEAN NOT NULL DEFAULT FALSE"),
         add_col("users", "is_admin", "BOOLEAN NOT NULL DEFAULT FALSE"),
         add_col("users", "avatar_url", "VARCHAR(500)"),
         add_col("users", "bio", "VARCHAR(500)"),
@@ -123,6 +124,8 @@ def run_migrations(engine):
         add_col("notes", "score", "FLOAT DEFAULT 0.0"),
         add_col("notes", "file_url", "VARCHAR(500)"),
         add_col("notes", "user_id", "INTEGER"),
+        add_col("notes", "view_count", "INTEGER NOT NULL DEFAULT 0"),
+        add_col("notes", "download_count", "INTEGER NOT NULL DEFAULT 0"),
 
         # Reviews
         add_col("reviews", "rating", "INTEGER NOT NULL DEFAULT 0"),

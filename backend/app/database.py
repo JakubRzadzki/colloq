@@ -6,10 +6,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# FIX #7: Updated default credentials to match docker-compose.yml
+# Domyślnie localhost (działa przy uruchomieniu poza Dockerem). W Dockerze ustaw DATABASE_URL.
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://colloq:colloq@db:5432/colloq"
+    "postgresql://colloq:colloq123@localhost:5432/colloq",
 )
 
 engine = create_engine(DATABASE_URL)
