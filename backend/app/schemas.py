@@ -23,6 +23,9 @@ class UserOut(BaseModel):
     class Config:
         from_attributes = True
 
+# Legacy aliases for backward compatibility
+UserResponse = UserOut
+
 class RegisterRequest(BaseModel):
     user: UserCreate
 

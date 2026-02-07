@@ -11,9 +11,8 @@ from datetime import datetime
 from .database import get_db
 from .models import User, University, Faculty, Note, Review
 from .schemas import (
-    UserCreate, UserResponse, UniversityCreate, UniversityResponse,
-    FacultyCreate, FacultyResponse, NoteCreate, NoteResponse, ReviewCreate,
-    StatsResponse, LeaderboardResponse, ActivityFeedResponse
+    UserCreate, UserResponse, UniversityOut, FacultyOut,
+    NoteOut, ReviewCreate, ImageRequestOut
 )
 
 app = FastAPI(title="Colloq API", version="1.0.0")
@@ -73,7 +72,7 @@ async def get_user(user_id: int, db: Session = Depends(get_db)):
     return user
 
 # University endpoints
-@app.post("/universities", response_model=UniversityResponse)
+@app.post("/universities", response_model=UniversityOut)
 async def create_university(
     name: str = Form(...),
     city: str = Form(...),
@@ -114,12 +113,12 @@ async def create_university(
     
     return university
 
-@app.get("/universities", response_model=List[UniversityResponse])
+@app.get("/universities", response_model=List[UniversityOut])
 async def get_universities(db: Session = Depends(get_db)):
     return db.query(University).all()
 
 # Faculty endpoints
-@app.post("/faculties", response_model=FacultyResponse)
+@app.post("/faculties", response_model=FacultyOut)
 async def create_faculty(
     name: str = Form(...),
     description: Optional[str] = Form(None),
@@ -162,12 +161,12 @@ async def create_faculty(
     
     return faculty
 
-@app.get("/faculties", response_model=List[FacultyResponse])
+@app.get("/faculties", response_model=List[FacultyOut])
 async def get_faculties(db: Session = Depends(get_db)):
     return db.query(Faculty).all()
 
 # Note endpoints
-@app.post("/notes", response_model=NoteResponse)
+@app.post("/notes", response_model=NoteOut)
 async def create_note(
     title: str = Form(...),
     description: Optional[str] = Form(None),
@@ -214,7 +213,7 @@ async def create_note(
     
     return note
 
-@app.get("/notes", response_model=List[NoteResponse])
+@app.get("/notes", response_model=List[NoteOut])
 async def get_notes(db: Session = Depends(get_db)):
     return db.query(Note).all()
 
@@ -265,31 +264,31 @@ async def create_review(
     return new_review
 
 # Statistics endpoints
-@app.get("/stats", response_model=StatsResponse)
+@app.get("/stats")
 async def get_stats(db: Session = Depends(get_db)):
     users_count = db.query(User).count()
     notes_count = db.query(Note).count()
     universities_count = db.query(University).count()
     
-    return StatsResponse(
-        users=users_count,
-        notes=notes_count,
-        universities=universities_count
-    )
+    return {
+        "users": users_count,
+        "notes": notes_count,
+        "universities": universities_count
+    }
 
-@app.get("/leaderboard", response_model=List[LeaderboardResponse])
+@app.get("/leaderboard")
 async def get_leaderboard(db: Session = Depends(get_db)):
     users = db.query(User).order_by(desc(User.reputation_points)).limit(5).all()
     
     return [
-        LeaderboardResponse(
-            nickname=user.nickname,
-            reputation_points=user.reputation_points,
-            uploads_count=user.uploads_count
-        ) for user in users
+        {
+            "nickname": user.nickname,
+            "reputation_points": user.reputation_points,
+            "uploads_count": user.uploads_count
+        } for user in users
     ]
 
-@app.get("/activity-feed", response_model=List[ActivityFeedResponse])
+@app.get("/activity-feed")
 async def get_activity_feed(db: Session = Depends(get_db)):
     # Get recent notes and reviews
     recent_notes = db.query(Note).order_by(desc(Note.created_at)).limit(5).all()
