@@ -29,12 +29,14 @@ import {
 } from 'lucide-react';
 import { getHome, resolveUrl } from '../utils/api';
 import { AddUniversityModal } from '../components/AddUniversityModal';
+import { t } from '../utils/i18n';
 
 interface HomePageProps {
   t: (key: string) => string;
 }
 
-export default function HomePage({ t }: HomePageProps) {
+export default function HomePage() {
+  const t = (key: string) => key; // Placeholder translation function
   const [search, setSearch] = useState('');
   const [isAddUniOpen, setAddUniOpen] = useState(false);
   const token = localStorage.getItem('token');
@@ -191,7 +193,7 @@ export default function HomePage({ t }: HomePageProps) {
             </div>
             <div className="flex flex-col gap-2 max-h-52 overflow-y-auto">
               {activityFeed && activityFeed.length > 0 ? (
-                activityFeed.map((item: any, idx: number) => (
+                activityFeed.map((item: Record<string, unknown>, idx: number) => (
                   <div key={idx} className="activity-item !p-3 !rounded-xl">
                     <div className="activity-icon !w-8 !h-8">
                       {item.type === 'note' ? <FileText size={14} /> : <MessageSquare size={14} />}
@@ -222,7 +224,7 @@ export default function HomePage({ t }: HomePageProps) {
             </div>
             <div className="flex flex-col gap-2">
               {leaderboardData?.leaderboard && leaderboardData.leaderboard.length > 0 ? (
-                leaderboardData.leaderboard.slice(0, 5).map((user: any) => (
+                leaderboardData.leaderboard.slice(0, 5).map((user: Record<string, unknown>) => (
                   <div key={user.user_id} className="leaderboard-item !p-3 !rounded-xl">
                     <div className="flex items-center gap-3 min-w-0">
                       <div
@@ -284,7 +286,7 @@ export default function HomePage({ t }: HomePageProps) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {recentNotes?.slice(0, 6).map((note) => (
+          {Array.isArray(recentNotes) && recentNotes.slice(0, 6).map((note) => (
             <Link
               to={`/note/${note.id}`}
               key={note.id}
@@ -347,7 +349,7 @@ export default function HomePage({ t }: HomePageProps) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filtered?.map((uni) => (
+          {Array.isArray(filtered) && filtered.map((uni) => (
             <Link
               to={`/university/${uni.id}`}
               key={uni.id}
@@ -395,7 +397,7 @@ export default function HomePage({ t }: HomePageProps) {
             <Globe className="text-[#32ade6]" /> {t('browse_by_region')}
           </h2>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {regions.map((region) => (
+            {Array.isArray(regions) && regions.map((region) => (
               <Link
                 to={`/region/${region}`}
                 key={region}
@@ -409,7 +411,7 @@ export default function HomePage({ t }: HomePageProps) {
                   {region}
                 </h4>
                 <p className="text-xs opacity-40 mt-1">
-                  {universities?.filter((u) => u.region === region).length} {t('universities')}
+                  {Array.isArray(universities) && universities.filter((u) => u.region === region).length} {t('universities')}
                 </p>
               </Link>
             ))}

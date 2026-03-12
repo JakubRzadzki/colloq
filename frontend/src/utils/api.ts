@@ -79,17 +79,21 @@ api.interceptors.request.use((config) => {
 });
 
 /**
- * Resolve an image/asset URL.
- * If the URL is already absolute (http/https/data:), return as-is.
- * If it's a relative path (e.g. /uploads/...), prepend API_URL.
- * Returns a fallback placeholder when url is null/undefined.
+ * Resolve an image/asset URL. Normalizes backslashes to forward slashes for cross-platform previews.
+ * Absolute URLs (http/https/data:) are returned as-is. Relative paths are prefixed with API_URL.
+ * Paths like /notes/... or /universities/... are served from /uploads/... on the API.
  */
 export const resolveUrl = (url?: string | null, fallback?: string): string => {
   if (!url) return fallback || 'https://placehold.co/400x200/5e5ce6/ffffff?text=Colloq';
-  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
-    return url;
+  const normalized = url.replace(/\\/g, '/');
+  if (normalized.startsWith('http://') || normalized.startsWith('https://') || normalized.startsWith('data:')) {
+    return normalized;
   }
-  return `${API_URL}${url}`;
+  let path = normalized.startsWith('/') ? normalized : `/${normalized}`;
+  if (/^\/(notes|universities|avatars|faculties)\//.test(path) && !path.startsWith('/uploads/')) {
+    path = `/uploads${path}`;
+  }
+  return `${API_URL.replace(/\/$/, '')}${path}`;
 };
 
 // =============================================================================
@@ -107,11 +111,16 @@ export const getAuthHeader = () => {
 /**
  * Check if current user is admin by decoding JWT token.
  */
+interface JwtPayload {
+  sub?: string;
+  is_admin?: boolean;
+}
+
 export const isAdmin = (): boolean => {
   const token = localStorage.getItem('token');
   if (!token) return false;
   try {
-    const decoded: any = jwtDecode(token);
+    const decoded = jwtDecode(token) as JwtPayload;
     return decoded.is_admin === true;
   } catch {
     return false;
@@ -138,10 +147,17 @@ export const login = async (username: string, password: string) => {
   return (await api.post('/token', params)).data;
 };
 
+/** User creation payload for registration */
+export interface UserCreateData {
+  email: string;
+  password: string;
+  university_id?: number | null;
+}
+
 /**
  * Register a new user account.
  */
-export const register = async (userData: any) =>
+export const register = async (userData: UserCreateData) =>
   (await api.post('/register', { user: userData })).data;
 
 /**
@@ -153,11 +169,18 @@ export const getCurrentUser = async (): Promise<User> => {
   return { ...res.data, username: res.data.nickname };
 };
 
+/** Profile update payload */
+export interface ProfileUpdateData {
+  username?: string;
+  bio?: string;
+  avatar?: File;
+}
+
 /**
  * Update user profile including avatar upload.
  * Uses FormData - does NOT set Content-Type manually (browser handles boundary).
  */
-export const updateProfile = async (data: any) => {
+export const updateProfile = async (data: ProfileUpdateData) => {
   const fd = new FormData();
   if (data.username) fd.append('nickname', data.username);
   if (data.bio !== undefined) fd.append('bio', data.bio);
@@ -207,7 +230,15 @@ export const getFields = async (id: number): Promise<FieldOfStudy[]> =>
 export const getSubjects = async (id: number): Promise<Subject[]> =>
   (await api.get(`/fields/${id}/subjects`)).data;
 
-/** Get notes with optional filtering (university, subject, semester, tags, date range, search, sort). */
+/** Paginated notes response */
+export interface PaginatedNotesResponse {
+  items: Note[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+/** Get notes with optional filtering (university, subject, semester, tags, date range, search, sort, pagination). */
 export const getNotes = async (params: {
   university_id?: number;
   subject_id?: number;
@@ -217,7 +248,9 @@ export const getNotes = async (params: {
   date_to?: string;
   search?: string;
   sort?: 'date' | 'score' | 'views';
-} = {}): Promise<Note[]> => {
+  page?: number;
+  page_size?: number;
+} = {}): Promise<PaginatedNotesResponse> => {
   const q = new URLSearchParams();
   if (params.university_id != null) q.append('university_id', params.university_id.toString());
   if (params.subject_id != null) q.append('subject_id', params.subject_id.toString());
@@ -227,6 +260,8 @@ export const getNotes = async (params: {
   if (params.date_to) q.append('date_to', params.date_to);
   if (params.search) q.append('search', params.search);
   if (params.sort) q.append('sort', params.sort);
+  if (params.page != null) q.append('page', params.page.toString());
+  if (params.page_size != null) q.append('page_size', params.page_size.toString());
   return (await api.get(`/notes?${q.toString()}`)).data;
 };
 
@@ -242,9 +277,30 @@ export const getNote = async (id: number): Promise<Note> =>
 // GLOBAL SEARCH
 // =============================================================================
 
+export interface SearchField {
+  id: number;
+  name: string;
+  degree_level?: string;
+  faculty_id: number;
+  faculty_name?: string;
+  university_id?: number;
+  university_name?: string;
+}
+
+export interface SearchSubject {
+  id: number;
+  name: string;
+  semester?: number;
+  field_of_study_id: number;
+  field_name?: string;
+  faculty_name?: string;
+  university_id?: number;
+  university_name?: string;
+}
+
 export interface SearchResult {
-  fields: any[];
-  subjects: any[];
+  fields: SearchField[];
+  subjects: SearchSubject[];
 }
 
 /** Global search across fields and subjects. */
@@ -255,10 +311,20 @@ export const globalSearch = async (query: string): Promise<SearchResult> =>
 // CREATION & UPLOADS (FormData - no manual Content-Type!)
 // =============================================================================
 
+/** University creation payload */
+export interface UniversityCreateData {
+  name: string;
+  city: string;
+  region?: string;
+  country?: string;
+  description?: string;
+  image?: File;
+}
+
 /**
  * Create a new university with optional image.
  */
-export const createUniversity = async (data: any) => {
+export const createUniversity = async (data: UniversityCreateData) => {
   const fd = new FormData();
   fd.append('name', data.name);
   fd.append('city', data.city);
@@ -321,8 +387,16 @@ export const toggleFavorite = async (id: number): Promise<{ is_favorited: boolea
 export const getUniversityReviews = async (id: number): Promise<Review[]> =>
   (await api.get(`/universities/${id}/reviews`)).data;
 
+/** Review creation payload */
+export interface ReviewCreateData {
+  rating: number;
+  content?: string;
+  note_id?: number;
+  university_id?: number;
+}
+
 /** Add a review to a university or note. */
-export const addReview = async (data: any) =>
+export const addReview = async (data: ReviewCreateData) =>
   await api.post('/reviews', data);
 
 /** Get comments for a note. */
@@ -333,23 +407,34 @@ export const getNoteComments = async (id: number): Promise<Comment[]> =>
 export const addComment = async (id: number, content: string) =>
   await api.post(`/notes/${id}/comments`, { content });
 
+/** Note update payload */
+export interface NoteUpdateData {
+  title?: string;
+  content?: string;
+  image?: File;
+  images?: File[];
+  files?: File[];
+}
+
 /**
  * Update a note (owner only).
- * Supports adding new images via the 'images' field.
+ * Supports adding new images via the 'images' field and files via the 'files' field.
  */
-export const updateNote = async (id: number, data: any): Promise<Note> => {
+export const updateNote = async (id: number, data: NoteUpdateData): Promise<Note> => {
   const fd = new FormData();
   if (data.title !== undefined) fd.append('title', data.title);
   if (data.content !== undefined) fd.append('content', data.content);
   if (data.image instanceof File) {
     fd.append('image', data.image);
   }
-  // Support multiple new images
   if (data.images && Array.isArray(data.images)) {
     for (const img of data.images) {
-      if (img instanceof File) {
-        fd.append('images', img);
-      }
+      if (img instanceof File) fd.append('images', img);
+    }
+  }
+  if (data.files && Array.isArray(data.files)) {
+    for (const f of data.files) {
+      if (f instanceof File) fd.append('files', f);
     }
   }
   const res = await api.put(`/notes/${id}`, fd);
@@ -363,6 +448,22 @@ export const getNoteHistory = async (id: number): Promise<NoteHistoryEntry[]> =>
 /** Delete a note (owner only). */
 export const deleteNote = async (id: number) =>
   await api.delete(`/notes/${id}`);
+
+/** Download a specific file from a note. */
+export const downloadNoteFile = async (noteId: number, fileId: number): Promise<Blob> => {
+  const res = await api.get(`/notes/${noteId}/download/${fileId}`, {
+    responseType: 'blob',
+  });
+  return res.data;
+};
+
+/** Request password reset (sends email with token). */
+export const forgotPassword = async (email: string) =>
+  (await api.post('/forgot-password', { email })).data;
+
+/** Reset password with a valid token. */
+export const resetPassword = async (token: string, newPassword: string) =>
+  (await api.post('/reset-password', { token, new_password: newPassword })).data;
 
 // =============================================================================
 // NOTIFICATIONS
@@ -461,8 +562,19 @@ export const updateUniversityImage = async (id: number, file: File) => {
   return (await api.patch(`/admin/universities/${id}/image`, fd)).data;
 };
 
+/** Report item from admin API. */
+export interface ReportItem {
+  id: number;
+  reporter_id: number;
+  note_id: number | null;
+  reported_user_id: number | null;
+  reason: string;
+  status: string;
+  created_at: string | null;
+}
+
 /** List reports (admin only). */
-export const getReports = async (status?: string): Promise<any[]> => {
+export const getReports = async (status?: string): Promise<ReportItem[]> => {
   const q = status ? `?status_filter=${status}` : '';
   return (await api.get(`/admin/reports${q}`)).data;
 };
@@ -471,16 +583,39 @@ export const getReports = async (status?: string): Promise<any[]> => {
 export const updateReportStatus = async (reportId: number, status: 'resolved' | 'dismissed') =>
   (await api.patch(`/admin/reports/${reportId}?status=${status}`)).data;
 
+/** Feedback item from admin API. */
+export interface FeedbackItem {
+  id: number;
+  user_id: number;
+  rating: number;
+  comment: string | null;
+  created_at: string | null;
+}
+
 /** List feedback (admin only). */
-export const getFeedback = async (): Promise<any[]> =>
+export const getFeedback = async (): Promise<FeedbackItem[]> =>
   (await api.get('/admin/feedback')).data;
 
+/** University update payload (admin) */
+export interface UniversityUpdateData {
+  description?: string;
+  banner?: File;
+}
+
 /** Update university details (admin only). */
-export const updateUniversity = async (id: number, data: any) => {
+export const updateUniversity = async (id: number, data: UniversityUpdateData) => {
   const fd = new FormData();
   if (data.description) fd.append('description', data.description);
   if (data.banner) fd.append('banner', data.banner);
   return await api.put(`/universities/${id}`, fd);
+};
+
+/** Admin-specific update university details (admin only). */
+export const adminUpdateUniversity = async (id: number, data: UniversityUpdateData) => {
+  const fd = new FormData();
+  if (data.description) fd.append('description', data.description);
+  if (data.banner) fd.append('banner', data.banner);
+  return await api.put(`/admin/universities/${id}`, fd);
 };
 
 // =============================================================================

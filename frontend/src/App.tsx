@@ -64,7 +64,7 @@ function App() {
   };
 
   // Build a translations-like object for legacy component compatibility
-  const tObj: any = new Proxy(
+  const tObj: Record<string, string> = new Proxy(
     {},
     {
       get: (_target, prop: string) => translate(prop, lang),

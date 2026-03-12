@@ -4,9 +4,11 @@
  */
 import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, Save } from 'lucide-react';
+import { X, Save, FileText } from 'lucide-react';
 import { updateNote, type Note } from '../utils/api';
 import { t } from '../utils/i18n';
+
+const MAX_FILES = 10;
 
 interface Props {
   note: Note;
@@ -20,6 +22,7 @@ export function EditNoteModal({ note, isOpen, onClose, onSuccess }: Props) {
   const [title, setTitle] = useState(note.title || '');
   const [content, setContent] = useState(note.content || '');
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [newFiles, setNewFiles] = useState<File[]>([]);
 
   useEffect(() => {
     if (note) {
@@ -28,16 +31,31 @@ export function EditNoteModal({ note, isOpen, onClose, onSuccess }: Props) {
     }
   }, [note]);
 
+  useEffect(() => {
+    if (!isOpen) setNewFiles([]);
+  }, [isOpen]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []).slice(0, MAX_FILES);
+    setNewFiles(files);
+  };
+
   const mutation = useMutation({
-    mutationFn: () => updateNote(note.id, { title, content, image: imageFile || undefined }),
+    mutationFn: () => updateNote(note.id, {
+      title,
+      content,
+      image: imageFile || undefined,
+      files: newFiles.length ? newFiles : undefined,
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['note', note.id] });
       queryClient.invalidateQueries({ queryKey: ['notes'] });
       onClose();
       onSuccess?.();
     },
-    onError: (err: any) => {
-      alert(err.response?.data?.detail || t('something_went_wrong'));
+    onError: (err: unknown) => {
+      const e = err as { response?: { data?: { detail?: string } } };
+      alert(e.response?.data?.detail || t('something_went_wrong'));
     },
   });
 
@@ -89,8 +107,27 @@ export function EditNoteModal({ note, isOpen, onClose, onSuccess }: Props) {
               type="file"
               accept="image/*"
               onChange={(e) => setImageFile(e.target.files?.[0] || null)}
+              className="file-input file-input-bordered w-full glass-input mb-2"
+            />
+          </div>
+          <div>
+            <label className="label text-white/70 uppercase text-xs font-bold">Attachments (up to {MAX_FILES})</label>
+            <input
+              type="file"
+              multiple
+              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.webp"
+              onChange={handleFileChange}
               className="file-input file-input-bordered w-full glass-input"
             />
+            {newFiles.length > 0 && (
+              <ul className="mt-2 space-y-1">
+                {newFiles.map((f, i) => (
+                  <li key={i} className="flex items-center gap-2 text-sm opacity-80">
+                    <FileText size={12} /> {f.name}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
           <div className="flex justify-end gap-3 pt-4">
             <button type="button" onClick={onClose} className="btn btn-ghost">

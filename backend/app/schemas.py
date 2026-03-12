@@ -1,15 +1,16 @@
 """
-Legacy Pydantic schemas for main.py (Colloq API v2).
-Re-exported from app.schemas so "from app.schemas import UserCreate" etc. works.
+Colloq API — Consolidated Pydantic schemas.
+Define child models before parents to avoid forward-reference issues.
 """
-from pydantic import BaseModel, EmailStr
 from datetime import datetime
-from typing import Optional, List
+from typing import List, Optional
+
+from pydantic import BaseModel, ConfigDict, EmailStr
 
 
-# =============================================================================
-# USER SCHEMAS
-# =============================================================================
+# -----------------------------------------------------------------------------
+# User (defined first; referenced by ReviewOut, CommentOut, NoteOut)
+# -----------------------------------------------------------------------------
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -18,7 +19,8 @@ class UserCreate(BaseModel):
 
 
 class UserOut(BaseModel):
-    """Output schema for user data. Matches User model exactly."""
+    """Output schema for user data. Matches User model."""
+    model_config = ConfigDict(from_attributes=True)
     id: int
     email: str
     nickname: Optional[str] = None
@@ -32,9 +34,6 @@ class UserOut(BaseModel):
     university_id: Optional[int] = None
     created_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
-
 
 UserResponse = UserOut
 
@@ -43,11 +42,12 @@ class RegisterRequest(BaseModel):
     user: UserCreate
 
 
-# =============================================================================
-# HIERARCHY SCHEMAS
-# =============================================================================
+# -----------------------------------------------------------------------------
+# Hierarchy (no forward refs)
+# -----------------------------------------------------------------------------
 
 class UniversityOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: int
     name: str
     name_en: Optional[str] = None
@@ -61,11 +61,9 @@ class UniversityOut(BaseModel):
     is_approved: bool = True
     created_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
-
 
 class FacultyOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: int
     name: str
     description: Optional[str] = None
@@ -73,30 +71,23 @@ class FacultyOut(BaseModel):
     university_id: int
     is_approved: bool = True
 
-    class Config:
-        from_attributes = True
-
 
 class FieldOfStudyOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: int
     name: str
     degree_level: Optional[str] = None
     faculty_id: int
     is_approved: bool = True
 
-    class Config:
-        from_attributes = True
-
 
 class SubjectOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: int
     name: str
     semester: Optional[int] = None
     field_of_study_id: int
     is_approved: bool = True
-
-    class Config:
-        from_attributes = True
 
 
 class SubjectCreate(BaseModel):
@@ -111,9 +102,9 @@ class FieldOfStudyCreate(BaseModel):
     faculty_id: int
 
 
-# =============================================================================
-# COMMUNITY SCHEMAS
-# =============================================================================
+# -----------------------------------------------------------------------------
+# Community (ReviewOut, CommentOut use UserOut — already defined)
+# -----------------------------------------------------------------------------
 
 class ReviewCreate(BaseModel):
     rating: int
@@ -124,14 +115,12 @@ class ReviewCreate(BaseModel):
 
 
 class ReviewOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: int
     rating: int
     content: Optional[str] = None
     created_at: Optional[datetime] = None
     user: Optional[UserOut] = None
-
-    class Config:
-        from_attributes = True
 
 
 class CommentCreate(BaseModel):
@@ -139,20 +128,29 @@ class CommentCreate(BaseModel):
 
 
 class CommentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: int
     content: str
     created_at: Optional[datetime] = None
     user: Optional[UserOut] = None
 
-    class Config:
-        from_attributes = True
 
+# -----------------------------------------------------------------------------
+# Note-related (NoteFileOut, NoteImageOut, TagOut before NoteOut)
+# -----------------------------------------------------------------------------
 
-# =============================================================================
-# NOTE SCHEMAS
-# =============================================================================
+class NoteFileOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    note_id: int
+    file_url: str
+    file_type: str
+    file_name: str
+    created_at: Optional[datetime] = None
+
 
 class NoteImageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: int
     note_id: int
     image_url: str
@@ -160,23 +158,23 @@ class NoteImageOut(BaseModel):
     position: int = 0
     created_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
-
 
 class TagOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: int
     name: str
-
-    class Config:
-        from_attributes = True
 
 
 class TagCreate(BaseModel):
     name: str
 
 
+class NoteTagsUpdate(BaseModel):
+    tag_ids: List[int] = []
+
+
 class NoteOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: int
     title: Optional[str] = None
     content: Optional[str] = None
@@ -195,13 +193,12 @@ class NoteOut(BaseModel):
     author: Optional[UserOut] = None
     subject: Optional[SubjectOut] = None
     images: List[NoteImageOut] = []
+    files: List[NoteFileOut] = []
     tags: List[TagOut] = []
-
-    class Config:
-        from_attributes = True
 
 
 class NoteHistoryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: int
     note_id: int
     title: Optional[str] = None
@@ -209,15 +206,13 @@ class NoteHistoryOut(BaseModel):
     edited_at: Optional[datetime] = None
     edited_by: Optional[int] = None
 
-    class Config:
-        from_attributes = True
 
-
-# =============================================================================
-# ADMIN SCHEMAS
-# =============================================================================
+# -----------------------------------------------------------------------------
+# Admin (ImageRequestOut before PendingItemsResponse)
+# -----------------------------------------------------------------------------
 
 class ImageRequestOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: int
     university_id: int
     new_image_url: str
@@ -225,9 +220,6 @@ class ImageRequestOut(BaseModel):
     submitted_by_id: int
     created_at: Optional[datetime] = None
     university_name: Optional[str] = None
-
-    class Config:
-        from_attributes = True
 
 
 class PendingItemsResponse(BaseModel):
@@ -262,6 +254,7 @@ class Token(BaseModel):
 
 
 class NotificationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: int
     user_id: int
     type: str
@@ -269,9 +262,6 @@ class NotificationOut(BaseModel):
     related_id: Optional[int] = None
     read_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
 
 
 class ReportCreate(BaseModel):
@@ -281,6 +271,7 @@ class ReportCreate(BaseModel):
 
 
 class ReportOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: int
     reporter_id: int
     note_id: Optional[int] = None
@@ -289,9 +280,6 @@ class ReportOut(BaseModel):
     status: str
     created_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
-
 
 class FeedbackCreate(BaseModel):
     rating: int  # 1-5
@@ -299,11 +287,30 @@ class FeedbackCreate(BaseModel):
 
 
 class FeedbackOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: int
     user_id: int
     rating: int
     comment: Optional[str] = None
     created_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+
+class BanUserBody(BaseModel):
+    banned: bool = False
+
+
+class PaginatedNotesResponse(BaseModel):
+    """Paginated response for notes listing."""
+    items: List[NoteOut] = []
+    total: int = 0
+    page: int = 1
+    page_size: int = 20
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str

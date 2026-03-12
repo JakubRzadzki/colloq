@@ -37,7 +37,7 @@ function useImmediateSearch<T>(value: T, delay: number): { debouncedValue: T; is
 }
 
 interface TermPageProps {
-  t: any;
+  t: import('../utils/i18n').TFunction;
 }
 
 export function TermPage({ t }: TermPageProps) {
@@ -106,7 +106,7 @@ export function TermPage({ t }: TermPageProps) {
                   <BookOpen className="text-[#5e5ce6]"/> {t.subjects} ({results.subjects.length})
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {results.subjects.map((sub: any) => (
+                  {results.subjects.map((sub: import('../utils/types').SearchSubject) => (
                     <div key={sub.id} className="card-spatial p-6 hover:border-[#5e5ce6]/40 group">
                       <div className="flex justify-between items-start">
                         <div>
@@ -135,7 +135,7 @@ export function TermPage({ t }: TermPageProps) {
                   <Library className="text-[#32ade6]"/> {t.fields} ({results.fields.length})
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {results.fields.map((field: any) => (
+                  {results.fields.map((field: import('../utils/types').SearchField) => (
                     <div key={field.id} className="card-spatial p-6 hover:border-[#32ade6]/40 group">
                       <h3 className="font-bold text-lg text-white group-hover:text-[#32ade6] transition-colors">{field.name}</h3>
                       <p className="text-sm text-white/50 mb-3">{field.degree_level}</p>

@@ -28,6 +28,8 @@ import {
 import { AddNoteModal } from '../components/addNoteModal';
 import { AddFacultyModal } from '../components/AddFacultyModal';
 import { NoteModal } from '../components/NoteModal';
+import type { TFunction } from '../utils/i18n';
+import type { Note, Review } from '../utils/types';
 
 type TabType = 'materials' | 'reviews' | 'about';
 
@@ -318,7 +320,7 @@ const AcademicStructure: React.FC<{
   );
 };
 
-export function UniversityPage({ t }: { t: any }) {
+export function UniversityPage({ t }: { t: TFunction }) {
   const { id } = useParams<{ id: string }>();
   const uniId = parseInt(id || '0');
   const token = localStorage.getItem('token');
@@ -329,7 +331,7 @@ export function UniversityPage({ t }: { t: any }) {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [isNoteModalOpen, setNoteModalOpen] = useState(false);
   const [isAddFacultyOpen, setAddFacultyOpen] = useState(false);
-  const [selectedNote, setSelectedNote] = useState<any>(null);
+  const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Debounce search to avoid firing API requests on every keystroke
@@ -378,7 +380,7 @@ export function UniversityPage({ t }: { t: any }) {
     queryFn: () => getMyFavorites(),
     enabled: !!token,
   });
-  const favoriteIds = new Set((myFavorites as any[]).map((n: any) => n.id));
+  const favoriteIds = new Set((myFavorites as Note[]).map((n: Note) => n.id));
 
   const { data: reviews } = useQuery({
     queryKey: ['reviews', uniId],
@@ -588,7 +590,7 @@ export function UniversityPage({ t }: { t: any }) {
                   </select>
                 </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {notes.map((n: any) => (
+                {notes.map((n: Note) => (
                   <div
                     key={n.id}
                     className="glass-panel p-5 cursor-pointer group hover:border-[#5e5ce6]/30 transition-all hover:-translate-y-1"
@@ -605,9 +607,9 @@ export function UniversityPage({ t }: { t: any }) {
                       <p className="text-sm opacity-60 line-clamp-3 mb-3">{n.content}</p>
                     )}
 
-                    {n.tags?.length > 0 && (
+                    {n.tags && n.tags.length > 0 && (
                       <div className="flex flex-wrap gap-1 mb-2">
-                        {n.tags.map((tag: { id: number; name: string }) => (
+                        {n.tags.map((tag: any) => (
                           <span key={tag.id} className="px-2 py-0.5 rounded-md bg-white/10 text-xs text-white/60">{tag.name}</span>
                         ))}
                       </div>
@@ -667,7 +669,7 @@ export function UniversityPage({ t }: { t: any }) {
             )}
 
             <div className="space-y-4">
-              {reviews?.map((r: any) => (
+              {reviews?.map((r: Review) => (
                 <div key={r.id} className="glass-panel p-6">
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex gap-3 items-center">

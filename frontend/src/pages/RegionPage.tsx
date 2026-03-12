@@ -2,6 +2,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { getUniversities, resolveUrl } from '../utils/api';
 import { ArrowLeft, MapPin } from 'lucide-react';
+import type { TFunction } from '../utils/i18n';
 
 interface University {
   id: number;
@@ -11,7 +12,7 @@ interface University {
   city: string;
 }
 
-export function RegionPage({ t }: { t: any }) {
+export function RegionPage({ t }: { t: TFunction }) {
   const { regionName } = useParams<{ regionName: string }>();
 
   // Fetch only universities in this region (backend filter)

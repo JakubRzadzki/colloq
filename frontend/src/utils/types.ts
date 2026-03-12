@@ -13,6 +13,7 @@ export interface User {
   avatar_url?: string;
   is_admin: boolean;
   is_verified: boolean;
+  is_banned: boolean;
   reputation_points: number;
   uploads_count: number;
   university_id?: number;
@@ -74,6 +75,18 @@ export interface NoteImage {
   created_at?: string;
 }
 
+/**
+ * NoteFile - represents a file attachment (PDF, DOC, etc.) on a note.
+ */
+export interface NoteFile {
+  id: number;
+  note_id: number;
+  file_url: string;
+  file_type: string;
+  file_name: string;
+  created_at?: string;
+}
+
 export interface Note {
   id: number;
   title?: string;
@@ -90,7 +103,8 @@ export interface Note {
   is_approved?: boolean;
   author: User;
   subject?: Subject;
-  images: NoteImage[]; // Rich Notes: multiple images
+  images?: NoteImage[]; // Rich Notes: multiple images (may be empty or omitted)
+  files?: NoteFile[]; // File attachments (PDF, DOC, etc.)
 }
 
 export interface Review {
@@ -118,6 +132,7 @@ export interface ImageRequest {
   status: string;
   submitted_by_id: number;
   created_at: string;
+  university_name?: string;
 }
 
 export interface PendingItems {
@@ -129,9 +144,30 @@ export interface PendingItems {
   image_requests: ImageRequest[];
 }
 
+export interface SearchField {
+  id: number;
+  name: string;
+  degree_level?: string;
+  faculty_id: number;
+  faculty_name?: string;
+  university_id?: number;
+  university_name?: string;
+}
+
+export interface SearchSubject {
+  id: number;
+  name: string;
+  semester?: number;
+  field_of_study_id: number;
+  field_name?: string;
+  faculty_name?: string;
+  university_id?: number;
+  university_name?: string;
+}
+
 export interface SearchResult {
-  fields: any[];
-  subjects: any[];
+  fields: SearchField[];
+  subjects: SearchSubject[];
 }
 
 export interface ActivityItem {
@@ -157,4 +193,16 @@ export interface LeaderboardUser {
   reviews_count: number;
   comments_count: number;
   total_activity: number;
+}
+
+/**
+ * Attachment - represents a file attachment for notes.
+ * Used by FilePreview component to handle different file types and access restrictions.
+ */
+export interface Attachment {
+  id: number;
+  file_url: string;
+  file_type: string;
+  is_blurred: boolean;
+  filename?: string;
 }

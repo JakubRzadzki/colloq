@@ -3,27 +3,74 @@
 .idea/
 .vscode/
 *.log
+*.tmp
+*.swp
+*.bak
 
 # --- Python (Backend) ---
 **/__pycache__/
 **/*.py[cod]
 *.pyc
+*.pyo
+*.pyd
+*.egg-info/
 backend/venv/
+backend/.venv/
 backend/.env
+backend/.env.local
 backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.coverage
+backend/.tox/
+backend/.ruff_cache/
 
-# --- Node (Frontend) ---
-frontend/node_modules/
+# --- Uploaded files & local DB ---
+backend/uploads/
+backend/data/
+
+# --- Node / JavaScript ---
+node_modules/
 frontend/dist/
+frontend/build/
+dist/
 frontend/.env
 frontend/.env.local
+frontend/.env.development
+frontend/.env.production
 frontend/npm-debug.log*
 frontend/yarn-debug.log*
 frontend/yarn-error.log*
+frontend/pnpm-debug.log*
+frontend/.pnpm-debug.log*
 
 # --- Database ---
 postgres_data/
+*.db
+*.sqlite
+*.sqlite3
 
 # --- Docker ---
 .docker/
 .env
+.dockerignore
+
+# --- Testing ---
+.pytest_cache/
+.coverage
+htmlcov/
+
+# --- OS ---
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+*.crdownload
+
+# --- Editors ---
+*.sublime-*
+*.atom/
+.atom/
+
+# --- Temporary files ---
+*.tmp
+*.temp
+*~

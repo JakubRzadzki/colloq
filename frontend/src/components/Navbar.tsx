@@ -39,7 +39,7 @@ export function Navbar({ token, theme, toggleTheme, logout, t, lang, setLang }: 
     queryFn: () => getNotifications(false),
     enabled: !!token,
   });
-  const unreadCount = notifications.filter((n: any) => !n.read_at).length;
+  const unreadCount = notifications.filter((n: { read_at?: string | null }) => !n.read_at).length;
 
   // Fetch current user data when token is available
   useEffect(() => {
@@ -67,7 +67,7 @@ export function Navbar({ token, theme, toggleTheme, logout, t, lang, setLang }: 
   const checkIsAdmin = (): boolean => {
     if (!token) return false;
     try {
-      const decoded: any = jwtDecode(token);
+      const decoded = jwtDecode(token) as { is_admin?: boolean };
       return decoded.is_admin === true;
     } catch {
       return false;
@@ -192,7 +192,7 @@ export function Navbar({ token, theme, toggleTheme, logout, t, lang, setLang }: 
                     {notifications.length === 0 ? (
                       <p className={`px-4 py-6 text-sm ${isDark ? 'text-white/50' : 'text-slate-500'}`}>No notifications</p>
                     ) : (
-                      notifications.slice(0, 20).map((n: any) => (
+                      notifications.slice(0, 20).map((n: { id: number; type: string; message: string; read_at?: string | null; created_at?: string }) => (
                         <div
                           key={n.id}
                           className={`px-4 py-2.5 text-sm border-b ${isDark ? 'border-white/5' : 'border-black/5'} ${!n.read_at ? (isDark ? 'bg-white/5' : 'bg-black/5') : ''}`}
