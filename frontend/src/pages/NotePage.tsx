@@ -13,12 +13,31 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Star, Lock, Upload, FileText, Pencil, Clock, Share2, Flag } from 'lucide-react';
+import { ArrowLeft, Star, Lock, Upload, FileText, Pencil, Clock, Share2, Flag, Download } from 'lucide-react';
 import { getNote, getCurrentUser, getNoteHistory, resolveUrl, createReport, type NoteHistoryEntry } from '../utils/api';
 import { AddNoteModal } from '../components/addNoteModal';
 import { EditNoteModal } from '../components/EditNoteModal';
 import { FilePreview } from '../components/FilePreview';
+import { Attachment } from '../utils/types';
+import { useFileDownload } from '../hooks/useFileDownload';
 import { t } from '../utils/i18n';
+
+// Download button component for NotePage
+function DownloadButton({ fileUrl, filename }: { fileUrl: string; filename: string }) {
+  const { downloadFile, isDownloading } = useFileDownload();
+
+  return (
+    <button
+      onClick={() => downloadFile(fileUrl, filename)}
+      disabled={isDownloading}
+      className="text-sm text-[#5e5ce6] hover:underline flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+      title="Download file"
+    >
+      <Download size={14} />
+      {isDownloading ? 'Downloading...' : 'Download'}
+    </button>
+  );
+}
 
 export default function NotePage() {
   const queryClient = useQueryClient();
@@ -201,7 +220,7 @@ export default function NotePage() {
             )}
 
             {/* Note Images (multiple) */}
-            {note.images?.length > 0 && (
+            {note.images && note.images.length > 0 && (
               <div className="mb-8 space-y-4">
                 {note.images.map((img: { id: number; image_url: string; caption?: string }) => (
                   <div key={img.id} className="rounded-xl overflow-hidden">
@@ -227,11 +246,52 @@ export default function NotePage() {
               </div>
             )}
 
-            {/* File attachment: preview + download */}
-            {note.file_url && (
+            {/* File attachments: list with preview + download */}
+            {((note.files && note.files.length > 0) || note.file_url) && (
               <div className="mt-8">
                 <h3 className="font-bold text-lg mb-3">{t('attachment')}</h3>
-                <FilePreview fileUrl={note.file_url} title={note.title} className="mb-4" />
+                <div className="space-y-6">
+                  {/* New multi-file support */}
+                  {note.files?.map((file) => (
+                    <div key={file.id} className="rounded-xl border border-white/10 bg-white/5 overflow-hidden">
+                      <div className="flex items-center justify-between px-4 py-2 border-b border-white/10 bg-black/20">
+                        <span className="text-sm font-medium truncate">{file.file_name}</span>
+                        <DownloadButton fileUrl={file.file_url} filename={file.file_name} />
+                      </div>
+                      <FilePreview
+                        attachment={{
+                          id: file.id,
+                          file_url: file.file_url,
+                          file_type: file.file_type,
+                          is_blurred: !!isBlocked,
+                          filename: file.file_name,
+                        }}
+                        title={file.file_name}
+                        className="border-0"
+                      />
+                    </div>
+                  ))}
+                  {/* Legacy single file_url (backward compat) */}
+                  {!note.files?.length && note.file_url && (
+                    <div className="rounded-xl border border-white/10 bg-white/5 overflow-hidden">
+                      <div className="flex items-center justify-between px-4 py-2 border-b border-white/10 bg-black/20">
+                        <span className="text-sm font-medium truncate">{note.title || 'note'}</span>
+                        <DownloadButton fileUrl={note.file_url} filename={note.title || 'note'} />
+                      </div>
+                      <FilePreview
+                        attachment={{
+                          id: note.id,
+                          file_url: note.file_url,
+                          file_type: 'file',
+                          is_blurred: !!isBlocked,
+                          filename: note.title || 'note',
+                        }}
+                        title={note.title}
+                        className="border-0"
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -311,7 +371,7 @@ export default function NotePage() {
                       onClick={() => setShowUploadModal(true)}
                       className="bg-gradient-to-r from-[#5e5ce6] to-[#bf5af2] text-white px-8 py-4 rounded-xl font-bold text-lg shadow-lg shadow-[#5e5ce6]/30 hover:scale-105 transition-all flex items-center gap-3 mx-auto"
                     >
-                      <Upload size={22} /> {t('unlock_with_upload')}
+                      <Upload size={22} /> {t('upload')}
                     </button>
                   </>
                 )}

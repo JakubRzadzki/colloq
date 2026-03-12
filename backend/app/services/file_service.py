@@ -1,11 +1,12 @@
 """
-File upload service: S3 presigned URL pattern.
+File upload service: Local file system storage.
 Phase 1: Client requests upload URL.
-Phase 2: Backend validates file type and returns presigned PUT URL (or mock).
+Phase 2: Backend validates file type and returns local upload endpoint URL.
 Phase 3: Client uploads to URL, then confirms; backend stores key/url/size in DB.
 """
 from __future__ import annotations
 
+import os
 import re
 import uuid
 from typing import Optional, Tuple
@@ -40,23 +41,13 @@ def _validate_file_type(filename: str, file_type: str) -> Tuple[bool, Optional[s
 
 class FileService:
     """
-    Generates presigned PUT URLs for direct-to-S3 uploads.
-    When S3 is not configured, returns a mock URL for development.
+    Local file upload service.
+    Saves files directly to the local file system.
     """
 
     def __init__(self) -> None:
-        self._client = None
-        if settings.s3_configured:
-            try:
-                import boto3
-                self._client = boto3.client(
-                    "s3",
-                    region_name=settings.AWS_REGION,
-                    aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-                    aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-                )
-            except Exception:
-                self._client = None
+        # Ensure uploads directory exists
+        os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 
     def generate_presigned_post(
         self,
@@ -66,9 +57,8 @@ class FileService:
         expires_in: int = 3600,
     ) -> dict:
         """
-        Validate file type and generate a presigned PUT URL (and key for DB).
+        Validate file type and return local upload endpoint.
         Returns dict with: upload_url, method ("PUT"), key, expires_in_seconds.
-        For development without S3, returns a mock URL and a stable key.
         """
         ok, err = _validate_file_type(filename, file_type)
         if not ok:
@@ -77,26 +67,12 @@ class FileService:
         # Sanitize filename for key
         safe_name = re.sub(r"[^\w.\-]", "_", filename)[:200]
         unique = uuid.uuid4().hex[:12]
-        folder = prefix or settings.S3_UPLOAD_PREFIX
+        folder = prefix or "notes"
         key = f"{folder}/{unique}_{safe_name}"
 
-        if self._client and settings.S3_BUCKET:
-            url = self._client.generate_presigned_url(
-                "put_object",
-                Params={"Bucket": settings.S3_BUCKET, "Key": key, "ContentType": file_type},
-                ExpiresIn=expires_in,
-            )
-            return {
-                "upload_url": url,
-                "method": "PUT",
-                "key": key,
-                "expires_in_seconds": expires_in,
-            }
-
-        # Mock for local/dev: client can POST to our confirm endpoint with the key
-        mock_base = "https://mock-s3.local"
+        # Return local upload endpoint (must match route: /api/v1/uploads/storage/{key})
         return {
-            "upload_url": f"{mock_base}/upload?key={key}",
+            "upload_url": f"{settings.API_URL}/api/v1/uploads/storage/{key}",
             "method": "PUT",
             "key": key,
             "expires_in_seconds": expires_in,

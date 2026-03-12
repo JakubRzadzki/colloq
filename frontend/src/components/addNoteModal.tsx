@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, Plus } from 'lucide-react';
+import { X, Plus, FileText } from 'lucide-react';
 import { getUniversities, getFaculties, getFields, getSubjects, createNote, createFieldOfStudy, createSubject } from '../utils/api';
 import { Captcha } from './Captcha';
+
+const MAX_FILES = 10;
 
 interface Props {
   /** When provided (e.g. from University page), skip university step. When null/undefined, user picks university first (add note by subject). */
@@ -27,6 +29,7 @@ export function AddNoteModal({ universityId: propUniversityId, isOpen, onClose }
       setFacultyId(null);
       setFieldId(null);
       setSubjectId(null);
+      setSelectedFiles([]);
     }
   }, [isOpen]);
 
@@ -35,11 +38,12 @@ export function AddNoteModal({ universityId: propUniversityId, isOpen, onClose }
   const [newSubjectName, setNewSubjectName] = useState('');
   const [captchaValid, setCaptchaValid] = useState(false);
   const [honeypot, setHoneypot] = useState('');
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
-  const { data: universities } = useQuery({ queryKey: ['unis'], queryFn: getUniversities, enabled: isOpen && showUniversityStep });
-  const { data: faculties } = useQuery({ queryKey: ['faculties', universityId], queryFn: () => getFaculties(universityId!), enabled: isOpen && !!universityId });
-  const { data: fields } = useQuery({ queryKey: ['fields', facultyId], queryFn: () => getFields(facultyId!), enabled: !!facultyId });
-  const { data: subjects } = useQuery({ queryKey: ['subjects', fieldId], queryFn: () => getSubjects(fieldId!), enabled: !!fieldId });
+  const { data: universities = [] } = useQuery({ queryKey: ['unis'], queryFn: () => getUniversities(), enabled: isOpen && showUniversityStep });
+  const { data: faculties = [] } = useQuery({ queryKey: ['faculties', universityId], queryFn: () => getFaculties(universityId!), enabled: isOpen && !!universityId });
+  const { data: fields = [] } = useQuery({ queryKey: ['fields', facultyId], queryFn: () => getFields(facultyId!), enabled: !!facultyId });
+  const { data: subjects = [] } = useQuery({ queryKey: ['subjects', fieldId], queryFn: () => getSubjects(fieldId!), enabled: !!fieldId });
 
   const noteMutation = useMutation({
     mutationFn: createNote,
@@ -69,6 +73,20 @@ export function AddNoteModal({ universityId: propUniversityId, isOpen, onClose }
     }
   });
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length > MAX_FILES) {
+      alert(`Maksymalnie ${MAX_FILES} plików na notatkę.`);
+      setSelectedFiles(files.slice(0, MAX_FILES));
+    } else {
+      setSelectedFiles(files);
+    }
+  };
+
+  const removeFile = (index: number) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!universityId || !subjectId) return alert("Wybierz przedmiot (i uczelnię, jeśli dodajesz notatkę spoza strony uczelni).");
@@ -77,6 +95,7 @@ export function AddNoteModal({ universityId: propUniversityId, isOpen, onClose }
     const fd = new FormData(form);
     fd.append('university_id', universityId.toString());
     fd.append('subject_id', subjectId.toString());
+    selectedFiles.forEach((file) => fd.append('files', file));
     noteMutation.mutate(fd);
   };
 
@@ -157,8 +176,32 @@ export function AddNoteModal({ universityId: propUniversityId, isOpen, onClose }
               </div>
 
               <div className="form-control">
-                 <label className="label"><span className="label-text font-semibold">Attachment (Image/PDF)</span></label>
-                 <input type="file" name="image" className="file-input file-input-bordered w-full" />
+                 <label className="label"><span className="label-text font-semibold">Attachments (up to {MAX_FILES} files)</span></label>
+                 <input
+                   type="file"
+                   name="files"
+                   multiple
+                   accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.webp"
+                   onChange={handleFileChange}
+                   className="file-input file-input-bordered w-full"
+                 />
+                 {selectedFiles.length > 0 && (
+                   <div className="mt-2 space-y-1.5">
+                     <p className="text-sm opacity-70">Selected: {selectedFiles.length} file(s)</p>
+                     <ul className="space-y-1">
+                       {selectedFiles.map((f, i) => (
+                         <li key={i} className="flex items-center gap-2 text-sm bg-base-200 rounded-lg px-3 py-2">
+                           <FileText size={14} className="opacity-60" />
+                           <span className="truncate flex-1">{f.name}</span>
+                           <span className="text-xs opacity-50">{(f.size / 1024).toFixed(1)} KB</span>
+                           <button type="button" onClick={() => removeFile(i)} className="btn btn-ghost btn-xs text-error">
+                             <X size={14} />
+                           </button>
+                         </li>
+                       ))}
+                     </ul>
+                   </div>
+                 )}
               </div>
 
               <Captcha onValidChange={setCaptchaValid} honeypotValue={honeypot} setHoneypotValue={setHoneypot} />

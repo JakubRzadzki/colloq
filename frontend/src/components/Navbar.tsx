@@ -39,7 +39,7 @@ export function Navbar({ token, theme, toggleTheme, logout, t, lang, setLang }: 
     queryFn: () => getNotifications(false),
     enabled: !!token,
   });
-  const unreadCount = notifications.filter((n: any) => !n.read_at).length;
+  const unreadCount = notifications.filter((n: { read_at?: string | null }) => !n.read_at).length;
 
   // Fetch current user data when token is available
   useEffect(() => {
@@ -67,7 +67,7 @@ export function Navbar({ token, theme, toggleTheme, logout, t, lang, setLang }: 
   const checkIsAdmin = (): boolean => {
     if (!token) return false;
     try {
-      const decoded: any = jwtDecode(token);
+      const decoded = jwtDecode(token) as { is_admin?: boolean };
       return decoded.is_admin === true;
     } catch {
       return false;

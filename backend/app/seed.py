@@ -3,9 +3,11 @@ Colloq Database Seeder
 Auto-populates the database with Politechnika Krakowska, faculties, subjects, and admin user.
 Runs on application startup.
 """
-from .database import SessionLocal
-from .models import User, University, Faculty, FieldOfStudy, Subject
-from .auth import get_password_hash
+from sqlalchemy import func
+
+from app.core.database import SessionLocal
+from app.models import User, University, Faculty, FieldOfStudy, Subject
+from app.core.security import get_password_hash
 
 
 def run_seed() -> None:
@@ -26,7 +28,7 @@ def run_seed() -> None:
                 city="Kraków",
                 region="Małopolskie",
                 country="Poland",
-                description="Publiczna uczelnia techniczna w Krakowie, kształcąca inżynierów i magistrów na 8 wydziałach. Znana z wysokiego poziomu nauczania architektury oraz inżynierii lądowej.",
+                description="Public technical university in Krakow, educating engineers and masters in 8 faculties. Known for high level of architecture and civil engineering education.",
                 image_url="https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Politechnika_Krakowska_logo.svg/1200px-Politechnika_Krakowska_logo.svg.png",
                 banner_url="https://upload.wikimedia.org/wikipedia/commons/e/e3/Politechnika_Krakowska_Kampus_Glowny_Wydzial_Inzynierii_Ladowej.jpg",
                 is_approved=True,
@@ -203,7 +205,7 @@ def run_seed() -> None:
             print("[SEED] Created admin user: admin@pk.edu.pl / admin123_secure")
 
         # Fallback: Colloq Academy and admin@colloq.pl if DB is completely empty
-        if db.query(University).count() == 0:
+        if (db.query(func.count(University.id)).scalar() or 0) == 0:
             colloq = University(
                 name="Colloq Academy",
                 name_en="Colloq Academy",

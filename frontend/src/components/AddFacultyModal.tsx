@@ -29,20 +29,18 @@ export function AddFacultyModal({ isOpen, onClose, universityId, universityName 
       onClose();
       alert('Wydział dodany pomyślnie! ✅');
     },
-    onError: (err: any) => {
-      const status = err.response?.status;
-      const detail = err.response?.data?.detail;
+    onError: (err: unknown) => {
+      const e = err as { response?: { status?: number; data?: { detail?: string | Array<{ msg: string }> } }; message?: string };
+      const detail = e.response?.data?.detail;
       let msg = 'Błąd podczas dodawania wydziału.';
-      if (status === 401 || status === 403) {
+      if (e.response?.status === 401 || e.response?.status === 403) {
         msg = 'Zaloguj się, aby dodać wydział.';
       } else if (typeof detail === 'string') {
         msg = detail;
       } else if (Array.isArray(detail) && detail[0]?.msg) {
-        msg = detail.map((d: any) => d.msg).join('; ');
-      } else if (detail?.message) {
-        msg = detail.message;
-      } else if (err.message) {
-        msg = err.message;
+        msg = detail.map((d) => d.msg).join('; ');
+      } else if (e.message) {
+        msg = e.message;
       }
       setError(msg);
     },

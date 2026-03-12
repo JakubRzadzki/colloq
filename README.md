@@ -51,8 +51,9 @@
 | **Browse by Region** | Navigate universities by all 16 Polish voivodeships |
 | **Add Content** | Add universities, faculties, fields of study, and subjects |
 | **Upload Notes** | Share materials with files and multiple images (Rich Notes) |
-| **Interact** | Vote, favorite, write reviews, and comment |
+| **Interact** | Vote, favorite, write reviews, and comment (With vote duplicate prevention) |
 | **Search** | Find notes and subjects across the platform |
+| **Paging & Filters** | Semester filters and paginated note responses |
 | **Leaderboard** | See top contributors and activity feed |
 
 ### For Administrators
@@ -156,6 +157,16 @@ VITE_API_URL=http://localhost:8000
 
 </details>
 
+### Running Tests
+
+```bash
+cd backend
+pip install -r requirements.txt
+pytest tests/ -v
+```
+
+Tests use an in-memory SQLite database. Covers auth (register/login) and notes (create/vote).
+
 ---
 
 ## 📁 Project Structure
@@ -164,20 +175,26 @@ VITE_API_URL=http://localhost:8000
 colloq/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py          # FastAPI app & routes
-│   │   ├── models.py        # SQLAlchemy models
-│   │   ├── schemas.py       # Pydantic schemas
-│   │   ├── database.py      # DB connection
-│   │   ├── auth.py          # JWT authentication
-│   │   ├── migrate.py       # Database migrations
-│   │   └── seed.py          # Initial data seeder
+│   │   ├── main.py            # FastAPI app entry point
+│   │   ├── models.py          # SQLAlchemy ORM models
+│   │   ├── schemas.py         # Pydantic schemas
+│   │   ├── migrate.py         # Database migrations
+│   │   ├── seed.py            # Initial data seeder
+│   │   ├── core/
+│   │   │   ├── config.py      # Settings from env
+│   │   │   ├── database.py    # SQLAlchemy engine & session
+│   │   │   └── security.py    # JWT, password hashing
+│   │   ├── routers/           # Auth, notes, universities, users, admin
+│   │   └── services/          # File manager, storage
+│   ├── tests/                 # Pytest fixtures, test_auth, test_notes
 │   ├── requirements.txt
 │   └── Dockerfile
 ├── frontend/
 │   ├── src/
-│   │   ├── components/      # Modals, Navbar, etc.
-│   │   ├── pages/           # Home, University, Admin, Note, etc.
-│   │   └── utils/           # API client, types, i18n, constants
+│   │   ├── components/        # Modals, Navbar, FilePreview, etc.
+│   │   ├── pages/             # Home, University, Admin, Note, etc.
+│   │   ├── hooks/             # useFileDownload
+│   │   └── utils/             # API client, types, i18n
 │   └── Dockerfile
 ├── docker-compose.yml
 └── README.md
@@ -202,8 +219,10 @@ colloq/
 | `GET` | `/universities/{id}` | University details |
 | `GET` | `/universities/{id}/faculties` | Faculties |
 | `GET` | `/faculties/{id}/fields` | Fields of study |
-| `GET` | `/fields/{id}/subjects` | Subjects |
-| `GET` | `/notes?university_id=&search=` | Notes (optional filters) |
+| `GET` | `/fields/{id}/subjects?semester=` | Subjects (optional semester filter) |
+| `GET` | `/notes?university_id=&subject_id=&search=&sort=&page=&page_size=` | Paginated notes |
+| `GET` | `/notes/{id}` | Single note by ID |
+| `POST` | `/notes` | Create note (auth, multipart: title, content, files, images) |
 | `GET` | `/search/global?q=` | Global search |
 
 ### Admin (requires admin JWT)

@@ -6,7 +6,8 @@ All relationships are explicitly defined with cascade rules for data integrity.
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Float, Boolean, Text, UniqueConstraint
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy.sql import func
-from .database import Base
+
+from app.core.database import Base
 
 
 class User(Base):
@@ -36,6 +37,7 @@ class User(Base):
     notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan", order_by="Notification.created_at")
     reports_submitted = relationship("Report", back_populates="reporter", foreign_keys="Report.reporter_id", cascade="all, delete-orphan")
     feedback_entries = relationship("Feedback", back_populates="user", cascade="all, delete-orphan")
+    votes = relationship("Vote", back_populates="user", cascade="all, delete-orphan")
 
 
 class University(Base):
@@ -100,6 +102,7 @@ class Subject(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(200), index=True, nullable=False)
     semester = Column(Integer, nullable=True)
+    academic_year = Column(String(50), nullable=True)
     field_of_study_id = Column(Integer, ForeignKey("fields_of_study.id"), nullable=False)
     is_approved = Column(Boolean, default=True)
 
@@ -140,10 +143,31 @@ class Note(Base):
     comments = relationship("Comment", back_populates="note", cascade="all, delete-orphan")
     history = relationship("NoteHistory", back_populates="note", cascade="all, delete-orphan", order_by="NoteHistory.id")
     images = relationship("NoteImage", back_populates="note", cascade="all, delete-orphan", order_by="NoteImage.position")
+    files = relationship("NoteFile", back_populates="note", cascade="all, delete-orphan", order_by="NoteFile.id")
     favorited_by = relationship("UserFavorite", back_populates="note", cascade="all, delete-orphan")
     reports = relationship("Report", back_populates="note", cascade="all, delete-orphan")
     note_tags = relationship("NoteTag", back_populates="note", cascade="all, delete-orphan")
     tags = relationship("Tag", secondary="note_tags", backref=backref("notes", overlaps="note_tags"), overlaps="note_tags")
+    votes = relationship("Vote", back_populates="note", cascade="all, delete-orphan")
+
+
+class NoteFile(Base):
+    """
+    NoteFile model - supports multiple file attachments per note.
+    Each file has: file_url, file_type, file_name.
+    Files are stored in uploads/notes/{note_id}/{uuid}_{filename}
+    """
+    __tablename__ = "note_files"
+
+    id = Column(Integer, primary_key=True, index=True)
+    note_id = Column(Integer, ForeignKey("notes.id", ondelete="CASCADE"), nullable=False)
+    file_url = Column(String(500), nullable=False)  # Path with forward slashes: notes/{note_id}/{uuid}_{filename}
+    file_type = Column(String(50), nullable=False)  # e.g. pdf, doc, docx, jpg, png
+    file_name = Column(String(255), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    note = relationship("Note", back_populates="files")
 
 
 class NoteImage(Base):
@@ -310,3 +334,30 @@ class Feedback(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("User", back_populates="feedback_entries")
+
+
+class Vote(Base):
+    """Vote model - tracks user votes on notes (prevents duplicates)."""
+    __tablename__ = "votes"
+    __table_args__ = (UniqueConstraint("user_id", "note_id", name="uq_user_vote"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    note_id = Column(Integer, ForeignKey("notes.id", ondelete="CASCADE"), nullable=False, index=True)
+    value = Column(Integer, default=1)  # +1 upvote, -1 downvote
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="votes")
+    note = relationship("Note", back_populates="votes")
+
+
+class PasswordResetToken(Base):
+    """Token for password reset flow."""
+    __tablename__ = "password_reset_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    token = Column(String(255), unique=True, nullable=False, index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

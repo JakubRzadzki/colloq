@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { login } from '../utils/api';
+import type { TFunction } from '../utils/i18n';
 
-export function LoginPage({ setToken, t }: { setToken: (t: string) => void; t: any }) {
+export function LoginPage({ setToken, t }: { setToken: (token: string) => void; t: TFunction }) {
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -15,9 +16,7 @@ export function LoginPage({ setToken, t }: { setToken: (t: string) => void; t: a
     setLoading(true);
 
     try {
-      console.log('Próba logowania jako:', username);
       const data = await login(username, password);
-      console.log('Odpowiedź serwera:', data);
 
       if (data.access_token) {
         localStorage.setItem('token', data.access_token);
@@ -26,15 +25,14 @@ export function LoginPage({ setToken, t }: { setToken: (t: string) => void; t: a
       } else {
         setError('Błąd: Serwer nie zwrócił tokena.');
       }
-    } catch (err: any) {
-      console.error('Błąd logowania:', err);
-
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { detail?: string } } };
       // Sprawdzamy czy to błąd sieci (brak response)
-      if (!err.response) {
+      if (!axiosErr.response) {
         setError('Błąd połączenia z serwerem. Upewnij się, że backend działa (localhost:8000).');
       } else {
         // Błąd zwrócony przez backend
-        const detail = err.response?.data?.detail;
+        const detail = axiosErr.response?.data?.detail;
         if (detail === "Invalid credentials") {
           setError("Nieprawidłowy email lub hasło.");
         } else {

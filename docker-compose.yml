@@ -13,6 +13,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://colloq:colloq123@db:5432/colloq
       - SECRET_KEY=your-secret-key-change-in-production
+      - UPLOAD_DIR=/app/uploads
     depends_on:
       db:
         condition: service_healthy

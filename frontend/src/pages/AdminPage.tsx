@@ -1,16 +1,18 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check, X, Shield, FileText, Image as ImageIcon, Building2, AlertCircle, Users, GraduationCap, BookOpen, Flag, MessageSquare, Ban, Pencil, Trash2 } from 'lucide-react';
+import { Check, X, Shield, FileText, Image as ImageIcon, Building2, AlertCircle, Users, GraduationCap, BookOpen, Flag, MessageSquare, Ban, Pencil, Trash2, Edit3, Edit, Save, Upload } from 'lucide-react';
 import {
   getPendingItems, approveItem, rejectItem, approveImageRequest, rejectImageRequest,
   getAllUsers, getNotes, getReports, getFeedback, updateReportStatus, resolveUrl,
-  banUser as apiBanUser, deleteNote,
+  banUser as apiBanUser, deleteNote, updateUniversity, getUniversities, adminUpdateUniversity,
 } from '../utils/api';
 import { Link } from 'react-router-dom';
+import type { TFunction } from '../utils/i18n';
+import type { User, Note, University, Faculty, FieldOfStudy, Subject, ImageRequest } from '../utils/types';
 
-type AdminTab = 'users' | 'notes' | 'pending-notes' | 'pending-universities' | 'pending-faculties' | 'pending-fields' | 'pending-subjects' | 'images' | 'reports' | 'feedback';
+type AdminTab = 'users' | 'notes' | 'pending-notes' | 'pending-universities' | 'pending-faculties' | 'pending-fields' | 'pending-subjects' | 'images' | 'reports' | 'feedback' | 'universities';
 
-export function AdminPage({ t }: { t: any }) {
+export function AdminPage({ t }: { t: TFunction }) {
   const [activeTab, setActiveTab] = useState<AdminTab>('users');
   const queryClient = useQueryClient();
 
@@ -37,6 +39,11 @@ export function AdminPage({ t }: { t: any }) {
   const { data: feedbackList = [], isLoading: feedbackLoading } = useQuery({
     queryKey: ['admin', 'feedback'],
     queryFn: getFeedback,
+  });
+
+  const { data: allUniversities, isLoading: universitiesLoading } = useQuery({
+    queryKey: ['admin', 'universities'],
+    queryFn: () => getUniversities(),
   });
 
   const reportStatusMutation = useMutation({
@@ -108,13 +115,14 @@ export function AdminPage({ t }: { t: any }) {
 
       <div className="flex gap-2 mb-8 overflow-x-auto pb-2 flex-wrap">
         <TabBtn active={activeTab === 'users'} onClick={() => setActiveTab('users')} icon={<Users size={18} />} label={`Użytkownicy (${users?.length ?? 0})`} />
-        <TabBtn active={activeTab === 'notes'} onClick={() => setActiveTab('notes')} icon={<FileText size={18} />} label={`Wszystkie notatki (${notes?.length ?? 0})`} />
+        <TabBtn active={activeTab === 'notes'} onClick={() => setActiveTab('notes')} icon={<FileText size={18} />} label={`Wszystkie notatki (${notes?.items?.length ?? 0})`} />
         <TabBtn active={activeTab === 'pending-notes'} onClick={() => setActiveTab('pending-notes')} icon={<FileText size={18} />} label={`Oczekujące notatki (${pendingNotes.length})`} />
         <TabBtn active={activeTab === 'pending-universities'} onClick={() => setActiveTab('pending-universities')} icon={<Building2 size={18} />} label={`Oczekujące uczelnie (${pendingUnis.length})`} />
         <TabBtn active={activeTab === 'pending-faculties'} onClick={() => setActiveTab('pending-faculties')} icon={<GraduationCap size={18} />} label={`Oczekujące wydziały (${pendingFaculties.length})`} />
         <TabBtn active={activeTab === 'pending-fields'} onClick={() => setActiveTab('pending-fields')} icon={<BookOpen size={18} />} label={`Oczekujące kierunki (${pendingFields.length})`} />
         <TabBtn active={activeTab === 'pending-subjects'} onClick={() => setActiveTab('pending-subjects')} icon={<BookOpen size={18} />} label={`Oczekujące przedmioty (${pendingSubjects.length})`} />
         <TabBtn active={activeTab === 'images'} onClick={() => setActiveTab('images')} icon={<ImageIcon size={18} />} label={`Zmiany obrazów (${pendingImages.length})`} />
+        <TabBtn active={activeTab === 'universities'} onClick={() => setActiveTab('universities')} icon={<Building2 size={18} />} label={`Uczelnie`} />
         <TabBtn active={activeTab === 'reports'} onClick={() => setActiveTab('reports')} icon={<Flag size={18} />} label={`Zgłoszenia (${reports?.length ?? 0})`} />
         <TabBtn active={activeTab === 'feedback'} onClick={() => setActiveTab('feedback')} icon={<MessageSquare size={18} />} label={`Feedback (${feedbackList?.length ?? 0})`} />
       </div>
@@ -123,7 +131,7 @@ export function AdminPage({ t }: { t: any }) {
         {activeTab === 'users' && (
           users?.length === 0 ? <EmptyState msg="Brak użytkowników." /> :
           <div className="space-y-3">
-            {users?.map((u: any) => (
+            {users?.map((u: User) => (
               <div key={u.id} className="glass-panel p-5 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
                 <div className="flex gap-4 items-center">
                   <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#5e5ce6] to-[#32ade6] flex items-center justify-center text-white font-bold text-lg">
@@ -137,7 +145,7 @@ export function AdminPage({ t }: { t: any }) {
                 </div>
                 <div className="flex gap-2 items-center flex-wrap">
                   {u.is_admin && <span className="badge badge-primary bg-[#5e5ce6]/30 text-[#5e5ce6] border-none">Admin</span>}
-                  {u.is_banned && <span className="badge bg-red-500/30 text-red-400 border-none">Zbanowany</span>}
+                  {u.is_verified === false && <span className="badge bg-red-500/30 text-red-400 border-none">Niezweryfikowany</span>}
                   {!u.is_admin && (
                     <button
                       type="button"
@@ -156,9 +164,9 @@ export function AdminPage({ t }: { t: any }) {
         )}
 
         {activeTab === 'notes' && (
-          notes?.length === 0 ? <EmptyState msg="Brak notatek." /> :
+          notes?.items?.length === 0 ? <EmptyState msg="Brak notatek." /> :
           <div className="space-y-3">
-            {notes?.map((n: any) => (
+            {notes?.items?.map((n: Note) => (
               <div key={n.id} className="glass-panel p-5 hover:border-[#5e5ce6]/50 transition-colors flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
                 <Link to={`/note/${n.id}`} className="flex gap-4 items-start min-w-0 flex-1">
                   <div className="p-3 bg-white/5 rounded-xl text-[#32ade6] shrink-0">
@@ -189,7 +197,7 @@ export function AdminPage({ t }: { t: any }) {
 
         {activeTab === 'pending-notes' && (
           pendingNotes.length === 0 ? <EmptyState msg="Brak oczekujących notatek." /> :
-          pendingNotes.map((note: any) => (
+          pendingNotes.map((note: Note) => (
             <div key={note.id} className="glass-panel p-6 flex flex-col md:flex-row gap-6 items-start md:items-center justify-between group hover:border-[#5e5ce6]/50 transition-colors">
               <div className="flex gap-4 items-center">
                 <div className="p-3 bg-white/5 rounded-xl text-[#32ade6]">
@@ -197,7 +205,7 @@ export function AdminPage({ t }: { t: any }) {
                 </div>
                 <div>
                   <h3 className="text-xl font-bold text-white">{note.title}</h3>
-                  <p className="text-white/60 text-sm">{note.subject?.name} • {note.university?.name}</p>
+                  <p className="text-white/60 text-sm">{note.subject?.name} • Uniwersytet ID: {note.university_id}</p>
                   {note.file_url && (
                     <a href={resolveUrl(note.file_url)} target="_blank" rel="noreferrer" className="text-xs text-[#5e5ce6] hover:underline mt-1 block">Podgląd pliku</a>
                   )}
@@ -210,7 +218,7 @@ export function AdminPage({ t }: { t: any }) {
 
         {activeTab === 'pending-universities' && (
           pendingUnis.length === 0 ? <EmptyState msg="Brak oczekujących uczelni." /> :
-          pendingUnis.map((uni: any) => (
+          pendingUnis.map((uni: University) => (
             <div key={uni.id} className="glass-panel p-6 flex flex-col md:flex-row gap-6 items-start md:items-center justify-between">
               <div className="flex gap-4 items-center">
                 <div className="p-3 bg-white/5 rounded-xl text-[#bf5af2]">
@@ -226,9 +234,16 @@ export function AdminPage({ t }: { t: any }) {
           ))
         )}
 
+        {activeTab === 'universities' && (
+          allUniversities?.length === 0 ? <EmptyState msg="Brak uczelni." /> :
+          allUniversities?.map((uni: University) => (
+            <UniversityEditRow key={uni.id} university={uni} onDelete={() => deleteNoteMutation.mutate(uni.id)} />
+          ))
+        )}
+
         {activeTab === 'pending-faculties' && (
           pendingFaculties.length === 0 ? <EmptyState msg="Brak oczekujących wydziałów." /> :
-          pendingFaculties.map((fac: any) => (
+          pendingFaculties.map((fac: Faculty) => (
             <div key={fac.id} className="glass-panel p-6 flex flex-col md:flex-row gap-6 items-start md:items-center justify-between">
               <div className="flex gap-4 items-center">
                 <div className="p-3 bg-white/5 rounded-xl text-[#32ade6]">
@@ -246,7 +261,7 @@ export function AdminPage({ t }: { t: any }) {
 
         {activeTab === 'pending-fields' && (
           pendingFields.length === 0 ? <EmptyState msg="Brak oczekujących kierunków." /> :
-          pendingFields.map((f: any) => (
+          pendingFields.map((f: FieldOfStudy) => (
             <div key={f.id} className="glass-panel p-6 flex flex-col md:flex-row gap-6 items-start md:items-center justify-between">
               <div className="flex gap-4 items-center">
                 <div className="p-3 bg-white/5 rounded-xl text-[#bf5af2]">
@@ -264,7 +279,7 @@ export function AdminPage({ t }: { t: any }) {
 
         {activeTab === 'pending-subjects' && (
           pendingSubjects.length === 0 ? <EmptyState msg="Brak oczekujących przedmiotów." /> :
-          pendingSubjects.map((s: any) => (
+          pendingSubjects.map((s: Subject) => (
             <div key={s.id} className="glass-panel p-6 flex flex-col md:flex-row gap-6 items-start md:items-center justify-between">
               <div className="flex gap-4 items-center">
                 <div className="p-3 bg-white/5 rounded-xl text-[#5e5ce6]">
@@ -282,7 +297,7 @@ export function AdminPage({ t }: { t: any }) {
 
         {activeTab === 'images' && (
           pendingImages.length === 0 ? <EmptyState msg="Brak próśb o zmianę zdjęcia." /> :
-          pendingImages.map((req: any) => (
+          pendingImages.map((req: ImageRequest) => (
             <div key={req.id} className="glass-panel p-6">
               <div className="flex flex-col md:flex-row gap-8 items-center">
                 <div className="w-full md:w-1/3">
@@ -352,7 +367,12 @@ const TabBtn = ({ active, onClick, icon, label }: { active: boolean; onClick: ()
   </button>
 );
 
-const ActionButtons = ({ onApprove, onReject, labels = ['Zatwierdź', 'Odrzuć'] }: any) => (
+interface ActionButtonsProps {
+  onApprove: () => void;
+  onReject: () => void;
+  labels?: [string, string];
+}
+const ActionButtons = ({ onApprove, onReject, labels = ['Zatwierdź', 'Odrzuć'] }: ActionButtonsProps) => (
   <div className="flex gap-3">
     <button onClick={onReject} className="btn btn-ghost hover:bg-red-500/20 text-red-400 gap-2 rounded-xl">
       <X size={18} /> {labels[1]}
@@ -369,3 +389,95 @@ const EmptyState = ({ msg }: { msg: string }) => (
     <p className="text-xl">{msg}</p>
   </div>
 );
+
+interface UniversityEditRowProps {
+  university: University;
+  onDelete: () => void;
+}
+const UniversityEditRow = ({ university, onDelete }: UniversityEditRowProps) => {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(university.name);
+  const [city, setCity] = useState(university.city);
+  const [region, setRegion] = useState(university.region || '');
+  const [country, setCountry] = useState(university.country || 'Poland');
+  const [description, setDescription] = useState(university.description || '');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    const data: { description?: string; banner?: File } = {};
+    if (description !== university.description) data.description = description;
+    if (bannerFile) data.banner = bannerFile;
+    try {
+      await adminUpdateUniversity(university.id, data);
+      setEditing(false);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="glass-panel p-6">
+      <div className="flex flex-col md:flex-row gap-6 items-start md:items-center justify-between">
+        <div className="flex gap-4 items-center">
+          <div className="p-3 bg-white/5 rounded-xl text-[#bf5af2]">
+            <Building2 size={24} />
+          </div>
+          <div>
+            <h3 className="text-xl font-bold text-white">{university.name}</h3>
+            <p className="text-white/60 text-sm">{university.city}, {university.region}</p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => setEditing(!editing)} className="btn btn-ghost gap-2 rounded-xl">
+            <Edit size={18} /> {editing ? 'Anuluj' : 'Edytuj'}
+          </button>
+          <button onClick={() => window.confirm('Usunąć uczelnię?') && onDelete()} className="btn btn-ghost text-red-400 hover:bg-red-500/20 gap-2 rounded-xl">
+            <Trash2 size={18} /> Usuń
+          </button>
+        </div>
+      </div>
+      {editing && (
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-white/60 text-sm mb-1">Nazwa</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} className="input input-bordered w-full" />
+          </div>
+          <div>
+            <label className="block text-white/60 text-sm mb-1">Miasto</label>
+            <input value={city} onChange={(e) => setCity(e.target.value)} className="input input-bordered w-full" />
+          </div>
+          <div>
+            <label className="block text-white/60 text-sm mb-1">Region</label>
+            <input value={region} onChange={(e) => setRegion(e.target.value)} className="input input-bordered w-full" />
+          </div>
+          <div>
+            <label className="block text-white/60 text-sm mb-1">Kraj</label>
+            <input value={country} onChange={(e) => setCountry(e.target.value)} className="input input-bordered w-full" />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-white/60 text-sm mb-1">Opis</label>
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} className="textarea textarea-bordered w-full" rows={3} />
+          </div>
+          <div>
+            <label className="block text-white/60 text-sm mb-1">Zdjęcie</label>
+            <input type="file" onChange={(e) => setImageFile(e.target.files?.[0] || null)} className="file-input file-input-bordered w-full" />
+          </div>
+          <div>
+            <label className="block text-white/60 text-sm mb-1">Baner</label>
+            <input type="file" onChange={(e) => setBannerFile(e.target.files?.[0] || null)} className="file-input file-input-bordered w-full" />
+          </div>
+          <div className="md:col-span-2 flex justify-end gap-2">
+            <button onClick={handleSave} disabled={saving} className="btn bg-[#5e5ce6] text-white border-none gap-2 rounded-xl">
+              <Save size={18} /> Zapisz
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

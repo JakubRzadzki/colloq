@@ -1,19 +1,16 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { Mail, Lock, GraduationCap } from 'lucide-react';
-import { register, getUniversities } from '../utils/api';
+import { Mail, Lock } from 'lucide-react';
+import { register } from '../utils/api';
 import { Captcha } from '../components/Captcha';
+import type { TFunction } from '../utils/i18n';
 
-export function RegisterPage({ t }: { t: any }) {
+export function RegisterPage({ t }: { t: TFunction }) {
   const navigate = useNavigate();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [captchaValid, setCaptchaValid] = useState(false);
   const [honeypot, setHoneypot] = useState('');
-
-  // Pobieranie uczelni do selecta
-  const { data: unis, isLoading: unisLoading, isError } = useQuery({ queryKey: ['unis'], queryFn: getUniversities });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,16 +20,15 @@ export function RegisterPage({ t }: { t: any }) {
     setLoading(true);
 
     try {
-      const rawUni = form.university?.value;
       await register({
         email: form.email.value,
         password: form.password.value,
-        ...(rawUni && rawUni !== '' ? { university_id: Number(rawUni) } : {}),
       });
       alert('Rejestracja udana! Możesz się teraz zalogować.');
       navigate('/login');
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Rejestracja nieudana. Sprawdź dane.');
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: string } } };
+      setError(e.response?.data?.detail || 'Rejestracja nieudana. Sprawdź dane.');
     } finally {
       setLoading(false);
     }
@@ -46,7 +42,6 @@ export function RegisterPage({ t }: { t: any }) {
         </h2>
 
         {error && <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl text-sm mb-4 text-center">{error}</div>}
-        {isError && <div className="alert alert-warning text-sm mb-4">Nie udało się załadować listy uczelni.</div>}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="form-control">
@@ -59,18 +54,9 @@ export function RegisterPage({ t }: { t: any }) {
             <input name="password" type="password" className="glass-input" required placeholder="••••••••" />
           </div>
 
-          <div className="form-control">
-            <label className="label pl-1"><span className="label-text opacity-70 flex gap-2"><GraduationCap size={16}/> Uczelnia (opcjonalnie)</span></label>
-            <select name="university" className="select glass-input w-full" disabled={unisLoading}>
-                <option value="">{unisLoading ? "Ładowanie..." : "Nie wybieram / dodam później w profilu"}
-                </option>
-                {unis?.map((u: any) => <option key={u.id} value={u.id}>{u.name}</option>)}
-            </select>
-          </div>
-
           <Captcha onValidChange={setCaptchaValid} honeypotValue={honeypot} setHoneypotValue={setHoneypot} />
 
-          <button className="btn-squircle w-full mt-6" disabled={loading || unisLoading || isError || !captchaValid}>
+          <button className="btn-squircle w-full mt-6" disabled={loading || !captchaValid}>
             {loading ? <span className="loading loading-spinner"></span> : t.register}
           </button>
         </form>

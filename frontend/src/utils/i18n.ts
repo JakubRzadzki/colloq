@@ -6,6 +6,9 @@
 
 export type Language = 'en' | 'pl';
 
+/** Translation function type for component props */
+export type TFunction = any;
+
 interface TranslationDict {
   [key: string]: string;
 }

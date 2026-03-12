@@ -12,7 +12,7 @@ import { AddNoteModal } from '../components/addNoteModal';
  * Allows users to update their profile information including avatar, username, and bio
  * NOTE: We use the imported `t` function, NOT the prop (which is a Proxy object and not callable).
  */
-const ProfilePage: React.FC<{ t: any }> = (_props) => {
+const ProfilePage: React.FC<{ t: import('../utils/i18n').TFunction }> = () => {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -51,8 +51,9 @@ const ProfilePage: React.FC<{ t: any }> = (_props) => {
         fileInputRef.current.value = '';
       }
     },
-    onError: (error: any) => {
-      alert(`${t('error')}: ${error.response?.data?.detail || t('something_went_wrong')}`);
+    onError: (error: unknown) => {
+      const e = error as { response?: { data?: { detail?: string } } };
+      alert(`${t('error')}: ${e.response?.data?.detail || t('something_went_wrong')}`);
     },
   });
 
@@ -74,7 +75,7 @@ const ProfilePage: React.FC<{ t: any }> = (_props) => {
    */
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const updates: any = { username, bio };
+    const updates: { username: string; bio: string; avatar?: File } = { username, bio };
     if (avatarFile) updates.avatar = avatarFile;
     updateMutation.mutate(updates);
   };
@@ -88,7 +89,7 @@ const ProfilePage: React.FC<{ t: any }> = (_props) => {
   }
 
   if (!user) {
-    const is401 = (userError as any)?.response?.status === 401;
+    const is401 = (userError as { response?: { status?: number } })?.response?.status === 401;
     return (
       <div className="min-h-screen flex items-center justify-center pt-24 px-4">
         <div className="glass-panel p-8 text-center max-w-md">

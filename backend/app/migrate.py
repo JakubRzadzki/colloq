@@ -18,6 +18,10 @@ from sqlalchemy import text, inspect
 def run_migrations(engine):
     """Ensure the database schema matches the current SQLAlchemy models."""
 
+    # PostgreSQL-only raw SQL; SQLite uses create_all from models only
+    if "sqlite" in str(engine.url):
+        return
+
     # -------------------------------------------------------------------------
     # Step 1: Detect how broken the schema is
     # -------------------------------------------------------------------------
@@ -52,7 +56,7 @@ def run_migrations(engine):
     # -------------------------------------------------------------------------
     if missing_count >= 3:
         print(f"[MIGRATE] Detected {missing_count} missing critical columns. Resetting database schema...")
-        from .database import Base
+        from app.core.database import Base
         Base.metadata.drop_all(bind=engine)
         Base.metadata.create_all(bind=engine)
         print("[MIGRATE] Database schema rebuilt successfully.")
@@ -113,6 +117,7 @@ def run_migrations(engine):
 
         # Subjects
         add_col("subjects", "is_approved", "BOOLEAN NOT NULL DEFAULT TRUE"),
+        add_col("subjects", "academic_year", "VARCHAR(50)"),
 
         # Notes
         add_col("notes", "is_approved", "BOOLEAN NOT NULL DEFAULT TRUE"),

@@ -21,20 +21,18 @@ export function AddUniversityModal({ isOpen, onClose }: Props) {
       onClose();
       alert('University added successfully! ✅');
     },
-    onError: (err: any) => {
-      const status = err.response?.status;
-      const detail = err.response?.data?.detail;
+    onError: (err: unknown) => {
+      const e = err as { response?: { status?: number; data?: { detail?: string | Array<{ msg: string }> } }; message?: string };
+      const detail = e.response?.data?.detail;
       let msg = "Error creating university";
-      if (status === 401 || status === 403) {
+      if (e.response?.status === 401 || e.response?.status === 403) {
         msg = "Please log in to add a university.";
       } else if (typeof detail === "string") {
         msg = detail;
       } else if (Array.isArray(detail) && detail[0]?.msg) {
-        msg = detail.map((d: any) => d.msg).join("; ");
-      } else if (detail?.message) {
-        msg = detail.message;
-      } else if (err.message) {
-        msg = err.message;
+        msg = detail.map((d) => d.msg).join("; ");
+      } else if (e.message) {
+        msg = e.message;
       }
       setError(msg);
     }
