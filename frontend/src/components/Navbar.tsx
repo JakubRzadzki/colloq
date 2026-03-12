@@ -192,7 +192,7 @@ export function Navbar({ token, theme, toggleTheme, logout, t, lang, setLang }: 
                     {notifications.length === 0 ? (
                       <p className={`px-4 py-6 text-sm ${isDark ? 'text-white/50' : 'text-slate-500'}`}>No notifications</p>
                     ) : (
-                      notifications.slice(0, 20).map((n: { id: number; type: string; message: string; read_at?: string | null; created_at?: string }) => (
+                      notifications.slice(0, 20).map((n: any) => (
                         <div
                           key={n.id}
                           className={`px-4 py-2.5 text-sm border-b ${isDark ? 'border-white/5' : 'border-black/5'} ${!n.read_at ? (isDark ? 'bg-white/5' : 'bg-black/5') : ''}`}

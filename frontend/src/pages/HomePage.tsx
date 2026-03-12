@@ -193,7 +193,7 @@ export default function HomePage() {
             </div>
             <div className="flex flex-col gap-2 max-h-52 overflow-y-auto">
               {activityFeed && activityFeed.length > 0 ? (
-                activityFeed.map((item: Record<string, unknown>, idx: number) => (
+                activityFeed.map((item: any, idx: number) => (
                   <div key={idx} className="activity-item !p-3 !rounded-xl">
                     <div className="activity-icon !w-8 !h-8">
                       {item.type === 'note' ? <FileText size={14} /> : <MessageSquare size={14} />}
@@ -224,7 +224,7 @@ export default function HomePage() {
             </div>
             <div className="flex flex-col gap-2">
               {leaderboardData?.leaderboard && leaderboardData.leaderboard.length > 0 ? (
-                leaderboardData.leaderboard.slice(0, 5).map((user: Record<string, unknown>) => (
+                leaderboardData.leaderboard.slice(0, 5).map((user: any) => (
                   <div key={user.user_id} className="leaderboard-item !p-3 !rounded-xl">
                     <div className="flex items-center gap-3 min-w-0">
                       <div

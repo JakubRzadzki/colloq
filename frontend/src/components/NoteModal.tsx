@@ -241,7 +241,7 @@ export function NoteModal({
                  
                  <div className="flex gap-3 pt-4 border-t border-white/10">
                    <button 
-                     onClick={() => editMutation.mutate({ title: editTitle, content: editContent })}
+                     onClick={() => editMutation.mutate({ title: editTitle || '', content: editContent || '' })}
                      disabled={editMutation.isPending}
                      className="btn btn-primary bg-gradient-to-r from-[#5e5ce6] to-[#32ade6] hover:from-[#4a4ad1] hover:to-[#2a96d6] text-white font-bold px-6 py-3 text-sm transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                    >
@@ -369,7 +369,7 @@ export function NoteModal({
                           {c.user?.nickname?.[0]?.toUpperCase() || 'U'}
                        </div>
                        <div className="flex-1">
-                          <div className="font-bold text-[#32ade6] text-sm">{c.user?.nickname || `User #${c.user_id}`}</div>
+                          <div className="font-bold text-[#32ade6] text-sm">{c.user?.nickname || `User #${(c as any).user_id || (c as any).author_id}`}</div>
                           <div className="text-xs text-white/40">{new Date(c.created_at).toLocaleDateString()}</div>
                        </div>
                     </div>
