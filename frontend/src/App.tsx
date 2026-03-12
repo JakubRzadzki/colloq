@@ -90,7 +90,7 @@ function App() {
         {/* Suspense boundary with glass LoadingSpinner */}
         <Suspense fallback={<LoadingSpinner />}>
           <Routes>
-            <Route path="/" element={<HomePage t={tFunc} />} />
+            <Route path="/" element={<HomePage />} />
             <Route path="/login" element={<LoginPage setToken={setToken} t={tObj} />} />
             <Route path="/register" element={<RegisterPage t={tObj} />} />
             <Route path="/term" element={<TermPage t={tObj} />} />

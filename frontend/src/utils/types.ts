@@ -87,6 +87,11 @@ export interface NoteFile {
   created_at?: string;
 }
 
+export interface Tag {
+  id: number;
+  name: string;
+}
+
 export interface Note {
   id: number;
   title?: string;
@@ -105,6 +110,7 @@ export interface Note {
   subject?: Subject;
   images?: NoteImage[]; // Rich Notes: multiple images (may be empty or omitted)
   files?: NoteFile[]; // File attachments (PDF, DOC, etc.)
+  tags?: Tag[];
 }
 
 export interface Review {
@@ -142,6 +148,13 @@ export interface PendingItems {
   fields: FieldOfStudy[];
   subjects: Subject[];
   image_requests: ImageRequest[];
+}
+
+export interface PaginatedNotesResponse {
+  items: Note[];
+  total: number;
+  page: number;
+  page_size: number;
 }
 
 export interface SearchField {

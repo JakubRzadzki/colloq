@@ -115,7 +115,7 @@ export function AdminPage({ t }: { t: TFunction }) {
 
       <div className="flex gap-2 mb-8 overflow-x-auto pb-2 flex-wrap">
         <TabBtn active={activeTab === 'users'} onClick={() => setActiveTab('users')} icon={<Users size={18} />} label={`Użytkownicy (${users?.length ?? 0})`} />
-        <TabBtn active={activeTab === 'notes'} onClick={() => setActiveTab('notes')} icon={<FileText size={18} />} label={`Wszystkie notatki (${notes?.length ?? 0})`} />
+        <TabBtn active={activeTab === 'notes'} onClick={() => setActiveTab('notes')} icon={<FileText size={18} />} label={`Wszystkie notatki (${notes?.items?.length ?? 0})`} />
         <TabBtn active={activeTab === 'pending-notes'} onClick={() => setActiveTab('pending-notes')} icon={<FileText size={18} />} label={`Oczekujące notatki (${pendingNotes.length})`} />
         <TabBtn active={activeTab === 'pending-universities'} onClick={() => setActiveTab('pending-universities')} icon={<Building2 size={18} />} label={`Oczekujące uczelnie (${pendingUnis.length})`} />
         <TabBtn active={activeTab === 'pending-faculties'} onClick={() => setActiveTab('pending-faculties')} icon={<GraduationCap size={18} />} label={`Oczekujące wydziały (${pendingFaculties.length})`} />
@@ -164,9 +164,9 @@ export function AdminPage({ t }: { t: TFunction }) {
         )}
 
         {activeTab === 'notes' && (
-          notes?.length === 0 ? <EmptyState msg="Brak notatek." /> :
+          notes?.items?.length === 0 ? <EmptyState msg="Brak notatek." /> :
           <div className="space-y-3">
-            {notes?.map((n: Note) => (
+            {notes?.items?.map((n: Note) => (
               <div key={n.id} className="glass-panel p-5 hover:border-[#5e5ce6]/50 transition-colors flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
                 <Link to={`/note/${n.id}`} className="flex gap-4 items-start min-w-0 flex-1">
                   <div className="p-3 bg-white/5 rounded-xl text-[#32ade6] shrink-0">
@@ -319,7 +319,7 @@ export function AdminPage({ t }: { t: TFunction }) {
         {activeTab === 'reports' && (
           reports?.length === 0 ? <EmptyState msg="Brak zgłoszeń." /> :
           <div className="space-y-3">
-            {reports?.map((r: { id: number; reason: string; status: string; reporter_id: number; note_id?: number; reported_user_id?: number }) => (
+            {reports?.map((r: any) => (
               <div key={r.id} className="glass-panel p-5 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
                 <div>
                   <p className="text-white/80 text-sm">Powód: <span className="text-white font-medium">{r.reason}</span></p>
@@ -341,7 +341,7 @@ export function AdminPage({ t }: { t: TFunction }) {
         {activeTab === 'feedback' && (
           feedbackList?.length === 0 ? <EmptyState msg="Brak opinii." /> :
           <div className="space-y-3">
-            {feedbackList?.map((f: { id: number; rating: number; user_id: number; comment?: string }) => (
+            {feedbackList?.map((f: any) => (
               <div key={f.id} className="glass-panel p-5">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-yellow-400 font-bold">{'★'.repeat(f.rating)}{'☆'.repeat(5 - f.rating)}</span>

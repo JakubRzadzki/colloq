@@ -558,7 +558,7 @@ export function UniversityPage({ t }: { t: TFunction }) {
             )}
 
             {/* Sort & Notes Grid */}
-            {!notesLoading && notes && notes.length > 0 && (
+            {!notesLoading && notes?.items && notes.items.length > 0 && (
               <>
                 <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
                   {tags.length > 0 && (
@@ -590,7 +590,7 @@ export function UniversityPage({ t }: { t: TFunction }) {
                   </select>
                 </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {notes.map((n: Note) => (
+                {notes.items.map((n: Note) => (
                   <div
                     key={n.id}
                     className="glass-panel p-5 cursor-pointer group hover:border-[#5e5ce6]/30 transition-all hover:-translate-y-1"
@@ -644,7 +644,7 @@ export function UniversityPage({ t }: { t: TFunction }) {
             )}
 
             {/* Empty State - Glass card */}
-            {!notesLoading && (!notes || notes.length === 0) && (
+            {!notesLoading && (!notes?.items || notes.items.length === 0) && (
               <div className="empty-state">
                 <FileText size={48} className="empty-state-icon" />
                 <p className="text-xl font-semibold opacity-60 mb-2">No Materials Found</p>
@@ -724,7 +724,7 @@ export function UniversityPage({ t }: { t: TFunction }) {
                   <p className="text-xs uppercase tracking-widest opacity-50 mt-1 font-semibold">Faculties</p>
                 </div>
                 <div className="glass-panel p-5 text-center">
-                  <p className="text-3xl font-black text-[#32ade6]">{notes?.length || 0}</p>
+                  <p className="text-3xl font-black text-[#32ade6]">{notes?.items?.length || 0}</p>
                   <p className="text-xs uppercase tracking-widest opacity-50 mt-1 font-semibold">Notes</p>
                 </div>
               </div>
