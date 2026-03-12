@@ -185,9 +185,16 @@ async def create_field(
 
 
 @router.get("/fields/{field_id}/subjects", response_model=List[SubjectOut])
-async def get_subjects(field_id: int, db: Session = Depends(get_db)):
-    """List subjects for a field."""
-    return db.query(Subject).filter(Subject.field_of_study_id == field_id).all()
+async def get_subjects(
+    field_id: int, 
+    semester: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """List subjects for a field. Supports optional semester filtering."""
+    q = db.query(Subject).filter(Subject.field_of_study_id == field_id)
+    if semester is not None:
+        q = q.filter(Subject.semester == semester)
+    return q.all()
 
 
 @router.post("/subjects", response_model=SubjectOut)
@@ -199,6 +206,7 @@ async def create_subject(
     subject = Subject(
         name=data.name,
         semester=data.semester,
+        academic_year=data.academic_year,
         field_of_study_id=data.field_of_study_id,
     )
     db.add(subject)
