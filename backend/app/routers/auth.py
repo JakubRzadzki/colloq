@@ -7,12 +7,16 @@ from app.core.database import get_db
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.models import User
 from app.schemas import RegisterRequest, Token, UserOut
+from app.core.rate_limit import limiter
+from fastapi import Request
 
 router = APIRouter(tags=["auth"])
 
 
 @router.post("/token", response_model=Token)
+@limiter.limit("5/minute")
 async def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
@@ -25,7 +29,8 @@ async def login(
 
 
 @router.post("/register", response_model=UserOut)
-async def register(payload: RegisterRequest, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+async def register(request: Request, payload: RegisterRequest, db: Session = Depends(get_db)):
     """Register a new user account."""
     user_data = payload.user
     

@@ -57,7 +57,13 @@ for attempt in range(5):
         time.sleep(2)
 run_seed()
 
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from app.core.rate_limit import limiter
+
 app = FastAPI(title="Colloq API", version="2.1.0")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -68,7 +74,7 @@ app.add_middleware(
         "http://127.0.0.1:3000",
         "http://localhost:4173",
         "http://frontend:5173",
-    ],
+    ] + settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
