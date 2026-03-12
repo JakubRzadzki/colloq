@@ -51,8 +51,9 @@
 | **Browse by Region** | Navigate universities by all 16 Polish voivodeships |
 | **Add Content** | Add universities, faculties, fields of study, and subjects |
 | **Upload Notes** | Share materials with files and multiple images (Rich Notes) |
-| **Interact** | Vote, favorite, write reviews, and comment |
+| **Interact** | Vote, favorite, write reviews, and comment (With vote duplicate prevention) |
 | **Search** | Find notes and subjects across the platform |
+| **Paging & Filters** | Semester filters and paginated note responses |
 | **Leaderboard** | See top contributors and activity feed |
 
 ### For Administrators
@@ -218,8 +219,8 @@ colloq/
 | `GET` | `/universities/{id}` | University details |
 | `GET` | `/universities/{id}/faculties` | Faculties |
 | `GET` | `/faculties/{id}/fields` | Fields of study |
-| `GET` | `/fields/{id}/subjects` | Subjects |
-| `GET` | `/notes?university_id=&subject_id=&search=&sort=` | Notes (optional filters) |
+| `GET` | `/fields/{id}/subjects?semester=` | Subjects (optional semester filter) |
+| `GET` | `/notes?university_id=&subject_id=&search=&sort=&page=&page_size=` | Paginated notes |
 | `GET` | `/notes/{id}` | Single note by ID |
 | `POST` | `/notes` | Create note (auth, multipart: title, content, files, images) |
 | `GET` | `/search/global?q=` | Global search |
