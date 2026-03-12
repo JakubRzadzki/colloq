@@ -102,6 +102,7 @@ class Subject(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(200), index=True, nullable=False)
     semester = Column(Integer, nullable=True)
+    academic_year = Column(String(50), nullable=True)
     field_of_study_id = Column(Integer, ForeignKey("fields_of_study.id"), nullable=False)
     is_approved = Column(Boolean, default=True)
 

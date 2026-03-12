@@ -117,6 +117,7 @@ def run_migrations(engine):
 
         # Subjects
         add_col("subjects", "is_approved", "BOOLEAN NOT NULL DEFAULT TRUE"),
+        add_col("subjects", "academic_year", "VARCHAR(50)"),
 
         # Notes
         add_col("notes", "is_approved", "BOOLEAN NOT NULL DEFAULT TRUE"),

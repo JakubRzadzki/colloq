@@ -86,6 +86,7 @@ class SubjectOut(BaseModel):
     id: int
     name: str
     semester: Optional[int] = None
+    academic_year: Optional[str] = None
     field_of_study_id: int
     is_approved: bool = True
 
@@ -93,6 +94,7 @@ class SubjectOut(BaseModel):
 class SubjectCreate(BaseModel):
     name: str
     semester: int
+    academic_year: Optional[str] = None
     field_of_study_id: int
 
 
