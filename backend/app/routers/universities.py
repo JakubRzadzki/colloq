@@ -143,6 +143,8 @@ async def create_faculty(
     db: Session = Depends(get_db),
 ):
     """Create a faculty."""
+    if not db.query(University).filter(University.id == university_id).first():
+        raise HTTPException(status_code=404, detail="University not found")
     image_url = None
     if image and image.filename:
         image_url = save_upload(image, DIR_FACULTIES)
@@ -170,9 +172,12 @@ async def get_fields(fac_id: int, db: Session = Depends(get_db)):
 @router.post("/fields", response_model=FieldOfStudyOut)
 async def create_field(
     data: FieldOfStudyCreate,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Create a field of study."""
+    if not db.query(Faculty).filter(Faculty.id == data.faculty_id).first():
+        raise HTTPException(status_code=404, detail="Faculty not found")
     field = FieldOfStudy(
         name=data.name,
         degree_level=data.degree_level,
@@ -200,9 +205,12 @@ async def get_subjects(
 @router.post("/subjects", response_model=SubjectOut)
 async def create_subject(
     data: SubjectCreate,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Create a subject."""
+    if not db.query(FieldOfStudy).filter(FieldOfStudy.id == data.field_of_study_id).first():
+        raise HTTPException(status_code=404, detail="Field of study not found")
     subject = Subject(
         name=data.name,
         semester=data.semester,
