@@ -136,6 +136,7 @@ def test_create_field_of_study(client: TestClient, auth_headers: dict):
     response = client.post(
         "/fields",
         json={"name": "Informatyka", "degree_level": "inżynier", "faculty_id": fac_id},
+        headers=auth_headers,
     )
     assert response.status_code == 200
     assert response.json()["name"] == "Informatyka"
@@ -160,14 +161,37 @@ def test_create_subject(client: TestClient, auth_headers: dict):
     field = client.post(
         "/fields",
         json={"name": "Informatyka", "degree_level": "inżynier", "faculty_id": fac_id},
+        headers=auth_headers,
     )
+    assert field.status_code == 200, field.json()
     field_id = field.json()["id"]
 
     response = client.post(
         "/subjects",
         json={"name": "Algorytmy", "semester": 3, "field_of_study_id": field_id},
+        headers=auth_headers,
     )
     assert response.status_code == 200
     data = response.json()
     assert data["name"] == "Algorytmy"
     assert data["semester"] == 3
+
+
+def test_create_field_invalid_faculty(client: TestClient, auth_headers: dict):
+    """Creating a field of study for a non-existent faculty should fail."""
+    response = client.post(
+        "/fields",
+        json={"name": "Informatyka Invalid", "degree_level": "inżynier", "faculty_id": 999999},
+        headers=auth_headers,
+    )
+    assert response.status_code in [400, 404, 422, 500]
+
+
+def test_create_subject_invalid_field(client: TestClient, auth_headers: dict):
+    """Creating a subject for a non-existent field of study should fail."""
+    response = client.post(
+        "/subjects",
+        json={"name": "Algorytmy Invalid", "semester": 3, "field_of_study_id": 999999},
+        headers=auth_headers,
+    )
+    assert response.status_code in [400, 404, 422, 500]

@@ -9,6 +9,7 @@ import { Navbar } from './components/Navbar';
 import { FeedbackWidget } from './components/FeedbackWidget';
 import { t as translate, getCurrentLanguage, setLanguage, type Language } from './utils/i18n';
 import { isAdmin } from './utils/api';
+import { jwtDecode } from 'jwt-decode';
 import LoadingSpinner from './components/LoadingSpinner';
 
 // Lazy-loaded route components for code-splitting
@@ -29,8 +30,31 @@ function App() {
   // Theme state - dark mode by default
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
 
-  // Authentication token
-  const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
+  // Authentication token with proactive expiration check
+  const [token, setToken] = useState<string | null>(() => {
+    const t = localStorage.getItem('token');
+    if (!t) return null;
+    try {
+      const decoded = jwtDecode<{ exp: number }>(t);
+      if (decoded.exp * 1000 < Date.now()) {
+        localStorage.removeItem('token');
+        return null;
+      }
+      return t;
+    } catch {
+      localStorage.removeItem('token');
+      return null;
+    }
+  });
+
+  // Listen for global auth expiration events from API interceptor
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      setToken(null);
+    };
+    window.addEventListener('auth-expired', handleAuthExpired);
+    return () => window.removeEventListener('auth-expired', handleAuthExpired);
+  }, []);
 
   // Translation function that uses current lang state
   const tFunc = (key: string): string => translate(key, lang);

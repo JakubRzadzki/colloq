@@ -109,11 +109,11 @@ export function TermPage({ t }: TermPageProps) {
                   {results.subjects.map((sub: import('../utils/types').SearchSubject) => (
                     <div key={sub.id} className="card-spatial p-6 hover:border-[#5e5ce6]/40 group">
                       <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="font-bold text-lg text-white group-hover:text-[#5e5ce6] transition-colors">{sub.name}</h3>
+                        <div className="flex-1 min-w-0 pr-3">
+                          <h3 className="font-bold text-lg text-white group-hover:text-[#5e5ce6] transition-colors truncate">{sub.name}</h3>
                           <div className="badge badge-sm bg-white/10 text-white border-none mt-2">{t.semester} {sub.semester}</div>
                         </div>
-                        <Link to={`/university/${sub.university_id}`} className="btn btn-circle btn-sm btn-ghost text-white/50 hover:text-white hover:bg-white/10">
+                        <Link to={`/university/${sub.university_id}`} className="btn btn-circle btn-sm btn-ghost text-white/50 hover:text-white hover:bg-white/10 shrink-0">
                           <ArrowRight size={16}/>
                         </Link>
                       </div>

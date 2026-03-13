@@ -143,3 +143,18 @@ def test_delete_note(client: TestClient, auth_headers: dict, note_id: int):
     get_response = client.get(f"/notes/{note_id}")
     assert get_response.status_code == 404
 
+
+def test_delete_note_non_owner(client: TestClient, auth_headers: dict, note_id: int):
+    """Non-owner cannot delete the note."""
+    # Create another user and get token
+    client.post(
+        "/register",
+        json={"user": {"email": "other_delete@example.com", "password": "password123", "university_id": None}},
+    )
+    r = client.post("/token", data={"username": "other_delete@example.com", "password": "password123"})
+    other_token = r.json()["access_token"]
+    other_headers = {"Authorization": f"Bearer {other_token}"}
+
+    response = client.delete(f"/notes/{note_id}", headers=other_headers)
+    assert response.status_code == 403
+
