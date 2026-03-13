@@ -57,7 +57,6 @@ from app.core.rate_limit import limiter
 app = FastAPI(title="Colloq API", version="2.1.0")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
 @app.on_event("startup")
 async def startup_event():
     # Only validate on real startup, not import
@@ -68,7 +67,6 @@ async def startup_event():
             "Set the SECRET_KEY environment variable to a secure random string.",
             UserWarning,
         )
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
