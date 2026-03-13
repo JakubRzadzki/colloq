@@ -59,12 +59,16 @@ api.interceptors.response.use(
       // Token expired or invalid - clean up and let the app handle redirect
       localStorage.removeItem('token');
       console.warn('[API] Session expired. Token removed.');
+      window.dispatchEvent(new Event('auth-expired'));
     } else if (status === 403) {
       console.warn('[API] Forbidden:', detail || 'Access denied');
+      window.dispatchEvent(new CustomEvent('api-error', { detail: detail || 'Access denied' }));
     } else if (status >= 500) {
       console.error('[API] Server error:', status, detail || 'Internal server error');
+      window.dispatchEvent(new CustomEvent('api-error', { detail: 'Internal server error' }));
     }
 
+    // Pass the error but suppress unhandled rejection logs if components miss it
     return Promise.reject(error);
   }
 );
@@ -200,16 +204,47 @@ export const getUniversities = async (region?: string): Promise<University[]> =>
   return (await api.get(`/universities${params}`)).data;
 };
 
+export interface LatestActivity {
+  latest_note: { id: number; title: string; created_at: string; university_id: number } | null;
+  latest_user: { id: number; nickname: string; created_at: string } | null;
+  latest_review: { id: number; content: string; created_at: string; university_id: number } | null;
+}
+
+export interface LeaderboardEntry {
+  rank: number;
+  user_id: number;
+  nickname: string;
+  avatar_url: string | null;
+  reputation_points: number;
+  uploads_count: number;
+  notes_count: number;
+  total_score: number;
+  reviews_count: number;
+  comments_count: number;
+  total_activity: number;
+}
+
+export interface ActivityFeedEntry {
+  type: string;
+  title?: string;
+  description?: string;
+  rating?: number;
+  comment?: string;
+  created_at: string;
+  user_nickname: string;
+  note_title?: string;
+}
+
 /** Single batched payload for home page. */
 export const getHome = async (): Promise<{
   stats: {
     users_count: number;
     notes_count: number;
     universities_count: number;
-    latest_activity: Record<string, unknown>;
+    latest_activity: LatestActivity;
   };
-  leaderboard: { leaderboard: Array<Record<string, unknown>>; total_users: number };
-  activity_feed: Array<Record<string, unknown>>;
+  leaderboard: { leaderboard: LeaderboardEntry[]; total_users: number };
+  activity_feed: ActivityFeedEntry[];
   recent_notes: Note[];
   universities: University[];
 }> => (await api.get('/home')).data;
@@ -630,41 +665,14 @@ export const getStats = async (): Promise<{
   users_count: number;
   notes_count: number;
   universities_count: number;
-  latest_activity: {
-    latest_note: { id: number; title: string; created_at: string; university_id: number } | null;
-    latest_user: { id: number; nickname: string; created_at: string } | null;
-    latest_review: { id: number; content: string; created_at: string; university_id: number } | null;
-  };
+  latest_activity: LatestActivity;
 }> => (await api.get('/stats')).data;
 
 /** Leaderboard - top 5 users by reputation. */
 export const getLeaderboard = async (): Promise<{
-  leaderboard: Array<{
-    rank: number;
-    user_id: number;
-    nickname: string;
-    avatar_url: string | null;
-    reputation_points: number;
-    uploads_count: number;
-    notes_count: number;
-    total_score: number;
-    reviews_count: number;
-    comments_count: number;
-    total_activity: number;
-  }>;
+  leaderboard: LeaderboardEntry[];
   total_users: number;
 }> => (await api.get('/leaderboard')).data;
 
 /** Activity feed - last 5 activities. */
-export const getActivityFeed = async (): Promise<
-  Array<{
-    type: string;
-    title?: string;
-    description?: string;
-    rating?: number;
-    comment?: string;
-    created_at: string;
-    user_nickname: string;
-    note_title?: string;
-  }>
-> => (await api.get('/activity-feed')).data;
+export const getActivityFeed = async (): Promise<ActivityFeedEntry[]> => (await api.get('/activity-feed')).data;

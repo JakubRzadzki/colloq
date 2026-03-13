@@ -526,23 +526,23 @@ export function UniversityPage({ t }: { t: TFunction }) {
               <div className="relative w-full md:w-80">
                 <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 opacity-40" />
                 <input
-                  className="glass-input pl-12 !rounded-xl"
+                  className="glass-input pl-12 !rounded-xl w-full"
                   placeholder="Search by title or content..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
               {token && (
-                <div className="flex gap-2 shrink-0">
+                <div className="flex flex-wrap sm:flex-nowrap gap-2 w-full sm:w-auto shrink-0">
                   <button
                     onClick={() => setAddFacultyOpen(true)}
-                    className="btn-squircle flex items-center gap-2"
+                    className="btn-squircle flex items-center gap-2 flex-1 sm:flex-auto justify-center"
                   >
                     <Building2 size={16} /> Add Faculty
                   </button>
                   <button
                     onClick={() => setNoteModalOpen(true)}
-                    className="btn-squircle flex items-center gap-2"
+                    className="btn-squircle flex items-center gap-2 flex-1 sm:flex-auto justify-center"
                   >
                     <FileText size={16} /> Upload Note
                   </button>
