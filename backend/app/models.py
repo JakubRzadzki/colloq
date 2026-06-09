@@ -54,7 +54,7 @@ class University(Base):
     description = Column(Text, nullable=True)
     image_url = Column(String(500), nullable=True)
     banner_url = Column(String(500), nullable=True)
-    is_approved = Column(Boolean, default=True)
+    is_approved = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
@@ -72,7 +72,7 @@ class Faculty(Base):
     description = Column(Text, nullable=True)
     image_url = Column(String(500), nullable=True)
     university_id = Column(Integer, ForeignKey("universities.id"), nullable=False)
-    is_approved = Column(Boolean, default=True)
+    is_approved = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
@@ -88,7 +88,7 @@ class FieldOfStudy(Base):
     name = Column(String(200), index=True, nullable=False)
     degree_level = Column(String(50), nullable=True)
     faculty_id = Column(Integer, ForeignKey("faculties.id"), nullable=False)
-    is_approved = Column(Boolean, default=True)
+    is_approved = Column(Boolean, default=False)
 
     # Relationships
     faculty = relationship("Faculty", back_populates="fields_of_study")
@@ -104,7 +104,7 @@ class Subject(Base):
     semester = Column(Integer, nullable=True)
     academic_year = Column(String(50), nullable=True)
     field_of_study_id = Column(Integer, ForeignKey("fields_of_study.id"), nullable=False)
-    is_approved = Column(Boolean, default=True)
+    is_approved = Column(Boolean, default=False)
 
     # Relationships
     field_of_study = relationship("FieldOfStudy", back_populates="subjects")
@@ -126,7 +126,9 @@ class Note(Base):
     image_url = Column(String(500), nullable=True)  # Legacy single-image field
     video_url = Column(String(500), nullable=True)
     link_url = Column(String(500), nullable=True)
-    score = Column(Float, default=0.0)
+    score = Column(Float, default=0.0)  # Net vote sum (upvotes)
+    avg_rating = Column(Float, default=0.0)  # Average of review ratings (1-5)
+    rating_count = Column(Integer, default=0)  # Number of reviews
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     university_id = Column(Integer, ForeignKey("universities.id"), nullable=False)
     subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=True)

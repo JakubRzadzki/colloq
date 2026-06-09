@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import desc, func
 
 from app.models import User, Note, University, Review, Comment
@@ -57,7 +57,7 @@ def get_home_data(db: Session):
     activities.sort(key=lambda x: x.get("created_at") or "", reverse=True)
     activity_feed = activities[:5]
     
-    recent_notes = db.query(Note).options(joinedload(Note.author), joinedload(Note.subject), joinedload(Note.images), joinedload(Note.files)).order_by(desc(Note.created_at)).limit(6).all()
+    recent_notes = db.query(Note).options(joinedload(Note.author), joinedload(Note.subject), selectinload(Note.images), selectinload(Note.files)).order_by(desc(Note.created_at)).limit(6).all()
     universities_list = db.query(University).filter(University.is_approved == True).all()
     
     recent_notes_out = []

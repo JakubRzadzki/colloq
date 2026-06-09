@@ -73,7 +73,14 @@ api.interceptors.response.use(
   }
 );
 
-// Request interceptor to automatically attach auth header
+// SECURITY (tracked, see GitHub issue "Move JWT out of localStorage"):
+// The JWT is currently read from localStorage, which is accessible to any
+// JavaScript and therefore vulnerable to token theft via XSS. The intended
+// long-term fix is to issue the token as an httpOnly, Secure, SameSite cookie
+// from the backend and drop localStorage entirely. When that lands, this
+// interceptor should stop attaching the Authorization header (the browser
+// will send the cookie automatically) and `logout()` must call a backend
+// endpoint that clears the cookie.
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) {
@@ -333,7 +340,25 @@ export interface SearchSubject {
   university_name?: string;
 }
 
+export interface SearchNote {
+  id: number;
+  title: string;
+  score: number;
+  university_id: number;
+  user_nickname?: string;
+}
+
+export interface SearchUniversity {
+  id: number;
+  name: string;
+  city: string;
+  region?: string;
+  image_url?: string;
+}
+
 export interface SearchResult {
+  notes: SearchNote[];
+  universities: SearchUniversity[];
   fields: SearchField[];
   subjects: SearchSubject[];
 }

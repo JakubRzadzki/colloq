@@ -128,6 +128,7 @@ export interface Comment {
   content: string;
   created_at: string;
   user: User;
+  user_id: number;
   note_id: number;
 }
 

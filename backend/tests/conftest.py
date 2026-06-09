@@ -1,61 +1,62 @@
 """
-Pytest fixtures: temporary SQLite DB, test client, and dependencies override.
+Pytest fixtures: temporary PostgreSQL DB, test client, and dependencies override.
 """
 import os
 from collections.abc import Generator
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 
-# Use in-memory SQLite before importing app so config picks it up
-os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+# Mark this process as a test run BEFORE importing the app so that the rate
+# limiter is disabled and secret-key enforcement is skipped.
+os.environ["TESTING"] = "1"
+
+# Use the test PostgreSQL database. Honour an externally-provided DATABASE_URL
+# (e.g. in CI) and fall back to the local default otherwise.
+os.environ.setdefault("DATABASE_URL", "postgresql://colloq_user:colloq_password@localhost:5432/colloq_test")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests-minimum-32-chars")
 
-from sqlalchemy import create_engine
-from sqlalchemy.pool import StaticPool
 from app.core.database import Base, get_db
 from app.main import app
 
-# Create a test-specific engine with StaticPool for in-memory SQLite sharing
-test_engine_url = "sqlite:///:memory:"
-engine = create_engine(
-    test_engine_url,
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
-)
+test_engine_url = os.environ["DATABASE_URL"]
+engine = create_engine(test_engine_url, pool_pre_ping=True)
 
-TestingSessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=engine,
-)
+# Dla testów sessionmaker bez autocommitu
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-
-def override_get_db() -> Generator[Session, None, None]:
-    """Override get_db to use test session."""
-    db = TestingSessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
+@pytest.fixture(scope="session", autouse=True)
+def setup_test_db():
+    """Tworzy schemat bazy DOKŁADNIE RAZ przed wszystkimi testami"""
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    yield
+    Base.metadata.drop_all(bind=engine)
 
 @pytest.fixture(scope="function")
 def db_session() -> Generator[Session, None, None]:
-    """Create a fresh DB and session for each test."""
-    Base.metadata.create_all(bind=engine)
-    session = TestingSessionLocal()
+    """Szybkie czyszczenie danych: odpala wszystko w transakcji, która na koniec robi ROLLBACK"""
+    connection = engine.connect()
+    transaction = connection.begin()
+    
+    # Tworzymy sesję przypiętą do konkretnego połączenia i transakcji
+    session = TestingSessionLocal(bind=connection)
+    
     try:
         yield session
     finally:
         session.close()
-        Base.metadata.drop_all(bind=engine)
-
+        transaction.rollback() # Dane dodane w teście magicznie znikają!
+        connection.close()
 
 @pytest.fixture(scope="function")
 def client(db_session: Session) -> Generator[TestClient, None, None]:
-    """FastAPI TestClient with DB override. Tables exist from db_session."""
+    """TestClient z podmienioną bazą. Tabele i schemat już istnieją."""
+    def override_get_db():
+        yield db_session
+
     app.dependency_overrides[get_db] = override_get_db
     with TestClient(app) as c:
         yield c

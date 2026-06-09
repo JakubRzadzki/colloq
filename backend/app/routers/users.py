@@ -2,13 +2,13 @@
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import desc
 
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models import User, Note, UserFavorite, Review, Comment
-from app.schemas import UserOut, NoteOut
+from app.schemas import UserOut, PublicUserOut, NoteOut
 from app.services.file_manager import save_upload, normalize_stored_path, DIR_AVATARS
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -46,13 +46,13 @@ async def update_me(
     return out
 
 
-@router.get("/{user_id}", response_model=UserOut)
+@router.get("/{user_id}", response_model=PublicUserOut)
 async def get_user(user_id: int, db: Session = Depends(get_db)):
-    """Get user by ID."""
+    """Get public user profile by ID (no email)."""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    out = UserOut.model_validate(user)
+    out = PublicUserOut.model_validate(user)
     if out.avatar_url:
         out.avatar_url = normalize_stored_path(out.avatar_url)
     return out
@@ -69,8 +69,8 @@ async def get_my_favorites(
         .options(
             joinedload(Note.author),
             joinedload(Note.subject),
-            joinedload(Note.images),
-            joinedload(Note.tags),
+            selectinload(Note.images),
+            selectinload(Note.tags),
         )
         .join(UserFavorite, UserFavorite.note_id == Note.id)
         .filter(UserFavorite.user_id == current_user.id)
@@ -104,13 +104,13 @@ async def get_my_dashboard(
     my_notes = db.query(Note).options(
         joinedload(Note.author),
         joinedload(Note.subject),
-        joinedload(Note.images),
+        selectinload(Note.images),
     ).filter(Note.user_id == current_user.id).order_by(desc(Note.created_at)).limit(10).all()
 
     # My favorites
     my_favs = (
         db.query(Note)
-        .options(joinedload(Note.author), joinedload(Note.subject), joinedload(Note.images))
+        .options(joinedload(Note.author), joinedload(Note.subject), selectinload(Note.images))
         .join(UserFavorite, UserFavorite.note_id == Note.id)
         .filter(UserFavorite.user_id == current_user.id)
         .order_by(desc(UserFavorite.created_at))

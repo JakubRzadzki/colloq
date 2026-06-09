@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Search, BookOpen, GraduationCap, ArrowRight, Library, Building2 } from 'lucide-react';
-import { globalSearch } from '../utils/api';
+import { Search, BookOpen, GraduationCap, ArrowRight, Library, Building2, FileText, Star, MapPin } from 'lucide-react';
+import { globalSearch, resolveUrl } from '../utils/api';
 
 // Hook debouncingu (opóźnienie wyszukiwania)
 function useDebounceValue<T>(value: T, delay: number): T {
@@ -99,6 +99,67 @@ export function TermPage({ t }: TermPageProps) {
         {!isLoading && results && (
           <div className="space-y-8 pb-20">
 
+            {/* NOTES RESULTS */}
+            {results.notes && results.notes.length > 0 && (
+              <section>
+                <h2 className="text-2xl font-bold mb-4 flex items-center gap-2 text-white">
+                  <FileText className="text-[#bf5af2]"/> {t.notes} ({results.notes.length})
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {results.notes.map((note: import('../utils/api').SearchNote) => (
+                    <Link to={`/note/${note.id}`} key={note.id} className="card-spatial p-6 hover:border-[#bf5af2]/40 group no-underline block">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1 min-w-0 pr-3">
+                          <h3 className="font-bold text-lg text-white group-hover:text-[#bf5af2] transition-colors truncate">{note.title || 'Untitled Note'}</h3>
+                          <div className="flex items-center gap-2 mt-2 text-sm text-white/50">
+                             <Star size={14} className="text-[#f59e0b]"/> {Number(note.score || 0).toFixed(1)}
+                             <span>&bull;</span>
+                             <span>{t.by_author} {note.user_nickname || 'Anonymous'}</span>
+                          </div>
+                        </div>
+                        <div className="btn btn-circle btn-sm btn-ghost text-white/50 group-hover:text-white group-hover:bg-white/10 shrink-0">
+                          <ArrowRight size={16}/>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* UNIVERSITIES RESULTS */}
+            {results.universities && results.universities.length > 0 && (
+              <section>
+                <h2 className="text-2xl font-bold mb-4 flex items-center gap-2 text-white">
+                  <Building2 className="text-[#5e5ce6]"/> {t.universities} ({results.universities.length})
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {results.universities.map((uni: import('../utils/api').SearchUniversity) => (
+                    <Link to={`/university/${uni.id}`} key={uni.id} className="card-spatial group p-0 overflow-hidden h-48 flex flex-col justify-end relative no-underline">
+                      <div className="absolute inset-0">
+                        <img
+                          src={resolveUrl(uni.image_url, 'https://placehold.co/400x200/5e5ce6/ffffff?text=University')}
+                          alt={uni.name}
+                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent" />
+                      </div>
+                      <div className="relative p-5 z-10 translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
+                        <h3 className="text-xl font-bold text-white mb-1 group-hover:text-[#32ade6] transition-colors line-clamp-2">
+                          {uni.name}
+                        </h3>
+                        <div className="flex justify-between items-center text-white/80 group-hover:text-white transition-opacity">
+                          <span className="text-xs flex gap-1 items-center">
+                            <MapPin size={12} /> {uni.city}{uni.region ? `, ${uni.region}` : ''}
+                          </span>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            )}
+
             {/* SUBJECTS RESULTS */}
             {results.subjects.length > 0 && (
               <section>
@@ -154,7 +215,11 @@ export function TermPage({ t }: TermPageProps) {
               </section>
             )}
 
-            {results.subjects.length === 0 && results.fields.length === 0 && debouncedValue.length > 1 && (
+            {(!results.subjects || results.subjects.length === 0) &&
+             (!results.fields || results.fields.length === 0) &&
+             (!results.notes || results.notes.length === 0) &&
+             (!results.universities || results.universities.length === 0) &&
+             debouncedValue.length > 1 && (
               <div className="text-center py-16 opacity-50 border border-dashed border-white/10 rounded-2xl bg-white/5">
                 <Search size={48} className="mx-auto mb-4 opacity-30"/>
                 <p className="text-xl">{t.noResults}</p>

@@ -6,12 +6,24 @@ from fastapi.testclient import TestClient
 
 
 @pytest.fixture
-def auth_headers(client: TestClient):
-    """Register, login, return Authorization header."""
-    client.post(
-        "/register",
-        json={"user": {"email": "uni_test@example.com", "password": "testpass123", "university_id": None}},
+def auth_headers(client: TestClient, db_session):
+    """Create an admin user, login, return Authorization header.
+
+    An admin is used so that content created in these CRUD tests is
+    auto-approved and therefore visible in the public listings being asserted.
+    """
+    from app.models import User
+    from app.core.security import get_password_hash
+
+    admin = User(
+        email="uni_test@example.com",
+        nickname="uni_test",
+        hashed_password=get_password_hash("testpass123"),
+        is_admin=True,
     )
+    db_session.add(admin)
+    db_session.commit()
+
     r = client.post("/token", data={"username": "uni_test@example.com", "password": "testpass123"})
     token = r.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}

@@ -6,6 +6,7 @@ import {
   getAllUsers, getNotes, getReports, getFeedback, updateReportStatus, resolveUrl,
   banUser as apiBanUser, deleteNote, updateUniversity, getUniversities, adminUpdateUniversity,
 } from '../utils/api';
+import type { ReportItem, FeedbackItem } from '../utils/api';
 import { Link } from 'react-router-dom';
 import type { TFunction } from '../utils/i18n';
 import type { User, Note, University, Faculty, FieldOfStudy, Subject, ImageRequest } from '../utils/types';
@@ -319,7 +320,7 @@ export function AdminPage({ t }: { t: TFunction }) {
         {activeTab === 'reports' && (
           reports?.length === 0 ? <EmptyState msg="Brak zgłoszeń." /> :
           <div className="space-y-3">
-            {reports?.map((r: any) => (
+            {reports?.map((r: ReportItem) => (
               <div key={r.id} className="glass-panel p-5 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
                 <div>
                   <p className="text-white/80 text-sm">Powód: <span className="text-white font-medium">{r.reason}</span></p>
@@ -341,7 +342,7 @@ export function AdminPage({ t }: { t: TFunction }) {
         {activeTab === 'feedback' && (
           feedbackList?.length === 0 ? <EmptyState msg="Brak opinii." /> :
           <div className="space-y-3">
-            {feedbackList?.map((f: any) => (
+            {feedbackList?.map((f: FeedbackItem) => (
               <div key={f.id} className="glass-panel p-5">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-yellow-400 font-bold">{'★'.repeat(f.rating)}{'☆'.repeat(5 - f.rating)}</span>

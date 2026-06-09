@@ -369,7 +369,7 @@ export function NoteModal({
                           {c.user?.nickname?.[0]?.toUpperCase() || 'U'}
                        </div>
                        <div className="flex-1">
-                          <div className="font-bold text-[#32ade6] text-sm">{c.user?.nickname || `User #${(c as any).user_id || (c as any).author_id}`}</div>
+                          <div className="font-bold text-[#32ade6] text-sm">{c.user?.nickname || `User #${c.user_id}`}</div>
                           <div className="text-xs text-white/40">{new Date(c.created_at).toLocaleDateString()}</div>
                        </div>
                     </div>

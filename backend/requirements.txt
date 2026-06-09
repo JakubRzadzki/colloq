@@ -11,5 +11,7 @@ python-multipart==0.0.6
 python-dotenv==1.0.0
 # PostgreSQL for production; SQLite used for local dev and tests
 psycopg2-binary>=2.9.9
+alembic>=1.13.0
 asyncpg==0.29.0
 pytest>=7.4.0
+slowapi==0.1.9
