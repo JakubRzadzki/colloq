@@ -20,8 +20,14 @@ COPY . .
 # Utworzenie folderu na uploady
 RUN mkdir -p uploads
 
+# Entrypoint runs `alembic upgrade head` before the app starts
+RUN chmod +x docker-entrypoint.sh
+
 # Eksponowanie portu
 EXPOSE 8000
+
+# Apply migrations, then run the container command
+ENTRYPOINT ["./docker-entrypoint.sh"]
 
 # Komenda startowa
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -12,7 +12,7 @@ services:
       - ./backend/uploads:/app/uploads
     environment:
       - DATABASE_URL=postgresql://colloq:colloq123@db:5432/colloq
-      - SECRET_KEY=your-secret-key-change-in-production
+      - SECRET_KEY=${SECRET_KEY}
       - UPLOAD_DIR=/app/uploads
     depends_on:
       db:
