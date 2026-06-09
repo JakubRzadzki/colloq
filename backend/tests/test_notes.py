@@ -6,12 +6,24 @@ from fastapi.testclient import TestClient
 
 
 @pytest.fixture
-def auth_headers(client: TestClient):
-    """Register, login, return Authorization header."""
-    client.post(
-        "/register",
-        json={"user": {"email": "notes@example.com", "password": "pass12345", "university_id": None}},
+def auth_headers(client: TestClient, db_session):
+    """Create an admin user, login, return Authorization header.
+
+    An admin is used so notes created here are auto-approved and therefore
+    visible in the public ``GET /notes`` listing asserted by these tests.
+    """
+    from app.models import User
+    from app.core.security import get_password_hash
+
+    admin = User(
+        email="notes@example.com",
+        nickname="notesuser",
+        hashed_password=get_password_hash("pass12345"),
+        is_admin=True,
     )
+    db_session.add(admin)
+    db_session.commit()
+
     r = client.post("/token", data={"username": "notes@example.com", "password": "pass12345"})
     token = r.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
