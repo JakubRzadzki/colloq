@@ -30,6 +30,7 @@ export function AddNoteModal({ universityId: propUniversityId, isOpen, onClose }
       setFieldId(null);
       setSubjectId(null);
       setSelectedFiles([]);
+      setError('');
     }
   }, [isOpen]);
 
@@ -39,6 +40,7 @@ export function AddNoteModal({ universityId: propUniversityId, isOpen, onClose }
   const [captchaValid, setCaptchaValid] = useState(false);
   const [honeypot, setHoneypot] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [error, setError] = useState('');
 
   const { data: universities = [] } = useQuery({ queryKey: ['unis'], queryFn: () => getUniversities(), enabled: isOpen && showUniversityStep });
   const { data: faculties = [] } = useQuery({ queryKey: ['faculties', universityId], queryFn: () => getFaculties(universityId!), enabled: isOpen && !!universityId });
@@ -52,9 +54,8 @@ export function AddNoteModal({ universityId: propUniversityId, isOpen, onClose }
         queryClient.invalidateQueries({ queryKey: ['home'] });
         queryClient.invalidateQueries({ queryKey: ['currentUser'] });
         onClose();
-        alert("Notatka dodana pomyślnie!");
     },
-    onError: () => alert("Nie udało się dodać notatki.")
+    onError: () => setError("Nie udało się dodać notatki.")
   });
 
   const fieldMutation = useMutation({
@@ -76,9 +77,10 @@ export function AddNoteModal({ universityId: propUniversityId, isOpen, onClose }
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length > MAX_FILES) {
-      alert(`Maksymalnie ${MAX_FILES} plików na notatkę.`);
+      setError(`Maksymalnie ${MAX_FILES} plików na notatkę.`);
       setSelectedFiles(files.slice(0, MAX_FILES));
     } else {
+      setError('');
       setSelectedFiles(files);
     }
   };
@@ -89,8 +91,15 @@ export function AddNoteModal({ universityId: propUniversityId, isOpen, onClose }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!universityId || !subjectId) return alert("Wybierz przedmiot (i uczelnię, jeśli dodajesz notatkę spoza strony uczelni).");
-    if (!captchaValid || honeypot) return alert("Uzupełnij zabezpieczenie antyspamowe.");
+    if (!universityId || !subjectId) {
+      setError("Wybierz przedmiot (i uczelnię, jeśli dodajesz notatkę spoza strony uczelni).");
+      return;
+    }
+    if (!captchaValid || honeypot) {
+      setError("Uzupełnij zabezpieczenie antyspamowe.");
+      return;
+    }
+    setError('');
     const form = e.target as HTMLFormElement;
     const fd = new FormData(form);
     fd.append('university_id', universityId.toString());
@@ -179,7 +188,6 @@ export function AddNoteModal({ universityId: propUniversityId, isOpen, onClose }
                  <label className="label"><span className="label-text font-semibold">Attachments (up to {MAX_FILES} files)</span></label>
                  <input
                    type="file"
-                   name="files"
                    multiple
                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.webp"
                    onChange={handleFileChange}
@@ -209,7 +217,10 @@ export function AddNoteModal({ universityId: propUniversityId, isOpen, onClose }
           )}
         </div>
 
-        <div className="p-4 border-t bg-base-100 rounded-b-2xl flex justify-end">
+        <div className="p-4 border-t bg-base-100 rounded-b-2xl flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+          {error && (
+            <p className="text-error text-sm flex-1 text-left" role="alert">{error}</p>
+          )}
           <button type="submit" form="note-form" className="btn btn-primary px-8" disabled={!universityId || !subjectId || noteMutation.isPending || !captchaValid}>
             {noteMutation.isPending ? <span className="loading loading-spinner"></span> : "Dodaj notatkę"}
           </button>
