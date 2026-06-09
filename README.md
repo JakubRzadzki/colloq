@@ -162,10 +162,16 @@ VITE_API_URL=http://localhost:8000
 ```bash
 cd backend
 pip install -r requirements.txt
-pytest tests/ -v
+# Tests require a running PostgreSQL database named `colloq_test`, e.g.:
+#   docker run -d --name colloq-test-db \
+#     -e POSTGRES_USER=colloq_user -e POSTGRES_PASSWORD=colloq_password \
+#     -e POSTGRES_DB=colloq_test -p 5432:5432 postgres:15-alpine
+TESTING=1 pytest tests/ -v
 ```
 
-Tests use an in-memory SQLite database. Covers auth (register/login) and notes (create/vote).
+Tests run against a PostgreSQL `colloq_test` database (connection configured in
+`tests/conftest.py`). Set `TESTING=1` to disable rate limiting during the run.
+Covers auth, notes, universities, and admin flows.
 
 ---
 

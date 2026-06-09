@@ -69,11 +69,13 @@ Desktop.ini
 *.sublime-*
 *.atom/
 .atom/
+.vs/
 
 # --- Temporary files ---
 *.tmp
 *.temp
 *~
+tmp_*
 test_out.txt
 test_output.txt
 test_results_detailed.txt
