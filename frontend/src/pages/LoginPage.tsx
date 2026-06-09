@@ -19,6 +19,9 @@ export function LoginPage({ setToken, t }: { setToken: (token: string) => void; 
       const data = await login(username, password);
 
       if (data.access_token) {
+        // SECURITY: storing the JWT in localStorage exposes it to XSS-based
+        // theft. Tracked for migration to an httpOnly cookie (see GitHub issue
+        // "Move JWT out of localStorage").
         localStorage.setItem('token', data.access_token);
         setToken(data.access_token);
         navigate('/');

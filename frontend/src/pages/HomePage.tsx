@@ -28,15 +28,16 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import { getHome, resolveUrl } from '../utils/api';
+import type { ActivityFeedEntry, LeaderboardEntry } from '../utils/api';
 import { AddUniversityModal } from '../components/AddUniversityModal';
-import { t } from '../utils/i18n';
+import { useTranslation } from '../utils/i18n';
 
 interface HomePageProps {
-  t: (key: string) => string;
+  t?: unknown; // Kept for backwards compatibility if passed, but hook is preferred
 }
 
 export default function HomePage() {
-  const t = (key: string) => key; // Placeholder translation function
+  const { t } = useTranslation();
   const [search, setSearch] = useState('');
   const [isAddUniOpen, setAddUniOpen] = useState(false);
   const token = localStorage.getItem('token');
@@ -193,7 +194,7 @@ export default function HomePage() {
             </div>
             <div className="flex flex-col gap-2 max-h-52 overflow-y-auto">
               {activityFeed && activityFeed.length > 0 ? (
-                activityFeed.map((item: any, idx: number) => (
+                activityFeed.map((item: ActivityFeedEntry, idx: number) => (
                   <div key={idx} className="activity-item !p-3 !rounded-xl">
                     <div className="activity-icon !w-8 !h-8">
                       {item.type === 'note' ? <FileText size={14} /> : <MessageSquare size={14} />}
@@ -224,7 +225,7 @@ export default function HomePage() {
             </div>
             <div className="flex flex-col gap-2">
               {leaderboardData?.leaderboard && leaderboardData.leaderboard.length > 0 ? (
-                leaderboardData.leaderboard.slice(0, 5).map((user: any) => (
+                leaderboardData.leaderboard.slice(0, 5).map((user: LeaderboardEntry) => (
                   <div key={user.user_id} className="leaderboard-item !p-3 !rounded-xl">
                     <div className="flex items-center gap-3 min-w-0">
                       <div
