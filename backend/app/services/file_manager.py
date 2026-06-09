@@ -10,7 +10,7 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from fastapi import UploadFile
+from fastapi import HTTPException, UploadFile
 
 from app.core.config import settings
 
@@ -19,6 +19,29 @@ DIR_AVATARS = "avatars"
 DIR_NOTES = "notes"
 DIR_UNIVERSITIES = "universities"
 DIR_FACULTIES = "faculties"
+
+# Allow-list for uploaded files (defence against stored-XSS / executable uploads).
+ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".txt", ".png", ".jpg", ".jpeg", ".gif", ".webp"}
+ALLOWED_CONTENT_TYPES = {
+    "application/pdf",
+    "text/plain",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    # Some clients send a generic type; the extension check above is the hard gate.
+    "application/octet-stream",
+}
+
+
+def validate_file_type(file: UploadFile) -> None:
+    """Reject uploads whose extension or content-type is not in the allow-list."""
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"File type {ext or '(none)'} not allowed")
+    content_type = (file.content_type or "").lower()
+    if content_type and not (
+        content_type.startswith("image/") or content_type in ALLOWED_CONTENT_TYPES
+    ):
+        raise HTTPException(status_code=400, detail=f"Content type {content_type} not allowed")
 
 
 def _normalize_path(path: str) -> str:
@@ -64,6 +87,7 @@ def save_upload(file: UploadFile, directory: str) -> str:
     Save uploaded file with uuid4 + original extension. Return URL path with forward slashes.
     directory: one of DIR_AVATARS, DIR_NOTES, DIR_UNIVERSITIES, DIR_FACULTIES.
     """
+    validate_file_type(file)
     # Validate file size based on directory type
     if directory in [DIR_AVATARS, DIR_UNIVERSITIES, DIR_FACULTIES]:
         validate_file_size(file, settings.MAX_IMAGE_SIZE, "Image")
@@ -90,6 +114,7 @@ def save_upload_for_note(file: UploadFile, note_id: int) -> tuple[str, str, str]
     Save file for a note to uploads/notes/{note_id}/{uuid}_{filename}.
     Returns (file_url, file_type, file_name) - all with forward slashes in paths.
     """
+    validate_file_type(file)
     filename = file.filename or "file"
     ext = ""
     if "." in filename:
