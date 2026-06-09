@@ -4,7 +4,7 @@ Minimal entry point: config, upload dirs, CORS, routers, static files.
 Run: uvicorn app.main:app --host 0.0.0.0 --port 8000
 """
 import os
-import time
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, HTTPException
@@ -14,10 +14,8 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import desc, func
 
 from app.core.config import settings
-from app.core.database import Base, engine, get_db
+from app.core.database import get_db
 
-# Ensure test crash prevention by holding off on active validations at module load
-# SECRET_KEY validation moved to startup events
 from app.core.security import get_current_user
 from app.models import (
     User,
@@ -35,38 +33,31 @@ from app.models import (
     PasswordResetToken,
 )
 from app.schemas import NoteOut, UniversityOut, NotificationOut, ReportCreate, ReportOut, FeedbackCreate, FeedbackOut
-from app.migrate import run_migrations
 from app.seed import run_seed
-
-# Create tables and run migrations on startup (retry if DB not ready)
-for attempt in range(5):
-    try:
-        Base.metadata.create_all(bind=engine)
-        run_migrations(engine)
-        break
-    except Exception as e:
-        if attempt == 4:
-            raise
-        time.sleep(2)
-run_seed()
 
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.core.rate_limit import limiter
 
-app = FastAPI(title="Colloq API", version="2.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup/shutdown tasks.
+
+    The database schema is managed by Alembic (run via docker-entrypoint.sh
+    before the app starts), so we no longer create tables or run ad-hoc
+    migrations here. On startup we validate config and seed default data.
+    Both are skipped while running the test suite.
+    """
+    if not os.getenv("TESTING"):
+        settings.validate_secret_key()
+        run_seed()
+    yield
+
+
+app = FastAPI(title="Colloq API", version="2.1.0", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-@app.on_event("startup")
-async def startup_event():
-    # Only validate on real startup, not import
-    if settings.SECRET_KEY == "change-me-in-production" and not os.getenv("TESTING"):
-        import warnings
-        warnings.warn(
-            "SECRET_KEY is set to the insecure default value. "
-            "Set the SECRET_KEY environment variable to a secure random string.",
-            UserWarning,
-        )
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -81,6 +72,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    """Prevent MIME-sniffing of user-uploaded files served from /uploads."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
 
 # Ensure upload directories exist (cross-platform)
 os.makedirs(os.path.join(settings.UPLOAD_DIR, "universities"), exist_ok=True)
@@ -213,7 +213,7 @@ async def create_report(payload: ReportCreate, current_user: User = Depends(get_
         raise HTTPException(status_code=404, detail="Note not found")
     if payload.reported_user_id and not db.query(User).filter(User.id == payload.reported_user_id).first():
         raise HTTPException(status_code=404, detail="User not found")
-    r = Report(reporter_id=current_user.id, note_id=payload.note_id, reported_user_id=payload.reported_user_id, reason=payload.reason[:100])
+    r = Report(reporter_id=current_user.id, note_id=payload.note_id, reported_user_id=payload.reported_user_id, reason=payload.reason)
     db.add(r)
     db.commit()
     db.refresh(r)
@@ -223,9 +223,7 @@ async def create_report(payload: ReportCreate, current_user: User = Depends(get_
 @app.post("/feedback", response_model=FeedbackOut)
 async def submit_feedback(payload: FeedbackCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Submit user feedback (1-5 rating + optional comment)."""
-    if not (1 <= payload.rating <= 5):
-        raise HTTPException(status_code=400, detail="Rating must be 1-5")
-    f = Feedback(user_id=current_user.id, rating=payload.rating, comment=(payload.comment[:2000] if payload.comment else None))
+    f = Feedback(user_id=current_user.id, rating=payload.rating, comment=payload.comment)
     db.add(f)
     db.commit()
     db.refresh(f)

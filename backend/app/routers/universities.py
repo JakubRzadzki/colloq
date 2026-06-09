@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import desc, func
 
 from app.core.database import get_db
-from app.core.security import get_current_user, get_current_user_optional
+from app.core.security import get_current_user, get_current_user_optional, get_current_active_admin
 from app.models import University, Faculty, FieldOfStudy, Subject, User, Review
 from app.schemas import (
     UniversityOut,
@@ -67,6 +67,7 @@ async def create_university(
             country=(country or "Poland").strip(),
             description=description.strip() if (description and isinstance(description, str)) else None,
             image_url=image_url,
+            is_approved=current_user.is_admin,  # Regular users' submissions require admin approval
         )
         db.add(university)
         db.commit()
@@ -104,10 +105,10 @@ async def update_university(
     uni_id: int,
     description: Optional[str] = Form(None),
     banner: Optional[UploadFile] = File(None),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_admin),
     db: Session = Depends(get_db),
 ):
-    """Update university details (admin)."""
+    """Update university details (admin only)."""
     uni = db.query(University).filter(University.id == uni_id).first()
     if not uni:
         raise HTTPException(status_code=404, detail="University not found")
@@ -153,6 +154,7 @@ async def create_faculty(
         description=description,
         image_url=image_url,
         university_id=university_id,
+        is_approved=current_user.is_admin,  # Regular users' submissions require admin approval
     )
     db.add(faculty)
     db.commit()
@@ -182,6 +184,7 @@ async def create_field(
         name=data.name,
         degree_level=data.degree_level,
         faculty_id=data.faculty_id,
+        is_approved=current_user.is_admin,  # Regular users' submissions require admin approval
     )
     db.add(field)
     db.commit()
@@ -216,6 +219,7 @@ async def create_subject(
         semester=data.semester,
         academic_year=data.academic_year,
         field_of_study_id=data.field_of_study_id,
+        is_approved=current_user.is_admin,  # Regular users' submissions require admin approval
     )
     db.add(subject)
     db.commit()

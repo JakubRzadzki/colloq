@@ -1,11 +1,11 @@
 """Notes CRUD, comments, voting (atomic), favorites, tags. File cleanup on delete."""
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from sqlalchemy.orm import Session, joinedload
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
+from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import desc, or_
 
-from app.core.database import get_db
+from app.core.database import get_db, SessionLocal
 from app.core.security import get_current_user, get_current_user_optional
 from app.models import (
     User,
@@ -63,6 +63,19 @@ def _note_out(note: Note) -> NoteOut:
 MAX_FILES_PER_NOTE = 10
 
 
+def _increment_view_count(note_id: int) -> None:
+    """Fire-and-forget view counter. Uses its own session because the request
+    session is already closed by the time the background task runs."""
+    db = SessionLocal()
+    try:
+        db.query(Note).filter(Note.id == note_id).update(
+            {Note.view_count: Note.view_count + 1}, synchronize_session=False
+        )
+        db.commit()
+    finally:
+        db.close()
+
+
 @router.post("/notes", response_model=NoteOut)
 async def create_note(
     title: str = Form(None),
@@ -91,6 +104,7 @@ async def create_note(
         user_id=current_user.id,
         university_id=university_id,
         subject_id=subject_id,
+        is_approved=current_user.is_admin,  # Regular users' notes require admin approval
     )
     db.add(note)
     db.flush()
@@ -109,9 +123,9 @@ async def create_note(
     note = db.query(Note).options(
         joinedload(Note.author),
         joinedload(Note.subject),
-        joinedload(Note.images),
-        joinedload(Note.files),
-        joinedload(Note.tags),
+        selectinload(Note.images),
+        selectinload(Note.files),
+        selectinload(Note.tags),
     ).filter(Note.id == note.id).first()
     return _note_out(note)
 
@@ -137,9 +151,9 @@ async def get_notes(
     query = db.query(Note).options(
         joinedload(Note.author),
         joinedload(Note.subject),
-        joinedload(Note.images),
-        joinedload(Note.files),
-        joinedload(Note.tags),
+        selectinload(Note.images),
+        selectinload(Note.files),
+        selectinload(Note.tags),
     ).filter(Note.is_approved == True)
     if university_id:
         query = query.filter(Note.university_id == university_id)
@@ -173,9 +187,10 @@ async def get_notes(
     else:
         query = query.order_by(desc(Note.created_at))
 
-    # Count total before pagination
+    # Count total before pagination. Drop ORDER BY (invalid alongside an
+    # aggregate) and count distinct note ids (filters may join to-many tables).
     from sqlalchemy import func as sqlfunc
-    total = query.distinct().with_entities(sqlfunc.count(Note.id)).scalar() or 0
+    total = query.order_by(None).with_entities(sqlfunc.count(sqlfunc.distinct(Note.id))).scalar() or 0
 
     # Apply pagination
     notes = query.distinct().offset((page - 1) * page_size).limit(page_size).all()
@@ -189,19 +204,18 @@ async def get_notes(
 
 
 @router.get("/notes/{note_id}", response_model=NoteOut)
-async def get_note(note_id: int, db: Session = Depends(get_db)):
-    """Get a note by ID; increment view count."""
+async def get_note(note_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """Get a note by ID; increment view count asynchronously."""
     note = db.query(Note).options(
         joinedload(Note.author),
         joinedload(Note.subject),
-        joinedload(Note.images),
-        joinedload(Note.files),
-        joinedload(Note.tags),
+        selectinload(Note.images),
+        selectinload(Note.files),
+        selectinload(Note.tags),
     ).filter(Note.id == note_id).first()
     if not note:
         raise HTTPException(status_code=404, detail="Note not found")
-    note.view_count = (note.view_count or 0) + 1
-    db.commit()
+    background_tasks.add_task(_increment_view_count, note_id)
     return _note_out(note)
 
 
@@ -217,7 +231,7 @@ async def update_note(
     db: Session = Depends(get_db),
 ):
     """Update a note (owner only). Saves previous version to history."""
-    note = db.query(Note).options(joinedload(Note.images), joinedload(Note.files)).filter(Note.id == note_id).first()
+    note = db.query(Note).options(selectinload(Note.images), selectinload(Note.files)).filter(Note.id == note_id).first()
     if not note:
         raise HTTPException(status_code=404, detail="Note not found")
     if note.user_id != current_user.id and not current_user.is_admin:
@@ -245,9 +259,9 @@ async def update_note(
     note = db.query(Note).options(
         joinedload(Note.author),
         joinedload(Note.subject),
-        joinedload(Note.images),
-        joinedload(Note.files),
-        joinedload(Note.tags),
+        selectinload(Note.images),
+        selectinload(Note.files),
+        selectinload(Note.tags),
     ).filter(Note.id == note.id).first()
     return _note_out(note)
 
@@ -277,7 +291,7 @@ async def delete_note(
     db: Session = Depends(get_db),
 ):
     """Delete a note (owner or admin). Removes DB record and all files from disk."""
-    note = db.query(Note).options(joinedload(Note.images), joinedload(Note.files)).filter(Note.id == note_id).first()
+    note = db.query(Note).options(selectinload(Note.images), selectinload(Note.files)).filter(Note.id == note_id).first()
     if not note:
         raise HTTPException(status_code=404, detail="Note not found")
     if note.user_id != current_user.id and not current_user.is_admin:
@@ -299,9 +313,10 @@ async def delete_note(
 async def download_note_file(
     note_id: int,
     file_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Download a specific file from a note. Increments download counter."""
+    """Download a specific file from a note (requires login). Increments download counter."""
     from fastapi.responses import FileResponse
     from pathlib import Path as PathLib
 
@@ -453,7 +468,9 @@ async def add_review(
         if note:
             reviews = db.query(Review).filter(Review.note_id == review.note_id).all()
             total = sum(r.rating for r in reviews) + review.rating
-            note.score = total / (len(reviews) + 1)
+            count = len(reviews) + 1
+            note.avg_rating = total / count
+            note.rating_count = count
             author = db.query(User).filter(User.id == note.user_id).first()
             if author:
                 author.reputation_points = (author.reputation_points or 0) + 1
@@ -475,7 +492,7 @@ async def create_tag(
     db: Session = Depends(get_db),
 ):
     """Create a tag."""
-    name = (payload.name or "").strip()[:80]
+    name = (payload.name or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="Tag name required")
     existing = db.query(Tag).filter(Tag.name == name).first()
