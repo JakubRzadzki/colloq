@@ -1,23 +1,23 @@
 """
 Application configuration loaded from environment variables.
-Defaults to local SQLite and local uploads directory.
+Defaults to PostgreSQL database and local uploads directory.
 """
 from __future__ import annotations
 
 import os
+from dotenv import load_dotenv
 
-_BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-
+_BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+load_dotenv(os.path.join(_BASE_DIR, ".env")) # Wymuszamy załadowanie .env
 
 class Settings:
     """Centralized settings. Load from .env or environment."""
 
-    # Database: default SQLite (local file); set DATABASE_URL for PostgreSQL
-    _raw_db: str = os.getenv(
+    # Database: default PostgreSQL
+    DATABASE_URL: str = os.getenv(
         "DATABASE_URL",
-        "sqlite:///" + os.path.join(_BASE_DIR, "data", "colloq.db").replace("\\", "/"),
+        "postgresql://colloq_user:colloq_password@localhost:5432/colloq_dev"
     )
-    DATABASE_URL: str = _raw_db
 
     # Auth
     SECRET_KEY: str = os.getenv("SECRET_KEY", "change-me-in-production")
@@ -27,7 +27,7 @@ class Settings:
     def validate_secret_key(self):
         """Validate that SECRET_KEY is not using the insecure default."""
         if self.SECRET_KEY == "change-me-in-production":
-            raise ValueError(
+            raise RuntimeError(
                 "SECRET_KEY is set to the insecure default value. "
                 "Set the SECRET_KEY environment variable to a secure random string."
             )

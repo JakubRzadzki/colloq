@@ -11,15 +11,14 @@ from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 from app.core.config import settings
 
-kwargs = {}
-if "sqlite" in settings.DATABASE_URL:
-    kwargs["connect_args"] = {"check_same_thread": False}
-
+# Profesjonalna konfiguracja pule połączeń z PostgreSQL
 engine = create_engine(
     settings.DATABASE_URL,
     echo=False,
-    pool_pre_ping=("sqlite" not in settings.DATABASE_URL),
-    **kwargs
+    pool_size=10,             # Ilość permanentnie otwartych połączeń
+    max_overflow=20,          # Dodatkowe połączenia gdy aplikacja się przeciąży
+    pool_pre_ping=True,       # Pinguje bazę przed użyciem z puli (zapobiega zerwanym połączeniom!)
+    pool_recycle=1800         # Resetuje połączenie co 30 min (idealne dla AWS RDS / chmury)
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
