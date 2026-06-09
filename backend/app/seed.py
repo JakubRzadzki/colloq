@@ -18,8 +18,8 @@ def run_seed() -> None:
         print(f"[SEED] WARNING: Could not connect to database: {e}")
         return
     try:
-        # Check if Politechnika Krakowska already exists
-        pk = db.query(University).filter(University.name.ilike("%Politechnika Krakowska%")).first()
+        # Check if Politechnika Krakowska already exists using exact match instead of ilike
+        pk = db.query(University).filter(University.name == "Politechnika Krakowska im. Tadeusza Kościuszki").first()
         if not pk:
             pk = University(
                 name="Politechnika Krakowska im. Tadeusza Kościuszki",
@@ -34,8 +34,7 @@ def run_seed() -> None:
                 is_approved=True,
             )
             db.add(pk)
-            db.commit()
-            db.refresh(pk)
+            db.flush() # Flush wyśle SQL INSERT, ale nie commitnie. Pozwoli odczytać `pk.id`
             print(f"[SEED] Created university: {pk.name}")
 
             # Faculties with fields_of_study and subjects
@@ -183,13 +182,13 @@ def run_seed() -> None:
                             is_approved=True,
                         )
                         db.add(subj)
-            db.commit()
+            db.flush()
             print("[SEED] Created faculties, fields of study, and subjects for Politechnika Krakowska")
 
         # AdminPK user
         admin_pk = db.query(User).filter(User.email == "admin@pk.edu.pl").first()
         if not admin_pk:
-            pk_uni = pk if pk else db.query(University).filter(University.name.ilike("%Politechnika Krakowska%")).first()
+            pk_uni = pk if pk else db.query(University).filter(University.name == "Politechnika Krakowska im. Tadeusza Kościuszki").first()
             admin_pk = User(
                 email="admin@pk.edu.pl",
                 nickname="AdminPK",
@@ -201,7 +200,7 @@ def run_seed() -> None:
                 university_id=pk_uni.id if pk_uni is not None else None,
             )
             db.add(admin_pk)
-            db.commit()
+            db.flush()
             print("[SEED] Created admin user: admin@pk.edu.pl / admin123_secure")
 
         # Fallback: Colloq Academy and admin@colloq.pl if DB is completely empty
@@ -218,8 +217,8 @@ def run_seed() -> None:
                 is_approved=True,
             )
             db.add(colloq)
-            db.commit()
-            db.refresh(colloq)
+            db.flush()
+            
         if not db.query(User).filter(User.email == "admin@colloq.pl").first():
             admin = User(
                 email="admin@colloq.pl",
@@ -230,8 +229,11 @@ def run_seed() -> None:
                 is_verified=True,
             )
             db.add(admin)
-            db.commit()
+            db.flush()
             print("[SEED] Created fallback admin: admin@colloq.pl / password")
+            
+        # Finalny commit
+        db.commit()
     except Exception as e:
         print(f"[SEED] WARNING: Seeding failed: {e}")
         db.rollback()

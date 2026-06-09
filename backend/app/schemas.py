@@ -5,7 +5,7 @@ Define child models before parents to avoid forward-reference issues.
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 # -----------------------------------------------------------------------------
@@ -36,6 +36,15 @@ class UserOut(BaseModel):
 
 
 UserResponse = UserOut
+
+
+class PublicUserOut(BaseModel):
+    """Public-facing user info (no email). Used for nested author/user fields."""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    nickname: Optional[str] = None
+    avatar_url: Optional[str] = None
+    reputation_points: int = 0
 
 
 class RegisterRequest(BaseModel):
@@ -109,7 +118,7 @@ class FieldOfStudyCreate(BaseModel):
 # -----------------------------------------------------------------------------
 
 class ReviewCreate(BaseModel):
-    rating: int
+    rating: int = Field(ge=1, le=5)
     content: Optional[str] = None
     note_id: Optional[int] = None
     university_id: Optional[int] = None
@@ -122,7 +131,7 @@ class ReviewOut(BaseModel):
     rating: int
     content: Optional[str] = None
     created_at: Optional[datetime] = None
-    user: Optional[UserOut] = None
+    user: Optional[PublicUserOut] = None
 
 
 class CommentCreate(BaseModel):
@@ -134,7 +143,7 @@ class CommentOut(BaseModel):
     id: int
     content: str
     created_at: Optional[datetime] = None
-    user: Optional[UserOut] = None
+    user: Optional[PublicUserOut] = None
 
 
 # -----------------------------------------------------------------------------
@@ -168,7 +177,7 @@ class TagOut(BaseModel):
 
 
 class TagCreate(BaseModel):
-    name: str
+    name: str = Field(max_length=80)
 
 
 class NoteTagsUpdate(BaseModel):
@@ -181,6 +190,8 @@ class NoteOut(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
     score: float = 0.0
+    avg_rating: float = 0.0
+    rating_count: int = 0
     file_url: Optional[str] = None
     image_url: Optional[str] = None
     video_url: Optional[str] = None
@@ -192,7 +203,7 @@ class NoteOut(BaseModel):
     is_approved: bool = True
     view_count: int = 0
     download_count: int = 0
-    author: Optional[UserOut] = None
+    author: Optional[PublicUserOut] = None
     subject: Optional[SubjectOut] = None
     images: List[NoteImageOut] = []
     files: List[NoteFileOut] = []
@@ -269,7 +280,7 @@ class NotificationOut(BaseModel):
 class ReportCreate(BaseModel):
     note_id: Optional[int] = None
     reported_user_id: Optional[int] = None
-    reason: str
+    reason: str = Field(max_length=100)
 
 
 class ReportOut(BaseModel):
@@ -284,8 +295,8 @@ class ReportOut(BaseModel):
 
 
 class FeedbackCreate(BaseModel):
-    rating: int  # 1-5
-    comment: Optional[str] = None
+    rating: int = Field(ge=1, le=5)
+    comment: Optional[str] = Field(default=None, max_length=2000)
 
 
 class FeedbackOut(BaseModel):
