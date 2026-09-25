@@ -65,6 +65,13 @@ class NoteService:
             raise NotFoundError(NOTE_NOT_FOUND)
         return note
 
+    def _reload(self, note_id: int) -> Note:
+        """Fetch a note again with everything NoteOut needs, e.g. after a commit."""
+        note = self.repo.get(note_id)
+        if note is None:
+            raise NotFoundError(NOTE_NOT_FOUND)
+        return note
+
     def _get_owned(self, note_id: int, user: User) -> Note:
         note = self.repo.get(note_id)
         if note is None:
@@ -147,7 +154,7 @@ class NoteService:
             self._delete_files(saved)
             raise
         self._commit_or_discard(saved)
-        return self.repo.get(note.id)
+        return self._reload(note.id)
 
     def update(
         self,
@@ -189,7 +196,7 @@ class NoteService:
         # The old image is only removed once the new path is safely committed.
         if replaced_image:
             self._delete_files([replaced_image])
-        return self.repo.get(note_id)
+        return self._reload(note_id)
 
     def delete(self, user: User, note_id: int) -> None:
         note = self._get_owned(note_id, user)

@@ -6,6 +6,7 @@ SEED_ADMIN_PASSWORD; production admins are created with `python -m app.cli creat
 """
 import logging
 import secrets
+from typing import Any
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -49,9 +50,18 @@ def _seed_reference_data(db: Session) -> None:
             city="Kraków",
             region="Małopolskie",
             country="Poland",
-            description="Public technical university in Krakow, educating engineers and masters in 8 faculties. Known for high level of architecture and civil engineering education.",
-            image_url="https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Politechnika_Krakowska_logo.svg/1200px-Politechnika_Krakowska_logo.svg.png",
-            banner_url="https://upload.wikimedia.org/wikipedia/commons/e/e3/Politechnika_Krakowska_Kampus_Glowny_Wydzial_Inzynierii_Ladowej.jpg",
+            description=(
+                "Public technical university in Krakow, educating engineers and masters in 8 faculties. "
+                "Known for high level of architecture and civil engineering education."
+            ),
+            image_url=(
+                "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/"
+                "Politechnika_Krakowska_logo.svg/1200px-Politechnika_Krakowska_logo.svg.png"
+            ),
+            banner_url=(
+                "https://upload.wikimedia.org/wikipedia/commons/e/e3/"
+                "Politechnika_Krakowska_Kampus_Glowny_Wydzial_Inzynierii_Ladowej.jpg"
+            ),
             is_approved=True,
         )
         db.add(pk)
@@ -59,7 +69,7 @@ def _seed_reference_data(db: Session) -> None:
         logger.info("Seed: created university %s", pk.name)
 
         # Faculties with fields_of_study and subjects
-        faculties_data = [
+        faculties_data: list[dict[str, Any]] = [
             {
                 "name": "Wydział Informatyki i Telekomunikacji",
                 "image_url": "https://wiit.pk.edu.pl/wp-content/uploads/2021/01/logo-wiit.png",

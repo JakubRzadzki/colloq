@@ -21,6 +21,10 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: '3.11' }
       - run: pip install -r backend/requirements.txt -r backend/requirements-dev.txt
+      - name: Lint (ruff)
+        run: cd backend && ruff check app/
+      - name: Type check (mypy)
+        run: cd backend && mypy app/
       - run: cd backend && pytest tests/ -v
         env:
           TESTING: "1"

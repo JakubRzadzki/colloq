@@ -5,7 +5,9 @@ rolling back is the caller's (service's) job.
 """
 from __future__ import annotations
 
-from sqlalchemy import desc, func, or_
+from typing import Any
+
+from sqlalchemy import UnaryExpression, desc, func, or_
 from sqlalchemy.orm import Query, Session, joinedload, selectinload
 
 from app.core.sql import LIKE_ESCAPE, escape_like, paginate
@@ -23,7 +25,7 @@ from app.models import (
 )
 from app.schemas import NoteFilters, NoteSort
 
-SORT_ORDER = {
+SORT_ORDER: dict[NoteSort, tuple[UnaryExpression[Any], ...]] = {
     NoteSort.date: (desc(Note.created_at),),
     NoteSort.score: (desc(Note.score), desc(Note.created_at)),
     NoteSort.views: (desc(Note.view_count), desc(Note.created_at)),

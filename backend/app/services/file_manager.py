@@ -9,7 +9,6 @@ import re
 import shutil
 import uuid
 from pathlib import Path
-from typing import Optional
 
 from fastapi import UploadFile
 
@@ -62,7 +61,7 @@ def is_public_url(stored: str) -> bool:
     return _normalize_path(stored.strip()).lstrip("/").startswith(UPLOADS_URL_PREFIX)
 
 
-def _relative_path_from_url(url: Optional[str]) -> Optional[str]:
+def _relative_path_from_url(url: str | None) -> str | None:
     """Convert a stored URL like /uploads/notes/abc.jpg to a path relative to UPLOAD_DIR (notes/abc.jpg)."""
     if not url or not url.strip():
         return None
@@ -131,7 +130,6 @@ def save_upload_for_note(file: UploadFile, note_id: int) -> tuple[str, str, str]
     ext = ""
     if "." in filename:
         ext = "." + filename.rsplit(".", 1)[-1].lower()
-    safe_ext = ext if re.match(r"^\.\w+$", ext) else ""
     safe_name = re.sub(r"[^\w.\-]", "_", filename)[:200]
     unique = uuid.uuid4().hex[:12]
     stored_filename = f"{unique}_{safe_name}"
@@ -151,14 +149,14 @@ def attachment_path(stored: str) -> Path:
     return resolve_physical_path(_relative_path_from_url(stored) or "", settings.PRIVATE_UPLOAD_DIR)
 
 
-def delete_file(relative_path: Optional[str]) -> bool:
+def delete_file(relative_path: str | None) -> bool:
     """
     Delete a stored file: "/uploads/..." URLs from UPLOAD_DIR, other paths (note
     attachments) from PRIVATE_UPLOAD_DIR. Returns True if deleted or already missing.
     Safe to call with None or empty string; no-op and returns True.
     """
     rel = _relative_path_from_url(relative_path)
-    if not rel:
+    if not relative_path or not rel:
         return True
     base_dir = settings.UPLOAD_DIR if is_public_url(relative_path) else settings.PRIVATE_UPLOAD_DIR
     try:
@@ -177,7 +175,7 @@ def delete_file(relative_path: Optional[str]) -> bool:
 EXTERNAL_URL_PREFIXES = ("http://", "https://", "data:")
 
 
-def normalize_stored_path(url_or_path: Optional[str]) -> Optional[str]:
+def normalize_stored_path(url_or_path: str | None) -> str | None:
     """Normalize a stored image_url/file_url to forward slashes for API responses.
 
     External URLs are returned untouched: collapsing "//" would turn

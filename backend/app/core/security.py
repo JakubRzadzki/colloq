@@ -3,8 +3,7 @@ Authentication utilities: JWT, password hashing, current user dependency.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 import jwt
 from fastapi import Depends, HTTPException, status
@@ -31,7 +30,7 @@ def get_password_hash(password: str) -> str:
 
 def create_access_token(data: dict) -> str:
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.now(UTC) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode["exp"] = int(expire.timestamp())
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
@@ -48,11 +47,11 @@ def get_current_user(
     )
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        email: Optional[str] = payload.get("sub")
+        email: str | None = payload.get("sub")
         if not email:
             raise exc
     except jwt.PyJWTError:
-        raise exc
+        raise exc from None
     user = db.query(User).filter(User.email == email).first()
     if user is None or not user.is_active or getattr(user, "is_banned", False):
         raise exc
@@ -60,9 +59,9 @@ def get_current_user(
 
 
 def get_current_user_optional(
-    token: Optional[str] = Depends(oauth2_scheme_optional),
+    token: str | None = Depends(oauth2_scheme_optional),
     db: Session = Depends(get_db),
-) -> Optional[User]:
+) -> User | None:
     """Return current user if valid token present, else None."""
     if not token:
         return None

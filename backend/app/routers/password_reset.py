@@ -2,16 +2,16 @@
 import hashlib
 import logging
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.deps import DbSession
 from app.core.rate_limit import limiter
 from app.core.security import get_password_hash
-from app.core.deps import DbSession
-from app.models import User, PasswordResetToken
+from app.models import PasswordResetToken, User
 from app.schemas import ForgotPasswordRequest, ResetPasswordRequest
 from app.services.auth_service import find_user_by_email
 
@@ -40,7 +40,7 @@ def create_reset_token(db: Session, user: User) -> str:
     db.add(PasswordResetToken(
         user_id=user.id,
         token=_hash_token(token),
-        expires_at=datetime.now(timezone.utc) + RESET_TOKEN_TTL,
+        expires_at=datetime.now(UTC) + RESET_TOKEN_TTL,
     ))
     db.commit()
     return token
@@ -75,7 +75,7 @@ def reset_password(
     reset_token = db.query(PasswordResetToken).filter(
         PasswordResetToken.token == _hash_token(payload.token),
         PasswordResetToken.used == False,  # noqa: E712
-        PasswordResetToken.expires_at > datetime.now(timezone.utc),
+        PasswordResetToken.expires_at > datetime.now(UTC),
     ).first()
 
     if not reset_token:

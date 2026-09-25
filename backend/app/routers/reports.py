@@ -19,7 +19,12 @@ def create_report(request: Request, payload: ReportCreate, current_user: Current
         raise HTTPException(status_code=404, detail="Note not found")
     if payload.reported_user_id and not db.query(User).filter(User.id == payload.reported_user_id).first():
         raise HTTPException(status_code=404, detail="User not found")
-    r = Report(reporter_id=current_user.id, note_id=payload.note_id, reported_user_id=payload.reported_user_id, reason=payload.reason)
+    r = Report(
+        reporter_id=current_user.id,
+        note_id=payload.note_id,
+        reported_user_id=payload.reported_user_id,
+        reason=payload.reason,
+    )
     db.add(r)
     db.commit()
     db.refresh(r)

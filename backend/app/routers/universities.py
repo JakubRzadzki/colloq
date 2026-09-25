@@ -1,5 +1,4 @@
 """Universities, faculties, fields of study and subjects."""
-from typing import List, Optional
 
 from fastapi import APIRouter, File, Form, UploadFile
 
@@ -25,8 +24,8 @@ def create_university(
     city: str = Form(...),
     region: str = Form(""),
     country: str = Form("Poland"),
-    description: Optional[str] = Form(None),
-    image: Optional[UploadFile] = File(None),
+    description: str | None = Form(None),
+    image: UploadFile | None = File(None),
 ):
     """Create a university. Regular users' submissions wait for admin approval."""
     return service.create_university(
@@ -34,8 +33,8 @@ def create_university(
     )
 
 
-@router.get("/universities", response_model=List[UniversityOut])
-def get_universities(service: UniversityServiceDep, region: Optional[str] = None):
+@router.get("/universities", response_model=list[UniversityOut])
+def get_universities(service: UniversityServiceDep, region: str | None = None):
     """List all approved universities. Optional region filter."""
     return service.list_universities(region)
 
@@ -46,7 +45,7 @@ def get_university(uni_id: int, current_user: OptionalUser, service: UniversityS
     return service.get_university(uni_id, current_user)
 
 
-@router.get("/universities/{uni_id}/faculties", response_model=List[FacultyOut])
+@router.get("/universities/{uni_id}/faculties", response_model=list[FacultyOut])
 def get_faculties(uni_id: int, service: UniversityServiceDep):
     """List approved faculties for a university."""
     return service.list_faculties(uni_id)
@@ -57,8 +56,8 @@ def create_faculty(
     current_user: CurrentUser,
     service: UniversityServiceDep,
     name: str = Form(...),
-    description: Optional[str] = Form(None),
-    image: Optional[UploadFile] = File(None),
+    description: str | None = Form(None),
+    image: UploadFile | None = File(None),
     university_id: int = Form(...),
 ):
     """Create a faculty. Regular users' submissions wait for admin approval."""
@@ -67,7 +66,7 @@ def create_faculty(
     )
 
 
-@router.get("/faculties/{fac_id}/fields", response_model=List[FieldOfStudyOut])
+@router.get("/faculties/{fac_id}/fields", response_model=list[FieldOfStudyOut])
 def get_fields(fac_id: int, service: UniversityServiceDep):
     """List approved fields of study for a faculty."""
     return service.list_fields(fac_id)
@@ -79,8 +78,8 @@ def create_field(data: FieldOfStudyCreate, current_user: CurrentUser, service: U
     return service.create_field(current_user, data)
 
 
-@router.get("/fields/{field_id}/subjects", response_model=List[SubjectOut])
-def get_subjects(field_id: int, service: UniversityServiceDep, semester: Optional[int] = None):
+@router.get("/fields/{field_id}/subjects", response_model=list[SubjectOut])
+def get_subjects(field_id: int, service: UniversityServiceDep, semester: int | None = None):
     """List approved subjects for a field. Supports optional semester filtering."""
     return service.list_subjects(field_id, semester)
 
@@ -91,7 +90,7 @@ def create_subject(data: SubjectCreate, current_user: CurrentUser, service: Univ
     return service.create_subject(current_user, data)
 
 
-@router.get("/universities/{uni_id}/reviews", response_model=List[ReviewOut])
+@router.get("/universities/{uni_id}/reviews", response_model=list[ReviewOut])
 def get_university_reviews(uni_id: int, service: UniversityServiceDep):
     """List reviews for a university."""
     return service.list_reviews(uni_id)

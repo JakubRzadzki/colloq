@@ -10,9 +10,13 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from app.core.config import settings
 from app.core.exceptions import DomainError
+from app.core.rate_limit import limiter
 from app.routers import (
     admin,
     auth,
@@ -26,13 +30,7 @@ from app.routers import (
     universities,
     users,
 )
-
 from app.seed import run_seed
-
-from slowapi import _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
-from slowapi.middleware import SlowAPIMiddleware
-from app.core.rate_limit import limiter
 
 # The only logging configuration in the app; modules just call logging.getLogger(__name__).
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -60,7 +58,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Colloq API", version="2.1.0", lifespan=lifespan)
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+# slowapi's handler is typed for RateLimitExceeded only, Starlette expects Exception.
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
 
 @app.exception_handler(DomainError)

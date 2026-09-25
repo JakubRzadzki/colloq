@@ -61,7 +61,9 @@ class NoteModeration(ModerationHandler):
 
     def on_approve(self, db: Session, item: Note) -> None:
         reputation.note_approved(item.author)
-        db.add(Notification(user_id=item.user_id, type="note_approved", message="Your note was approved.", related_id=item.id))
+        db.add(Notification(
+            user_id=item.user_id, type="note_approved", message="Your note was approved.", related_id=item.id
+        ))
 
     def files_to_delete(self, item: Note) -> list[str]:
         return collect_note_files(item)

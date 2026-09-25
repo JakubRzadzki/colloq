@@ -1,6 +1,6 @@
 """Notes CRUD, comments, voting, favorites, tags and reviews."""
 import mimetypes
-from typing import Annotated, List, Optional
+from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse
@@ -34,12 +34,12 @@ def create_note(
     current_user: CurrentUser,
     service: NoteServiceDep,
     title: str = Form(None),
-    content: Optional[str] = Form(None),
+    content: str | None = Form(None),
     university_id: int = Form(...),
-    subject_id: Optional[int] = Form(None),
-    image: Optional[UploadFile] = File(None),
-    images: List[UploadFile] = File(default=[]),
-    files: List[UploadFile] = File(default=[]),
+    subject_id: int | None = Form(None),
+    image: UploadFile | None = File(None),
+    images: list[UploadFile] = File(default=[]),
+    files: list[UploadFile] = File(default=[]),
 ):
     """Create a note with optional images and up to 10 file attachments."""
     return service.create(
@@ -68,11 +68,11 @@ def update_note(
     note_id: int,
     current_user: CurrentUser,
     service: NoteServiceDep,
-    title: Optional[str] = Form(None),
-    content: Optional[str] = Form(None),
-    image: Optional[UploadFile] = File(None),
-    images: List[UploadFile] = File(default=[]),
-    files: List[UploadFile] = File(default=[]),
+    title: str | None = Form(None),
+    content: str | None = Form(None),
+    image: UploadFile | None = File(None),
+    images: list[UploadFile] = File(default=[]),
+    files: list[UploadFile] = File(default=[]),
 ):
     """Update a note (owner or admin). Saves the previous version to history."""
     return service.update(
@@ -80,7 +80,7 @@ def update_note(
     )
 
 
-@router.get("/notes/{note_id}/history", response_model=List[NoteHistoryOut])
+@router.get("/notes/{note_id}/history", response_model=list[NoteHistoryOut])
 def get_note_history(note_id: int, current_user: CurrentUser, service: NoteServiceDep):
     """Get version history for a note (owner or admin)."""
     return service.history(current_user, note_id)
@@ -123,7 +123,7 @@ def toggle_favorite(note_id: int, current_user: CurrentUser, service: NoteServic
     return {"msg": "Removed from favorites", "is_favorited": False}
 
 
-@router.get("/notes/{note_id}/comments", response_model=List[CommentOut])
+@router.get("/notes/{note_id}/comments", response_model=list[CommentOut])
 def get_comments(note_id: int, page: Page, response: Response, current_user: OptionalUser, service: NoteServiceDep):
     """List comments for a note, newest first. The total count is in X-Total-Count."""
     comments, total = service.list_comments(note_id, current_user, page)
@@ -146,7 +146,7 @@ def add_review(review: ReviewCreate, current_user: CurrentUser, service: ReviewS
     return service.add_review(current_user, review)
 
 
-@router.get("/tags", response_model=List[TagOut])
+@router.get("/tags", response_model=list[TagOut])
 def list_tags(service: NoteServiceDep):
     """List all tags."""
     return service.list_tags()

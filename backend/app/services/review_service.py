@@ -52,7 +52,7 @@ class ReviewService:
         note = None
         if data.note_id is not None:
             note = self._check_note_target(user, data.note_id)
-        else:
+        elif data.university_id is not None:
             self._check_university_target(user, data.university_id)
         if self._already_reviewed(user, data):
             raise ConflictError(ALREADY_REVIEWED)

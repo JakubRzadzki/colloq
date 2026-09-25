@@ -91,7 +91,7 @@
 ### Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) & Docker Compose  
-  *Or:* Python 3.9+, Node.js 18+, PostgreSQL 14+
+  *Or:* Python 3.11+, Node.js 18+, PostgreSQL 14+
 
 ### Docker (Recommended)
 

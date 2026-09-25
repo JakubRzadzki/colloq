@@ -1,5 +1,5 @@
 """In-app notifications of the current user."""
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import desc
@@ -23,10 +23,14 @@ def get_notifications(current_user: CurrentUser, db: DbSession, unread_only: boo
 @router.patch("/notifications/{notification_id}/read")
 def mark_notification_read(notification_id: int, current_user: CurrentUser, db: DbSession):
     """Mark a notification as read."""
-    n = db.query(Notification).filter(Notification.id == notification_id, Notification.user_id == current_user.id).first()
+    n = (
+        db.query(Notification)
+        .filter(Notification.id == notification_id, Notification.user_id == current_user.id)
+        .first()
+    )
     if not n:
         raise HTTPException(status_code=404, detail="Notification not found")
-    n.read_at = datetime.now(timezone.utc)
+    n.read_at = datetime.now(UTC)
     db.commit()
     return {"msg": "Marked as read"}
 
@@ -34,6 +38,8 @@ def mark_notification_read(notification_id: int, current_user: CurrentUser, db: 
 @router.patch("/notifications/read-all")
 def mark_all_notifications_read(current_user: CurrentUser, db: DbSession):
     """Mark all notifications as read."""
-    db.query(Notification).filter(Notification.user_id == current_user.id, Notification.read_at.is_(None)).update({Notification.read_at: datetime.now(timezone.utc)})
+    db.query(Notification).filter(
+        Notification.user_id == current_user.id, Notification.read_at.is_(None)
+    ).update({Notification.read_at: datetime.now(UTC)})
     db.commit()
     return {"msg": "All marked as read"}

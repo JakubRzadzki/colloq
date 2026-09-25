@@ -1,6 +1,8 @@
 """Universities and their hierarchy: faculties, fields of study and subjects."""
 from __future__ import annotations
 
+from typing import TypeGuard
+
 from sqlalchemy import desc, func
 from sqlalchemy.orm import Session, joinedload
 
@@ -15,10 +17,10 @@ DEFAULT_UNIVERSITY_IMAGE = "https://placehold.co/400x200/5e5ce6/ffffff?text=Coll
 
 def _visible(item, user: User | None) -> bool:
     """Unapproved hierarchy items exist only for admins."""
-    return item is not None and (item.is_approved or (user is not None and user.is_admin))
+    return item is not None and bool(item.is_approved or (user is not None and user.is_admin))
 
 
-def _has_file(upload: Upload | None) -> bool:
+def _has_file(upload: Upload | None) -> TypeGuard[Upload]:
     return upload is not None and bool(upload.filename)
 
 
@@ -189,7 +191,7 @@ class UniversityService:
             uni.description = description.strip() or None
 
         saved: list[str] = []
-        replaced: list[str] = []
+        replaced: list[str | None] = []
         try:
             if _has_file(image):
                 new_url = self.storage.save_image(image, DIR_UNIVERSITIES)

@@ -1,5 +1,4 @@
 """Admin: pending items, approve/reject (with file cleanup), users, reports, feedback."""
-from typing import List, Optional
 
 from fastapi import APIRouter, File, Form, Response, UploadFile
 
@@ -23,7 +22,7 @@ def get_pending_items(current_user: AdminUser, service: ModerationServiceDep):
     return service.pending_items()
 
 
-@router.get("/users", response_model=List[UserOut])
+@router.get("/users", response_model=list[UserOut])
 def admin_get_users(page: Page, response: Response, current_user: AdminUser, service: AdminServiceDep):
     """List users, newest first (admin only). The total count is in X-Total-Count."""
     users, total = service.list_users(page)
@@ -52,9 +51,9 @@ def reject_item(item_type: ItemType, item_id: int, current_user: AdminUser, serv
     return {"msg": f"{item_type.value} rejected"}
 
 
-@router.get("/reports", response_model=List[ReportOut])
+@router.get("/reports", response_model=list[ReportOut])
 def admin_list_reports(
-    page: Page, response: Response, current_user: AdminUser, service: AdminServiceDep, status_filter: Optional[str] = None
+    page: Page, response: Response, current_user: AdminUser, service: AdminServiceDep, status_filter: str | None = None
 ):
     """List reports, newest first (admin only). The total count is in X-Total-Count."""
     reports, total = service.list_reports(status_filter, page)
@@ -69,7 +68,7 @@ def admin_update_report(report_id: int, status: str, current_user: AdminUser, se
     return {"msg": "Report updated", "status": status}
 
 
-@router.get("/feedback", response_model=List[FeedbackOut])
+@router.get("/feedback", response_model=list[FeedbackOut])
 def admin_list_feedback(page: Page, response: Response, current_user: AdminUser, service: AdminServiceDep):
     """List user feedback, newest first (admin only). The total count is in X-Total-Count."""
     feedback, total = service.list_feedback(page)
@@ -105,13 +104,13 @@ def admin_update_university(
     uni_id: int,
     current_user: AdminUser,
     service: UniversityServiceDep,
-    name: Optional[str] = Form(None),
-    city: Optional[str] = Form(None),
-    region: Optional[str] = Form(None),
-    country: Optional[str] = Form(None),
-    description: Optional[str] = Form(None),
-    image: Optional[UploadFile] = File(None),
-    banner: Optional[UploadFile] = File(None),
+    name: str | None = Form(None),
+    city: str | None = Form(None),
+    region: str | None = Form(None),
+    country: str | None = Form(None),
+    description: str | None = Form(None),
+    image: UploadFile | None = File(None),
+    banner: UploadFile | None = File(None),
 ):
     """Update university details (admin only)."""
     uni = service.admin_update_university(
