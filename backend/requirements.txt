@@ -1,4 +1,7 @@
-fastapi==0.141.1
+# 0.137+ wraps included routers in _IncludedRouter, which slowapi's middleware
+# (0.1.9/0.1.10) cannot look into, so default rate limits would silently stop
+# applying to router endpoints. tests/test_rate_limits.py guards this.
+fastapi==0.136.3
 uvicorn[standard]==0.24.0
 sqlalchemy==2.0.23
 pydantic[email]==2.13.5
