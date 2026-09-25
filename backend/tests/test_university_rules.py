@@ -112,3 +112,25 @@ def test_admin_update_rejects_blank_required_fields(client, db_session, admin_he
     assert resp.status_code == 400
     db_session.refresh(uni)
     assert getattr(uni, field) == "Keep"
+
+
+def test_create_note_rejects_subject_from_another_university(client, db_session, user_headers):
+    home = University(name="Home", city="C", region="", is_approved=True)
+    other = University(name="Other", city="C", region="", is_approved=True)
+    db_session.add_all([home, other])
+    db_session.flush()
+    faculty = Faculty(name="F", university_id=other.id, is_approved=True)
+    db_session.add(faculty)
+    db_session.flush()
+    field = FieldOfStudy(name="Fi", faculty_id=faculty.id, is_approved=True)
+    db_session.add(field)
+    db_session.flush()
+    from app.models import Subject
+
+    subject = Subject(name="S", semester=1, field_of_study_id=field.id, is_approved=True)
+    db_session.add(subject)
+    db_session.commit()
+
+    resp = client.post("/notes", data={"title": "T", "university_id": home.id, "subject_id": subject.id}, headers=user_headers)
+
+    assert resp.status_code == 400

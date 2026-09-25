@@ -94,6 +94,8 @@ class NoteService:
             subject = self.db.get(Subject, subject_id)
             if subject is None or not (subject.is_approved or user.is_admin):
                 raise NotFoundError("Subject not found")
+            if subject.field_of_study.faculty.university_id != university_id:
+                raise DomainError("Subject does not belong to the selected university")
 
     def _check_file_limit(self, count: int) -> None:
         if count > MAX_FILES_PER_NOTE:
