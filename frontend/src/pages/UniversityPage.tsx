@@ -21,7 +21,7 @@ import {
 import {
   resolveUrl,
   getUniversity, getFaculties, getFields, getSubjects, getNotes, getMyFavorites, getUniversityReviews, getTags,
-  requestUniversityImageChange, voteNote, toggleFavorite, addReview,
+  requestUniversityImageChange, voteNote, toggleFavorite, addReview, getErrorMessage,
   createFieldOfStudy, createSubject,
   type University, type Faculty, type FieldOfStudy, type Subject,
 } from '../utils/api';
@@ -40,6 +40,7 @@ const ReviewForm: React.FC<{ universityId: number; onSuccess: () => void }> = ({
   const addReviewMutation = useMutation({
     mutationFn: addReview,
     onSuccess: () => { setContent(''); onSuccess(); },
+    onError: (err) => alert(getErrorMessage(err, 'Nie udało się dodać opinii.')),
   });
 
   return (

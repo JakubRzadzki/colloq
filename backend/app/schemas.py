@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Annotated, List, Optional
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from app.services.file_manager import normalize_stored_path
 
@@ -140,6 +140,12 @@ class ReviewCreate(BaseModel):
     content: Optional[str] = None
     note_id: Optional[int] = None
     university_id: Optional[int] = None
+
+    @model_validator(mode="after")
+    def _exactly_one_target(self) -> "ReviewCreate":
+        if (self.note_id is None) == (self.university_id is None):
+            raise ValueError("Provide exactly one of note_id or university_id")
+        return self
 
 
 class ReviewOut(BaseModel):

@@ -4,10 +4,11 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
-from app.core.exceptions import DomainError, NotFoundError, PermissionDeniedError
+from app.core.exceptions import ConflictError, DomainError, NotFoundError, PermissionDeniedError
 from app.models import (
     Comment,
     Note,
@@ -241,16 +242,22 @@ class NoteService:
     def vote(self, user: User, note_id: int) -> tuple[float, bool]:
         """Toggle the user's upvote. Returns (new score, whether the user now has a vote)."""
         note = self._get_visible(note_id, user)
-        author = note.author
+        if note.user_id == user.id:
+            raise PermissionDeniedError("You cannot vote on your own note")
         existing = self.repo.get_vote(user.id, note_id)
         if existing:
             self.repo.delete(existing)
-            author.reputation_points = max((author.reputation_points or 0) - 1, 0)
+            reputation.vote_withdrawn(note.author)
         else:
             self.repo.add(Vote(user_id=user.id, note_id=note_id, value=1))
-            author.reputation_points = (author.reputation_points or 0) + 1
+            reputation.vote_received(note.author)
         # Flush so the vote change is visible to the SUM below.
-        self.repo.flush()
+        try:
+            self.repo.flush()
+        except IntegrityError:
+            # A concurrent request from the same user added the vote first (uq_user_vote).
+            self.db.rollback()
+            raise ConflictError("Vote already registered") from None
         score = float(self.repo.sum_votes(note_id))
         note.score = score
         self.db.commit()

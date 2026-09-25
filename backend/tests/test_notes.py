@@ -30,6 +30,17 @@ def auth_headers(client: TestClient, db_session):
 
 
 @pytest.fixture
+def voter_headers(client: TestClient) -> dict:
+    """A second user: authors cannot vote on their own notes."""
+    client.post(
+        "/register",
+        json={"user": {"email": "voter@example.com", "password": "voterpass123", "university_id": None}},
+    )
+    r = client.post("/token", data={"username": "voter@example.com", "password": "voterpass123"})
+    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+
+@pytest.fixture
 def university_id(client: TestClient, auth_headers: dict) -> int:
     """Create a university and return its ID."""
     uni_response = client.post(
@@ -64,28 +75,28 @@ def test_create_note_requires_auth(client: TestClient):
     assert response.status_code == 401
 
 
-def test_create_note_and_vote(client: TestClient, auth_headers: dict, note_id: int):
-    """Create a note then upvote; score increases."""
+def test_create_note_and_vote(client: TestClient, voter_headers: dict, note_id: int):
+    """Create a note then upvote (as another user); score increases."""
     initial = client.get(f"/notes/{note_id}").json()
     initial_score = initial.get("score", 0)
 
     # Vote
-    vote_response = client.post(f"/notes/{note_id}/vote", headers=auth_headers)
+    vote_response = client.post(f"/notes/{note_id}/vote", headers=voter_headers)
     assert vote_response.status_code == 200
     vote_data = vote_response.json()
     assert vote_data["user_has_voted"] is True
     assert vote_data["new_score"] == initial_score + 1
 
 
-def test_vote_toggle(client: TestClient, auth_headers: dict, note_id: int):
+def test_vote_toggle(client: TestClient, voter_headers: dict, note_id: int):
     """Voting twice on the same note toggles the vote off."""
     # Vote once
-    r1 = client.post(f"/notes/{note_id}/vote", headers=auth_headers)
+    r1 = client.post(f"/notes/{note_id}/vote", headers=voter_headers)
     assert r1.json()["user_has_voted"] is True
     score_after_vote = r1.json()["new_score"]
 
     # Vote again (toggle off)
-    r2 = client.post(f"/notes/{note_id}/vote", headers=auth_headers)
+    r2 = client.post(f"/notes/{note_id}/vote", headers=voter_headers)
     assert r2.json()["user_has_voted"] is False
     assert r2.json()["new_score"] == score_after_vote - 1
 

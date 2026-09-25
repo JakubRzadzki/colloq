@@ -210,6 +210,11 @@ class NoteHistory(Base):
 class Review(Base):
     """Review model - ratings and reviews for notes or universities."""
     __tablename__ = "reviews"
+    # One review per user and target; NULLs never collide, so each constraint only covers its own target.
+    __table_args__ = (
+        UniqueConstraint("user_id", "note_id", name="uq_review_user_note"),
+        UniqueConstraint("user_id", "university_id", name="uq_review_user_university"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     rating = Column(Integer, nullable=False)  # 1-5 scale
