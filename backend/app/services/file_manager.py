@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -71,7 +72,6 @@ def _resolve_physical_path(relative_path: str) -> Path:
 
 def validate_file_size(file: UploadFile, max_size: int, file_type: str = "file") -> None:
     """Validate file size against limit. Raises HTTPException if too large."""
-    from fastapi import HTTPException
     file.file.seek(0, 2)  # Seek to end
     size = file.file.tell()
     file.file.seek(0)  # Reset to beginning
@@ -103,9 +103,8 @@ def save_upload(file: UploadFile, directory: str) -> str:
     rel = f"{subdir}/{name}"
     physical = _resolve_physical_path(rel)
     physical.parent.mkdir(parents=True, exist_ok=True)
-    content = file.file.read()
     with open(physical, "wb") as f:
-        f.write(content)
+        shutil.copyfileobj(file.file, f)
     return _normalize_path(f"/uploads/{rel}")
 
 
@@ -115,6 +114,7 @@ def save_upload_for_note(file: UploadFile, note_id: int) -> tuple[str, str, str]
     Returns (file_url, file_type, file_name) - all with forward slashes in paths.
     """
     validate_file_type(file)
+    validate_file_size(file, settings.MAX_FILE_SIZE, "File")
     filename = file.filename or "file"
     ext = ""
     if "." in filename:
@@ -127,9 +127,8 @@ def save_upload_for_note(file: UploadFile, note_id: int) -> tuple[str, str, str]
     rel = f"{subdir}/{stored_filename}"
     physical = _resolve_physical_path(rel)
     physical.parent.mkdir(parents=True, exist_ok=True)
-    content = file.file.read()
     with open(physical, "wb") as f:
-        f.write(content)
+        shutil.copyfileobj(file.file, f)
     file_url = _normalize_path(f"notes/{note_id}/{stored_filename}")
     file_type = (ext.lstrip(".") or "bin").lower()
     return (file_url, file_type, filename)
