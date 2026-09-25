@@ -4,6 +4,7 @@ Ensures paths use forward slashes for cross-platform (Windows/Linux) previews.
 """
 from __future__ import annotations
 
+import logging
 import re
 import shutil
 import uuid
@@ -14,6 +15,8 @@ from fastapi import UploadFile
 
 from app.core.config import settings
 from app.core.exceptions import DomainError
+
+logger = logging.getLogger(__name__)
 
 UPLOADS_URL_PREFIX = "uploads/"
 
@@ -65,12 +68,17 @@ def _relative_path_from_url(url: Optional[str]) -> Optional[str]:
     return path
 
 
-def resolve_physical_path(relative_path: str) -> Path:
-    """Resolve relative path (with /) to absolute file path. Prevents path traversal."""
-    normalized = _normalize_path(relative_path)
-    normalized = re.sub(r"\.\.+", "", normalized)
-    parts = [p for p in normalized.split("/") if p]
-    return Path(settings.UPLOAD_DIR).joinpath(*parts)
+def resolve_physical_path(relative_path: str, base_dir: str | None = None) -> Path:
+    """Resolve a stored relative path inside base_dir (UPLOAD_DIR by default).
+
+    Raises ValueError when the resolved path would leave the base directory
+    (e.g. "../../etc/passwd" or an absolute path).
+    """
+    base = Path(base_dir or settings.UPLOAD_DIR).resolve()
+    candidate = (base / _normalize_path(relative_path).lstrip("/")).resolve()
+    if not candidate.is_relative_to(base):
+        raise ValueError(f"Path escapes the upload directory: {relative_path!r}")
+    return candidate
 
 
 def validate_file_size(file: UploadFile, max_size: int, file_type: str = "file") -> None:
@@ -141,7 +149,11 @@ def delete_file(relative_path: Optional[str]) -> bool:
     rel = _relative_path_from_url(relative_path)
     if not rel:
         return True
-    physical = resolve_physical_path(rel)
+    try:
+        physical = resolve_physical_path(rel)
+    except ValueError:
+        logger.warning("Refusing to delete a path outside the upload directory: %r", relative_path)
+        return False
     try:
         if physical.is_file():
             physical.unlink()

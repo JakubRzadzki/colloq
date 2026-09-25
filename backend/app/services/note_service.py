@@ -214,7 +214,10 @@ class NoteService:
         note_file = self.repo.get_file(note_id, file_id)
         if note_file is None:
             raise NotFoundError("File not found")
-        path = self.storage.path_for(note_file.file_url)
+        try:
+            path = self.storage.path_for(note_file.file_url)
+        except ValueError:
+            raise NotFoundError("File not found") from None
         if not path.is_file():
             raise NotFoundError("File not found on disk")
         note.download_count = (note.download_count or 0) + 1

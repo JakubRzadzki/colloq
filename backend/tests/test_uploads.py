@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from pathlib import Path
 
 from app.core.config import settings
-from app.services.file_manager import delete_file
+from app.services.file_manager import delete_file, resolve_physical_path
 from app.core.security import get_password_hash
 from app.models import Faculty, University, User
 
@@ -77,3 +77,24 @@ def test_delete_file_resolves_stored_urls_inside_upload_dir(stored):
 
     assert delete_file(stored) is True
     assert not target.exists()
+
+
+@pytest.mark.parametrize("path", ["../../etc/passwd", "notes/../../outside.txt", "/../outside.txt"])
+def test_resolve_physical_path_rejects_traversal(path):
+    with pytest.raises(ValueError):
+        resolve_physical_path(path)
+
+
+def test_resolve_physical_path_keeps_paths_inside_upload_dir():
+    resolved = resolve_physical_path("notes/1/file.pdf")
+
+    assert resolved.is_relative_to(Path(settings.UPLOAD_DIR).resolve())
+    assert resolved.name == "file.pdf"
+
+
+def test_delete_file_does_not_touch_files_outside_upload_dir():
+    outside = Path(settings.UPLOAD_DIR).parent / "outside.txt"
+    outside.write_text("keep me")
+
+    assert delete_file("../outside.txt") is False
+    assert outside.exists()
