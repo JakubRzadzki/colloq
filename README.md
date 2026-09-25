@@ -178,7 +178,7 @@ VITE_API_URL=http://localhost:8000
 
 ```bash
 cd backend
-pip install -r requirements.txt
+pip install -r requirements.txt -r requirements-dev.txt
 # Tests require a running PostgreSQL database named `colloq_test`, e.g.:
 #   docker run -d --name colloq-test-db \
 #     -e POSTGRES_USER=colloq_user -e POSTGRES_PASSWORD=colloq_password \
