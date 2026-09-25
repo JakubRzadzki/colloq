@@ -14,6 +14,11 @@ services:
       - DATABASE_URL=postgresql://colloq:colloq123@db:5432/colloq
       - SECRET_KEY=${SECRET_KEY}
       - UPLOAD_DIR=/app/uploads
+      # "prod" by default: no admin account is seeded. For local development set
+      # ENV=dev plus SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD in the root .env.
+      - ENV=${ENV:-prod}
+      - SEED_ADMIN_EMAIL=${SEED_ADMIN_EMAIL:-}
+      - SEED_ADMIN_PASSWORD=${SEED_ADMIN_PASSWORD:-}
     depends_on:
       db:
         condition: service_healthy

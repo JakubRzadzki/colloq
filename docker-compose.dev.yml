@@ -1,5 +1,11 @@
 version: '3.8'
 
+# Database for local development. Run the backend on the host (backend/run.ps1)
+# with these settings in .env so a dev admin account gets seeded:
+#   ENV=dev
+#   SEED_ADMIN_EMAIL=admin@localhost.dev
+#   SEED_ADMIN_PASSWORD=<choose-a-password>
+
 services:
   postgres:
     image: postgres:15-alpine

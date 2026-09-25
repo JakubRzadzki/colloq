@@ -13,6 +13,13 @@ load_dotenv(os.path.join(_BASE_DIR, ".env")) # Wymuszamy załadowanie .env
 class Settings:
     """Centralized settings. Load from .env or environment."""
 
+    # "dev" or "prod". Defaults to "prod" so a missing variable never enables dev-only behaviour.
+    ENV: str = os.getenv("ENV", "prod").strip().lower()
+
+    # Dev-only seed admin; ignored unless ENV == "dev" and both are set.
+    SEED_ADMIN_EMAIL: str | None = os.getenv("SEED_ADMIN_EMAIL") or None
+    SEED_ADMIN_PASSWORD: str | None = os.getenv("SEED_ADMIN_PASSWORD") or None
+
     # Database: default PostgreSQL
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",

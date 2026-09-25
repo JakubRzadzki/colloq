@@ -3,6 +3,7 @@ Colloq API — Production-ready MVP.
 Minimal entry point: config, upload dirs, CORS, routers, static files.
 Run: uvicorn app.main:app --host 0.0.0.0 --port 8000
 """
+import logging
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -39,6 +40,8 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.core.rate_limit import limiter
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -51,7 +54,11 @@ async def lifespan(app: FastAPI):
     """
     if not os.getenv("TESTING"):
         settings.validate_secret_key()
-        run_seed()
+        try:
+            run_seed()
+        except Exception:
+            # A failed seed must not keep the API from starting.
+            logger.exception("Database seeding failed")
     yield
 
 

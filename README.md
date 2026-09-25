@@ -112,7 +112,24 @@ docker-compose up -d --build
 | **Backend API** | http://localhost:8000 |
 | **API Docs** | http://localhost:8000/docs |
 
-The database seeds automatically with sample data on first startup.
+The database seeds automatically with reference data (Politechnika Krakowska with
+its faculties, fields of study and subjects) on startup.
+
+### Admin accounts
+
+No admin account with a known password is ever created automatically.
+
+- **Development:** set `ENV=dev`, `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` in `.env`;
+  the startup seed then creates that single admin account (only if it does not exist yet).
+- **Production** (`ENV=prod`, the default): create an admin from the backend container or venv:
+
+  ```bash
+  cd backend
+  python -m app.cli create-admin --email you@example.com   # prompts for the password
+  # non-interactive: ADMIN_PASSWORD=... python -m app.cli create-admin --email you@example.com
+  ```
+
+  Running it for an existing email promotes that user to admin and resets their password.
 
 ### Manual Setup
 
