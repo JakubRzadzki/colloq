@@ -330,7 +330,6 @@ def download_note_file(
 ):
     """Download a specific file from a note (requires login). Increments download counter."""
     from fastapi.responses import FileResponse
-    from pathlib import Path as PathLib
 
     note = db.query(Note).filter(Note.id == note_id).first()
     if not note:
@@ -517,7 +516,7 @@ def create_tag(
     existing = db.query(Tag).filter(Tag.name == name).first()
     if existing:
         return existing
-    tag = Tag(name=name or "untitled")
+    tag = Tag(name=name)
     db.add(tag)
     db.commit()
     db.refresh(tag)

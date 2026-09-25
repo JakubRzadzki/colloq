@@ -35,8 +35,6 @@ class UserOut(BaseModel):
     created_at: Optional[datetime] = None
 
 
-UserResponse = UserOut
-
 
 class PublicUserOut(BaseModel):
     """Public-facing user info (no email). Used for nested author/user fields."""
@@ -122,7 +120,6 @@ class ReviewCreate(BaseModel):
     content: Optional[str] = None
     note_id: Optional[int] = None
     university_id: Optional[int] = None
-    user_id: Optional[int] = None
 
 
 class ReviewOut(BaseModel):
@@ -253,12 +250,6 @@ class VoteResponse(BaseModel):
 class FavoriteResponse(BaseModel):
     msg: str
     is_favorited: bool
-
-
-class UserDashboard(BaseModel):
-    my_notes: List[NoteOut] = []
-    my_favorites: List[NoteOut] = []
-    pending_submissions: dict = {}
 
 
 class Token(BaseModel):

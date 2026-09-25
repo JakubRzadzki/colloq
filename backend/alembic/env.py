@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.core.config import settings
 from app.core.database import Base
 # IMPORTUJEMY WSZYSTKIE MODELE, by Alembic wiedział z czego generować tabele
-import app.models 
+import app.models  # noqa: F401  (registers all models on Base.metadata)
 
 config = context.config
 

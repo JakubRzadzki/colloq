@@ -201,7 +201,6 @@ colloq/
 │   │   ├── main.py            # FastAPI app entry point
 │   │   ├── models.py          # SQLAlchemy ORM models
 │   │   ├── schemas.py         # Pydantic schemas
-│   │   ├── migrate.py         # Database migrations
 │   │   ├── seed.py            # Initial data seeder
 │   │   ├── core/
 │   │   │   ├── config.py      # Settings from env

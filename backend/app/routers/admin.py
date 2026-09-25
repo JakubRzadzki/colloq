@@ -1,7 +1,7 @@
 """Admin: pending items, approve/reject (with file cleanup), reports, feedback."""
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile  # noqa: F401 File, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import joinedload
 from sqlalchemy import desc
 
@@ -13,7 +13,6 @@ from app.models import (
     FieldOfStudy,
     Subject,
     Note,
-    NoteImage,
     ImageRequest,
     Report,
     Feedback,

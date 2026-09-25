@@ -662,14 +662,6 @@ export interface UniversityUpdateData {
   banner?: File;
 }
 
-/** Update university details (admin only). */
-export const updateUniversity = async (id: number, data: UniversityUpdateData) => {
-  const fd = new FormData();
-  if (data.description) fd.append('description', data.description);
-  if (data.banner) fd.append('banner', data.banner);
-  return await api.put(`/universities/${id}`, fd);
-};
-
 /** Admin-specific update university details (admin only). */
 export const adminUpdateUniversity = async (id: number, data: UniversityUpdateData) => {
   const fd = new FormData();

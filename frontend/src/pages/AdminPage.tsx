@@ -4,7 +4,7 @@ import { Check, X, Shield, FileText, Image as ImageIcon, Building2, AlertCircle,
 import {
   getPendingItems, approveItem, rejectItem, approveImageRequest, rejectImageRequest,
   getAllUsers, getNotes, getReports, getFeedback, updateReportStatus, resolveUrl,
-  banUser as apiBanUser, deleteNote, updateUniversity, getUniversities, adminUpdateUniversity,
+  banUser as apiBanUser, deleteNote, getUniversities, adminUpdateUniversity,
 } from '../utils/api';
 import type { ReportItem, FeedbackItem } from '../utils/api';
 import { Link } from 'react-router-dom';

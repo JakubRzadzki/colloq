@@ -5,8 +5,8 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import joinedload
 from sqlalchemy import desc, func
 
-from app.core.deps import AdminUser, CurrentUser, DbSession, OptionalUser
-from app.models import University, Faculty, FieldOfStudy, Subject, User, Review
+from app.core.deps import CurrentUser, DbSession, OptionalUser
+from app.models import University, Faculty, FieldOfStudy, Subject, Review
 from app.schemas import (
     UniversityOut,
     FacultyOut,
@@ -14,12 +14,10 @@ from app.schemas import (
     SubjectOut,
     SubjectCreate,
     FieldOfStudyCreate,
-    ReviewCreate,
     ReviewOut,
 )
 from app.services.file_manager import (
     save_upload,
-    delete_file,
     normalize_stored_path,
     DIR_UNIVERSITIES,
     DIR_FACULTIES,
@@ -93,27 +91,6 @@ def get_university(
     uni = db.query(University).filter(University.id == uni_id).first()
     if not uni or not (uni.is_approved or (current_user and current_user.is_admin)):
         raise HTTPException(status_code=404, detail="University not found")
-    return _uni_out(uni)
-
-
-@router.put("/universities/{uni_id}", response_model=UniversityOut)
-def update_university(
-    uni_id: int,
-    current_user: AdminUser,
-    db: DbSession,
-    description: Optional[str] = Form(None),
-    banner: Optional[UploadFile] = File(None),
-):
-    """Update university details (admin only)."""
-    uni = db.query(University).filter(University.id == uni_id).first()
-    if not uni:
-        raise HTTPException(status_code=404, detail="University not found")
-    if description is not None:
-        uni.description = description
-    if banner and banner.filename:
-        uni.banner_url = save_upload(banner, DIR_UNIVERSITIES)
-    db.commit()
-    db.refresh(uni)
     return _uni_out(uni)
 
 

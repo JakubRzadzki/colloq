@@ -1,7 +1,6 @@
 """
 Tests for authentication: register and login.
 """
-import pytest
 from fastapi.testclient import TestClient
 
 

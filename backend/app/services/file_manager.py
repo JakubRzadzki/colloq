@@ -4,7 +4,6 @@ Ensures paths use forward slashes for cross-platform (Windows/Linux) previews.
 """
 from __future__ import annotations
 
-import os
 import re
 import shutil
 import uuid
