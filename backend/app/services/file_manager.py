@@ -151,6 +151,17 @@ def delete_file(relative_path: Optional[str]) -> bool:
         return False
 
 
+EXTERNAL_URL_PREFIXES = ("http://", "https://", "data:")
+
+
 def normalize_stored_path(url_or_path: Optional[str]) -> Optional[str]:
-    """Normalize a stored image_url/file_url to forward slashes for API responses."""
-    return _normalize_path(url_or_path) if url_or_path else None
+    """Normalize a stored image_url/file_url to forward slashes for API responses.
+
+    External URLs are returned untouched: collapsing "//" would turn
+    "https://host" into "https:/host".
+    """
+    if not url_or_path:
+        return None
+    if url_or_path.lower().startswith(EXTERNAL_URL_PREFIXES):
+        return url_or_path
+    return _normalize_path(url_or_path)

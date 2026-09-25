@@ -53,3 +53,14 @@ def test_create_university_with_disallowed_image_returns_400(client, admin_heade
     )
 
     assert resp.status_code == 400
+
+
+def test_faculty_https_image_url_is_returned_unchanged(client, db_session, university):
+    url = "https://example.com/a.png"
+    db_session.add(Faculty(name="Remote Logo Faculty", image_url=url, university_id=university.id, is_approved=True))
+    db_session.commit()
+
+    resp = client.get(f"/universities/{university.id}/faculties")
+
+    assert resp.status_code == 200
+    assert [f["image_url"] for f in resp.json()] == [url]
