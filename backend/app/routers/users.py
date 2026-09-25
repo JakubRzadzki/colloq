@@ -4,11 +4,10 @@ from typing import List, Optional
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from sqlalchemy import func
 
-from app.core.deps import CurrentUser, DbSession
+from app.core.deps import CurrentUser, DbSession, UserServiceDep
 from app.models import User, Note, UserFavorite, Review, Comment
 from app.schemas import UserOut, PublicUserOut, NoteOut
 from app.repositories.note_repository import NoteRepository
-from app.services.file_manager import save_upload, DIR_AVATARS
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -22,21 +21,13 @@ def get_me(current_user: CurrentUser):
 @router.put("/me", response_model=UserOut)
 def update_me(
     current_user: CurrentUser,
-    db: DbSession,
+    service: UserServiceDep,
     nickname: Optional[str] = Form(None),
     bio: Optional[str] = Form(None),
     avatar: Optional[UploadFile] = File(None),
 ):
-    """Update current user profile, including avatar upload."""
-    if nickname is not None:
-        current_user.nickname = nickname
-    if bio is not None:
-        current_user.bio = bio
-    if avatar and avatar.filename:
-        current_user.avatar_url = save_upload(avatar, DIR_AVATARS)
-    db.commit()
-    db.refresh(current_user)
-    return current_user
+    """Update current user profile. Nickname: 1-100 characters after trimming, unique (409 if taken)."""
+    return service.update_profile(current_user, nickname=nickname, bio=bio, avatar=avatar)
 
 
 @router.get("/{user_id}", response_model=PublicUserOut)

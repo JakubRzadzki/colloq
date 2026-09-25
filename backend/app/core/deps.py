@@ -12,6 +12,7 @@ from app.services.auth_service import AuthService
 from app.services.note_service import NoteService
 from app.services.review_service import ReviewService
 from app.services.storage import LocalFileStorage, get_storage
+from app.services.user_service import UserService
 
 DbSession = Annotated[Session, Depends(get_db)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
@@ -32,6 +33,11 @@ def get_auth_service(db: DbSession) -> AuthService:
     return AuthService(db)
 
 
+def get_user_service(db: DbSession, storage: StorageDep) -> UserService:
+    return UserService(db, storage)
+
+
 NoteServiceDep = Annotated[NoteService, Depends(get_note_service)]
 ReviewServiceDep = Annotated[ReviewService, Depends(get_review_service)]
 AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
+UserServiceDep = Annotated[UserService, Depends(get_user_service)]

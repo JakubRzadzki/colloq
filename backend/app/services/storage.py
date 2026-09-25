@@ -1,11 +1,17 @@
 """File storage used by services. Injected via Depends so tests can swap it for a fake."""
 from __future__ import annotations
 
+import logging
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO, Protocol
 
+from sqlalchemy.orm import Session
+
 from app.services import file_manager
+
+logger = logging.getLogger(__name__)
 
 
 class Upload(Protocol):
@@ -44,3 +50,22 @@ class LocalFileStorage:
 
 def get_storage() -> LocalFileStorage:
     return LocalFileStorage()
+
+
+def delete_files(storage: LocalFileStorage, paths: Iterable[str | None]) -> None:
+    """Best-effort cleanup: a file that cannot be removed is logged, not raised."""
+    for path in paths:
+        try:
+            storage.delete(path)
+        except OSError:
+            logger.warning("Could not delete file %s", path, exc_info=True)
+
+
+def commit_or_discard(db: Session, storage: LocalFileStorage, saved: list[str]) -> None:
+    """Commit; if that fails, roll back and remove the files written for this change."""
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        delete_files(storage, saved)
+        raise
