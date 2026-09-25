@@ -677,27 +677,3 @@ export const adminUpdateUniversity = async (id: number, data: UniversityUpdateDa
   if (data.banner) fd.append('banner', data.banner);
   return await api.put(`/admin/universities/${id}`, fd);
 };
-
-// =============================================================================
-// STATISTICS & GAMIFICATION
-// =============================================================================
-
-/** Platform-wide statistics. */
-export const getStats = async (): Promise<{
-  users: number;
-  notes: number;
-  universities: number;
-  users_count: number;
-  notes_count: number;
-  universities_count: number;
-  latest_activity: LatestActivity;
-}> => (await api.get('/stats')).data;
-
-/** Leaderboard - top 5 users by reputation. */
-export const getLeaderboard = async (): Promise<{
-  leaderboard: LeaderboardEntry[];
-  total_users: number;
-}> => (await api.get('/leaderboard')).data;
-
-/** Activity feed - last 5 activities. */
-export const getActivityFeed = async (): Promise<ActivityFeedEntry[]> => (await api.get('/activity-feed')).data;

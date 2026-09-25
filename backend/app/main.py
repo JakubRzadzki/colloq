@@ -124,65 +124,6 @@ async def get_home(db: Session = Depends(get_db)):
     return get_home_data(db)
 
 
-@app.get("/stats")
-async def get_stats(db: Session = Depends(get_db)):
-    """Platform-wide statistics."""
-    users_count = db.query(func.count(User.id)).scalar() or 0
-    notes_count = db.query(func.count(Note.id)).scalar() or 0
-    universities_count = db.query(func.count(University.id)).scalar() or 0
-    latest_note = db.query(Note).order_by(desc(Note.created_at)).first()
-    latest_user = db.query(User).order_by(desc(User.created_at)).first()
-    latest_review = db.query(Review).order_by(desc(Review.created_at)).first()
-    return {
-        "users": users_count, "notes": notes_count, "universities": universities_count,
-        "users_count": users_count, "notes_count": notes_count, "universities_count": universities_count,
-        "latest_activity": {
-            "latest_note": {"id": latest_note.id, "title": latest_note.title, "created_at": str(latest_note.created_at) if latest_note else None, "university_id": latest_note.university_id} if latest_note else None,
-            "latest_user": {"id": latest_user.id, "nickname": latest_user.nickname, "created_at": str(latest_user.created_at) if latest_user else None} if latest_user else None,
-            "latest_review": {"id": latest_review.id, "content": latest_review.content, "created_at": str(latest_review.created_at) if latest_review else None, "university_id": latest_review.university_id} if latest_review else None,
-        },
-    }
-
-
-@app.get("/leaderboard")
-async def get_leaderboard(db: Session = Depends(get_db)):
-    """Top 5 users by reputation with activity counts."""
-    users = db.query(User).order_by(desc(User.reputation_points)).limit(5).all()
-    total_users = db.query(func.count(User.id)).scalar() or 0
-    user_ids = [u.id for u in users]
-    notes_per_user = {}
-    reviews_per_user = {}
-    comments_per_user = {}
-    if user_ids:
-        for uid, c in db.query(Note.user_id, func.count(Note.id)).filter(Note.user_id.in_(user_ids)).group_by(Note.user_id).all():
-            notes_per_user[uid] = c
-        for uid, c in db.query(Review.user_id, func.count(Review.id)).filter(Review.user_id.in_(user_ids)).group_by(Review.user_id).all():
-            reviews_per_user[uid] = c
-        for uid, c in db.query(Comment.user_id, func.count(Comment.id)).filter(Comment.user_id.in_(user_ids)).group_by(Comment.user_id).all():
-            comments_per_user[uid] = c
-    leaderboard = []
-    for rank, user in enumerate(users, start=1):
-        nc = notes_per_user.get(user.id, 0)
-        rvc = reviews_per_user.get(user.id, 0)
-        cc = comments_per_user.get(user.id, 0)
-        leaderboard.append({"rank": rank, "user_id": user.id, "nickname": user.nickname, "avatar_url": user.avatar_url, "reputation_points": user.reputation_points, "uploads_count": user.uploads_count, "notes_count": nc, "total_score": user.reputation_points, "reviews_count": rvc, "comments_count": cc, "total_activity": nc + rvc + cc})
-    return {"leaderboard": leaderboard, "total_users": total_users}
-
-
-@app.get("/activity-feed")
-async def get_activity_feed(db: Session = Depends(get_db)):
-    """Five most recent activities (notes and reviews)."""
-    recent_notes = db.query(Note).options(joinedload(Note.author)).order_by(desc(Note.created_at)).limit(5).all()
-    recent_reviews = db.query(Review).options(joinedload(Review.user), joinedload(Review.note)).order_by(desc(Review.created_at)).limit(5).all()
-    activities = []
-    for note in recent_notes:
-        activities.append({"type": "note", "title": note.title, "description": note.content[:200] if note.content else None, "created_at": str(note.created_at) if note.created_at else None, "user_nickname": note.author.nickname if note.author else "Anonymous"})
-    for review in recent_reviews:
-        activities.append({"type": "review", "rating": review.rating, "comment": review.content, "created_at": str(review.created_at) if review.created_at else None, "user_nickname": review.user.nickname if review.user else "Anonymous", "note_title": review.note.title if review.note else None})
-    activities.sort(key=lambda x: x.get("created_at") or "", reverse=True)
-    return activities[:5]
-
-
 @app.get("/notifications", response_model=list)
 async def get_notifications(current_user: User = Depends(get_current_user), db: Session = Depends(get_db), unread_only: bool = False):
     """List current user notifications."""
