@@ -3,9 +3,14 @@ Colloq API — Consolidated Pydantic schemas.
 Define child models before parents to avoid forward-reference issues.
 """
 from datetime import datetime
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr, Field
+
+from app.services.file_manager import normalize_stored_path
+
+# Stored upload paths are returned with forward slashes; external URLs pass through unchanged.
+NormalizedPath = Annotated[Optional[str], AfterValidator(normalize_stored_path)]
 
 
 # -----------------------------------------------------------------------------
@@ -25,7 +30,7 @@ class UserOut(BaseModel):
     email: str
     nickname: Optional[str] = None
     bio: Optional[str] = None
-    avatar_url: Optional[str] = None
+    avatar_url: NormalizedPath = None
     is_admin: bool = False
     is_banned: bool = False
     is_verified: bool = False
@@ -41,7 +46,7 @@ class PublicUserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     nickname: Optional[str] = None
-    avatar_url: Optional[str] = None
+    avatar_url: NormalizedPath = None
     reputation_points: int = 0
 
 
@@ -63,8 +68,8 @@ class UniversityOut(BaseModel):
     region: str = ""
     country: str = "Poland"
     description: Optional[str] = None
-    image_url: Optional[str] = None
-    banner_url: Optional[str] = None
+    image_url: NormalizedPath = None
+    banner_url: NormalizedPath = None
     is_approved: bool = True
     created_at: Optional[datetime] = None
 
@@ -74,7 +79,7 @@ class FacultyOut(BaseModel):
     id: int
     name: str
     description: Optional[str] = None
-    image_url: Optional[str] = None
+    image_url: NormalizedPath = None
     university_id: int
     is_approved: bool = True
 
@@ -151,7 +156,7 @@ class NoteFileOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     note_id: int
-    file_url: str
+    file_url: NormalizedPath
     file_type: str
     file_name: str
     created_at: Optional[datetime] = None
@@ -161,7 +166,7 @@ class NoteImageOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     note_id: int
-    image_url: str
+    image_url: NormalizedPath
     caption: Optional[str] = None
     position: int = 0
     created_at: Optional[datetime] = None
@@ -189,8 +194,8 @@ class NoteOut(BaseModel):
     score: float = 0.0
     avg_rating: float = 0.0
     rating_count: int = 0
-    file_url: Optional[str] = None
-    image_url: Optional[str] = None
+    file_url: NormalizedPath = None
+    image_url: NormalizedPath = None
     video_url: Optional[str] = None
     link_url: Optional[str] = None
     created_at: Optional[datetime] = None

@@ -41,26 +41,11 @@ from app.services.file_manager import (
     save_upload,
     save_upload_for_note,
     delete_file,
-    normalize_stored_path,
     DIR_NOTES,
     _resolve_physical_path,
 )
 
 router = APIRouter(tags=["notes"])
-
-
-def _note_out(note: Note) -> NoteOut:
-    """Build NoteOut with normalized image and file paths (forward slashes)."""
-    out = NoteOut.model_validate(note)
-    if out.image_url:
-        out.image_url = normalize_stored_path(out.image_url)
-    if out.author and getattr(out.author, "avatar_url", None):
-        out.author.avatar_url = normalize_stored_path(out.author.avatar_url)
-    for img in out.images or []:
-        img.image_url = normalize_stored_path(img.image_url) or img.image_url
-    for f in out.files or []:
-        f.file_url = normalize_stored_path(f.file_url) or f.file_url
-    return out
 
 
 MAX_FILES_PER_NOTE = 10
@@ -137,7 +122,7 @@ def create_note(
         selectinload(Note.files),
         selectinload(Note.tags),
     ).filter(Note.id == note.id).first()
-    return _note_out(note)
+    return note
 
 
 @router.get("/notes")
@@ -201,7 +186,7 @@ def get_notes(
 
     notes = query.distinct().offset((page - 1) * page_size).limit(page_size).all()
     return {
-        "items": [_note_out(n) for n in notes],
+        "items": [NoteOut.model_validate(n) for n in notes],
         "total": total,
         "page": page,
         "page_size": page_size,
@@ -227,7 +212,7 @@ def get_note(
     if not note or not is_note_visible(note, current_user):
         raise HTTPException(status_code=404, detail="Note not found")
     background_tasks.add_task(_increment_view_count, note_id)
-    return _note_out(note)
+    return note
 
 
 @router.put("/notes/{note_id}", response_model=NoteOut)
@@ -274,7 +259,7 @@ def update_note(
         selectinload(Note.files),
         selectinload(Note.tags),
     ).filter(Note.id == note.id).first()
-    return _note_out(note)
+    return note
 
 
 @router.get("/notes/{note_id}/history", response_model=List[NoteHistoryOut])

@@ -18,7 +18,6 @@ from app.schemas import (
 )
 from app.services.file_manager import (
     save_upload,
-    normalize_stored_path,
     DIR_UNIVERSITIES,
     DIR_FACULTIES,
 )
@@ -26,16 +25,6 @@ from app.services.file_manager import (
 router = APIRouter(tags=["universities"])
 
 DEFAULT_UNIVERSITY_IMAGE = "https://placehold.co/400x200/5e5ce6/ffffff?text=Colloq"
-
-
-def _uni_out(uni: University) -> UniversityOut:
-    """Serialize university and normalize image paths for preview."""
-    out = UniversityOut.model_validate(uni)
-    if out.image_url and out.image_url.startswith("/uploads"):
-        out.image_url = normalize_stored_path(out.image_url)
-    if out.banner_url and out.banner_url.startswith("/uploads"):
-        out.banner_url = normalize_stored_path(out.banner_url)
-    return out
 
 
 @router.post("/universities", response_model=UniversityOut)
@@ -65,7 +54,7 @@ def create_university(
     db.add(university)
     db.commit()
     db.refresh(university)
-    return _uni_out(university)
+    return university
 
 
 @router.get("/universities", response_model=List[UniversityOut])
@@ -78,7 +67,7 @@ def get_universities(
     if region and region.strip():
         q = q.filter(func.lower(University.region) == region.strip().lower())
     rows = q.order_by(University.name).all()
-    return [_uni_out(u) for u in rows]
+    return rows
 
 
 @router.get("/universities/{uni_id}", response_model=UniversityOut)
@@ -91,20 +80,13 @@ def get_university(
     uni = db.query(University).filter(University.id == uni_id).first()
     if not uni or not (uni.is_approved or (current_user and current_user.is_admin)):
         raise HTTPException(status_code=404, detail="University not found")
-    return _uni_out(uni)
+    return uni
 
 
 @router.get("/universities/{uni_id}/faculties", response_model=List[FacultyOut])
 def get_faculties(uni_id: int, db: DbSession):
     """List approved faculties for a university."""
-    faculties = db.query(Faculty).filter(Faculty.university_id == uni_id, Faculty.is_approved == True).all()  # noqa: E712
-    result = []
-    for f in faculties:
-        out = FacultyOut.model_validate(f)
-        if out.image_url:
-            out.image_url = normalize_stored_path(out.image_url)
-        result.append(out)
-    return result
+    return db.query(Faculty).filter(Faculty.university_id == uni_id, Faculty.is_approved == True).all()  # noqa: E712
 
 
 @router.post("/faculties", response_model=FacultyOut)
@@ -132,10 +114,7 @@ def create_faculty(
     db.add(faculty)
     db.commit()
     db.refresh(faculty)
-    out = FacultyOut.model_validate(faculty)
-    if out.image_url:
-        out.image_url = normalize_stored_path(out.image_url)
-    return out
+    return faculty
 
 
 @router.get("/faculties/{fac_id}/fields", response_model=List[FieldOfStudyOut])

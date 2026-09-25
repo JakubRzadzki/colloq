@@ -8,7 +8,7 @@ from sqlalchemy import desc, func
 from app.core.deps import CurrentUser, DbSession
 from app.models import User, Note, UserFavorite, Review, Comment
 from app.schemas import UserOut, PublicUserOut, NoteOut
-from app.services.file_manager import save_upload, normalize_stored_path, DIR_AVATARS
+from app.services.file_manager import save_upload, DIR_AVATARS
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -16,10 +16,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 @router.get("/me", response_model=UserOut)
 def get_me(current_user: CurrentUser):
     """Get current authenticated user."""
-    out = UserOut.model_validate(current_user)
-    if out.avatar_url:
-        out.avatar_url = normalize_stored_path(out.avatar_url)
-    return out
+    return current_user
 
 
 @router.put("/me", response_model=UserOut)
@@ -39,10 +36,7 @@ def update_me(
         current_user.avatar_url = save_upload(avatar, DIR_AVATARS)
     db.commit()
     db.refresh(current_user)
-    out = UserOut.model_validate(current_user)
-    if out.avatar_url:
-        out.avatar_url = normalize_stored_path(out.avatar_url)
-    return out
+    return current_user
 
 
 @router.get("/{user_id}", response_model=PublicUserOut)
@@ -51,10 +45,7 @@ def get_user(user_id: int, db: DbSession):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    out = PublicUserOut.model_validate(user)
-    if out.avatar_url:
-        out.avatar_url = normalize_stored_path(out.avatar_url)
-    return out
+    return user
 
 
 @router.get("/me/favorites", response_model=List[NoteOut])
@@ -76,7 +67,7 @@ def get_my_favorites(
         .order_by(desc(UserFavorite.created_at))
         .all()
     )
-    return [_note_out_with_normalized_paths(n) for n in notes]
+    return notes
 
 
 @router.get("/me/dashboard")
@@ -125,21 +116,9 @@ def get_my_dashboard(
             "reputation_points": current_user.reputation_points or 0,
             "reputation_rank": rank,
         },
-        "my_notes": [_note_out_with_normalized_paths(n) for n in my_notes],
-        "my_favorites": [_note_out_with_normalized_paths(n) for n in my_favs],
+        "my_notes": [NoteOut.model_validate(n) for n in my_notes],
+        "my_favorites": [NoteOut.model_validate(n) for n in my_favs],
         "pending_submissions": {
             "notes": pending_notes,
         },
     }
-
-
-def _note_out_with_normalized_paths(note: Note) -> NoteOut:
-    """Build NoteOut and normalize image URLs to forward slashes."""
-    out = NoteOut.model_validate(note)
-    if out.image_url:
-        out.image_url = normalize_stored_path(out.image_url)
-    if out.author and out.author.avatar_url:
-        out.author.avatar_url = normalize_stored_path(out.author.avatar_url)
-    for img in out.images or []:
-        img.image_url = normalize_stored_path(img.image_url) or img.image_url
-    return out

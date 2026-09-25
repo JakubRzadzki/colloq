@@ -3,7 +3,6 @@ from sqlalchemy import desc, func, or_
 
 from app.models import User, Note, University, Review, Comment
 from app.schemas import NoteOut, UniversityOut
-from app.services.file_manager import normalize_stored_path
 
 def _public_reviews(db: Session):
     """Reviews that are not attached to an unapproved note."""
@@ -68,12 +67,7 @@ def get_home_data(db: Session):
     recent_notes = approved_notes.options(joinedload(Note.author), joinedload(Note.subject), selectinload(Note.images), selectinload(Note.files)).order_by(desc(Note.created_at)).limit(6).all()
     universities_list = db.query(University).filter(University.is_approved == True).all()
     
-    recent_notes_out = []
-    for n in recent_notes:
-        o = NoteOut.model_validate(n)
-        if o.image_url:
-            o.image_url = normalize_stored_path(o.image_url)
-        recent_notes_out.append(o.model_dump())
+    recent_notes_out = [NoteOut.model_validate(n).model_dump() for n in recent_notes]
         
     unis_out = [UniversityOut.model_validate(u).model_dump() for u in universities_list]
     
