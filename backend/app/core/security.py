@@ -9,6 +9,7 @@ import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from passlib.context import CryptContext
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -52,7 +53,7 @@ def get_current_user(
             raise exc
     except jwt.PyJWTError:
         raise exc from None
-    user = db.query(User).filter(User.email == email).first()
+    user = db.query(User).filter(func.lower(User.email) == email.lower()).first()
     if user is None or not user.is_active or getattr(user, "is_banned", False):
         raise exc
     return user
@@ -70,7 +71,7 @@ def get_current_user_optional(
         email = payload.get("sub")
         if not email:
             return None
-        user = db.query(User).filter(User.email == email).first()
+        user = db.query(User).filter(func.lower(User.email) == email.lower()).first()
         if user is None or not user.is_active or getattr(user, "is_banned", False):
             return None
         return user

@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, backref, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -57,6 +57,10 @@ class User(Base):
     )
     feedback_entries: Mapped[list[Feedback]] = relationship(back_populates="user", cascade="all, delete-orphan")
     votes: Mapped[list[Vote]] = relationship(back_populates="user", cascade="all, delete-orphan")
+
+
+# Emails are compared case-insensitively everywhere; enforce that in the database too.
+Index("uq_users_email_lower", func.lower(User.email), unique=True)
 
 
 class University(Base):

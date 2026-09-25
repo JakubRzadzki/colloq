@@ -90,3 +90,26 @@ def test_reset_password_validates_new_password_in_schema(client):
     resp = client.post("/reset-password", json={"token": "whatever", "new_password": "short"})
 
     assert resp.status_code == 422
+
+
+def test_database_rejects_emails_differing_only_in_case(db_session):
+    from sqlalchemy.exc import IntegrityError
+
+    db_session.add(User(email="Case.Only@example.com", nickname="case_a", hashed_password="x"))
+    db_session.commit()
+    db_session.add(User(email="case.only@example.com", nickname="case_b", hashed_password="x"))
+
+    with pytest.raises(IntegrityError):
+        db_session.flush()
+    db_session.rollback()
+
+
+def test_token_issued_for_mixed_case_email_still_authenticates(client, db_session):
+    from app.core.security import create_access_token
+
+    db_session.add(User(email="legacy@example.com", nickname="legacy", hashed_password=get_password_hash("password123")))
+    db_session.commit()
+    # Tokens issued before emails were normalized carry the original spelling.
+    token = create_access_token({"sub": "Legacy@Example.com"})
+
+    assert client.get("/users/me", headers={"Authorization": f"Bearer {token}"}).status_code == 200
