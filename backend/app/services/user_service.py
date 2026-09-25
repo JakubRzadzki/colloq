@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import ConflictError, DomainError
 from app.models import User
 from app.services.file_manager import DIR_AVATARS
-from app.services.storage import LocalFileStorage, Upload, commit_or_discard
+from app.services.storage import LocalFileStorage, Upload, commit_or_discard, delete_files
 
 MAX_NICKNAME_LENGTH = 100
 NICKNAME_TAKEN = "Nickname already taken"
@@ -36,13 +36,18 @@ class UserService:
             user.bio = bio
 
         saved: list[str] = []
+        old_avatar = None
         if avatar is not None and avatar.filename:
-            user.avatar_url = self.storage.save_image(avatar, DIR_AVATARS)
-            saved.append(user.avatar_url)
+            new_url = self.storage.save_image(avatar, DIR_AVATARS)
+            saved.append(new_url)
+            old_avatar, user.avatar_url = user.avatar_url, new_url
         try:
             commit_or_discard(self.db, self.storage, saved)
         except IntegrityError:
             # Someone else took the nickname between the check and the commit.
             raise ConflictError(NICKNAME_TAKEN) from None
+        # Only after the commit: the old avatar must survive a failed update.
+        if old_avatar:
+            delete_files(self.storage, [old_avatar])
         self.db.refresh(user)
         return user
