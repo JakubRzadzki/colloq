@@ -15,7 +15,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 
 @router.get("/me", response_model=UserOut)
-async def get_me(current_user: User = Depends(get_current_user)):
+def get_me(current_user: User = Depends(get_current_user)):
     """Get current authenticated user."""
     out = UserOut.model_validate(current_user)
     if out.avatar_url:
@@ -24,7 +24,7 @@ async def get_me(current_user: User = Depends(get_current_user)):
 
 
 @router.put("/me", response_model=UserOut)
-async def update_me(
+def update_me(
     nickname: Optional[str] = Form(None),
     bio: Optional[str] = Form(None),
     avatar: Optional[UploadFile] = File(None),
@@ -47,7 +47,7 @@ async def update_me(
 
 
 @router.get("/{user_id}", response_model=PublicUserOut)
-async def get_user(user_id: int, db: Session = Depends(get_db)):
+def get_user(user_id: int, db: Session = Depends(get_db)):
     """Get public user profile by ID (no email)."""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -59,7 +59,7 @@ async def get_user(user_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/me/favorites", response_model=List[NoteOut])
-async def get_my_favorites(
+def get_my_favorites(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -81,7 +81,7 @@ async def get_my_favorites(
 
 
 @router.get("/me/dashboard")
-async def get_my_dashboard(
+def get_my_dashboard(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

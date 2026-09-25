@@ -84,7 +84,7 @@ def _increment_view_count(note_id: int) -> None:
 
 
 @router.post("/notes", response_model=NoteOut)
-async def create_note(
+def create_note(
     title: str = Form(None),
     content: Optional[str] = Form(None),
     university_id: int = Form(...),
@@ -138,7 +138,7 @@ async def create_note(
 
 
 @router.get("/notes")
-async def get_notes(
+def get_notes(
     university_id: Optional[int] = None,
     subject_id: Optional[int] = None,
     semester: Optional[int] = None,
@@ -211,7 +211,7 @@ async def get_notes(
 
 
 @router.get("/notes/{note_id}", response_model=NoteOut)
-async def get_note(
+def get_note(
     note_id: int,
     background_tasks: BackgroundTasks,
     current_user: Optional[User] = Depends(get_current_user_optional),
@@ -232,7 +232,7 @@ async def get_note(
 
 
 @router.put("/notes/{note_id}", response_model=NoteOut)
-async def update_note(
+def update_note(
     note_id: int,
     title: Optional[str] = Form(None),
     content: Optional[str] = Form(None),
@@ -279,7 +279,7 @@ async def update_note(
 
 
 @router.get("/notes/{note_id}/history", response_model=List[NoteHistoryOut])
-async def get_note_history(
+def get_note_history(
     note_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -297,7 +297,7 @@ async def get_note_history(
 
 
 @router.delete("/notes/{note_id}")
-async def delete_note(
+def delete_note(
     note_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -322,7 +322,7 @@ async def delete_note(
 
 
 @router.get("/notes/{note_id}/download/{file_id}")
-async def download_note_file(
+def download_note_file(
     note_id: int,
     file_id: int,
     current_user: User = Depends(get_current_user),
@@ -362,7 +362,7 @@ async def download_note_file(
 
 
 @router.post("/notes/{note_id}/vote", response_model=VoteResponse)
-async def vote_note(
+def vote_note(
     note_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -409,7 +409,7 @@ async def vote_note(
 
 
 @router.post("/notes/{note_id}/favorite", response_model=FavoriteResponse)
-async def toggle_favorite(
+def toggle_favorite(
     note_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -432,7 +432,7 @@ async def toggle_favorite(
 
 
 @router.get("/notes/{note_id}/comments", response_model=List[CommentOut])
-async def get_comments(
+def get_comments(
     note_id: int,
     current_user: Optional[User] = Depends(get_current_user_optional),
     db: Session = Depends(get_db),
@@ -447,7 +447,7 @@ async def get_comments(
 
 
 @router.post("/notes/{note_id}/comments", response_model=CommentOut)
-async def add_comment(
+def add_comment(
     note_id: int,
     payload: CommentCreate,
     current_user: User = Depends(get_current_user),
@@ -468,7 +468,7 @@ async def add_comment(
 
 
 @router.post("/reviews", response_model=ReviewOut)
-async def add_review(
+def add_review(
     review: ReviewCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -499,13 +499,13 @@ async def add_review(
 
 
 @router.get("/tags", response_model=List[TagOut])
-async def list_tags(db: Session = Depends(get_db)):
+def list_tags(db: Session = Depends(get_db)):
     """List all tags."""
     return db.query(Tag).order_by(Tag.name).all()
 
 
 @router.post("/tags", response_model=TagOut)
-async def create_tag(
+def create_tag(
     payload: TagCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -525,7 +525,7 @@ async def create_tag(
 
 
 @router.put("/notes/{note_id}/tags")
-async def set_note_tags(
+def set_note_tags(
     note_id: int,
     payload: NoteTagsUpdate,
     current_user: User = Depends(get_current_user),

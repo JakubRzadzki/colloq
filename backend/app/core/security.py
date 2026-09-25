@@ -36,7 +36,7 @@ def create_access_token(data: dict) -> str:
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-async def get_current_user(
+def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
 ) -> User:
@@ -59,7 +59,7 @@ async def get_current_user(
     return user
 
 
-async def get_current_user_optional(
+def get_current_user_optional(
     token: Optional[str] = Depends(oauth2_scheme_optional),
     db: Session = Depends(get_db),
 ) -> Optional[User]:
@@ -79,7 +79,7 @@ async def get_current_user_optional(
         return None
 
 
-async def get_current_active_admin(user: User = Depends(get_current_user)) -> User:
+def get_current_active_admin(user: User = Depends(get_current_user)) -> User:
     """Require admin; raise 403 if not admin."""
     if not user.is_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin privileges required")

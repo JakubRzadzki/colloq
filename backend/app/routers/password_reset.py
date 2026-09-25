@@ -47,7 +47,7 @@ def create_reset_token(db: Session, user: User) -> str:
 
 @router.post("/forgot-password")
 @limiter.limit("3/minute")
-async def forgot_password(
+def forgot_password(
     request: Request,
     payload: ForgotPasswordRequest,
     db: Session = Depends(get_db),
@@ -65,7 +65,7 @@ async def forgot_password(
 
 @router.post("/reset-password")
 @limiter.limit("5/minute")
-async def reset_password(
+def reset_password(
     request: Request,
     payload: ResetPasswordRequest,
     db: Session = Depends(get_db),

@@ -33,7 +33,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 
 @router.get("/pending_items", response_model=PendingItemsResponse)
-async def get_pending_items(
+def get_pending_items(
     current_user: User = Depends(get_current_active_admin),
     db: Session = Depends(get_db),
 ):
@@ -78,7 +78,7 @@ async def get_pending_items(
 
 
 @router.get("/users", response_model=List[UserOut])
-async def admin_get_users(
+def admin_get_users(
     current_user: User = Depends(get_current_active_admin),
     db: Session = Depends(get_db),
 ):
@@ -87,7 +87,7 @@ async def admin_get_users(
 
 
 @router.patch("/users/{user_id}/ban")
-async def admin_ban_user(
+def admin_ban_user(
     user_id: int,
     body: BanUserBody,
     current_user: User = Depends(get_current_active_admin),
@@ -108,7 +108,7 @@ async def admin_ban_user(
 
 
 @router.post("/approve/{item_type}/{item_id}")
-async def approve_item(
+def approve_item(
     item_type: str,
     item_id: int,
     current_user: User = Depends(get_current_active_admin),
@@ -137,7 +137,7 @@ async def approve_item(
 
 
 @router.delete("/reject/{item_type}/{item_id}")
-async def reject_item(
+def reject_item(
     item_type: str,
     item_id: int,
     current_user: User = Depends(get_current_active_admin),
@@ -178,7 +178,7 @@ async def reject_item(
 
 
 @router.get("/reports", response_model=List[ReportOut])
-async def admin_list_reports(
+def admin_list_reports(
     current_user: User = Depends(get_current_active_admin),
     db: Session = Depends(get_db),
     status_filter: Optional[str] = None,
@@ -191,7 +191,7 @@ async def admin_list_reports(
 
 
 @router.patch("/reports/{report_id}")
-async def admin_update_report(
+def admin_update_report(
     report_id: int,
     status: str,
     current_user: User = Depends(get_current_active_admin),
@@ -209,7 +209,7 @@ async def admin_update_report(
 
 
 @router.get("/feedback", response_model=List[FeedbackOut])
-async def admin_list_feedback(
+def admin_list_feedback(
     current_user: User = Depends(get_current_active_admin),
     db: Session = Depends(get_db),
 ):
@@ -218,7 +218,7 @@ async def admin_list_feedback(
 
 
 @router.post("/approve_image_request/{req_id}")
-async def approve_image_request(
+def approve_image_request(
     req_id: int,
     current_user: User = Depends(get_current_active_admin),
     db: Session = Depends(get_db),
@@ -236,7 +236,7 @@ async def approve_image_request(
 
 
 @router.post("/reject_image_request/{req_id}")
-async def reject_image_request(
+def reject_image_request(
     req_id: int,
     current_user: User = Depends(get_current_active_admin),
     db: Session = Depends(get_db),
@@ -252,7 +252,7 @@ async def reject_image_request(
 
 
 @router.patch("/universities/{uni_id}/image")
-async def admin_update_university_image(
+def admin_update_university_image(
     uni_id: int,
     image: UploadFile = File(...),
     current_user: User = Depends(get_current_active_admin),
@@ -274,7 +274,7 @@ async def admin_update_university_image(
 
 
 @router.put("/universities/{uni_id}")
-async def admin_update_university(
+def admin_update_university(
     uni_id: int,
     name: Optional[str] = Form(None),
     city: Optional[str] = Form(None),

@@ -15,7 +15,7 @@ router = APIRouter(tags=["auth"])
 
 @router.post("/token", response_model=Token)
 @limiter.limit("5/minute")
-async def login(
+def login(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
@@ -30,7 +30,7 @@ async def login(
 
 @router.post("/register", response_model=UserOut)
 @limiter.limit("5/minute")
-async def register(request: Request, payload: RegisterRequest, db: Session = Depends(get_db)):
+def register(request: Request, payload: RegisterRequest, db: Session = Depends(get_db)):
     """Register a new user account."""
     user_data = payload.user
     

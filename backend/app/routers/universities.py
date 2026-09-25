@@ -42,7 +42,7 @@ def _uni_out(uni: University) -> UniversityOut:
 
 
 @router.post("/universities", response_model=UniversityOut)
-async def create_university(
+def create_university(
     name: str = Form(...),
     city: str = Form(...),
     region: str = Form(""),
@@ -72,7 +72,7 @@ async def create_university(
 
 
 @router.get("/universities", response_model=List[UniversityOut])
-async def get_universities(
+def get_universities(
     region: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
@@ -85,7 +85,7 @@ async def get_universities(
 
 
 @router.get("/universities/{uni_id}", response_model=UniversityOut)
-async def get_university(
+def get_university(
     uni_id: int,
     current_user: Optional[User] = Depends(get_current_user_optional),
     db: Session = Depends(get_db),
@@ -98,7 +98,7 @@ async def get_university(
 
 
 @router.put("/universities/{uni_id}", response_model=UniversityOut)
-async def update_university(
+def update_university(
     uni_id: int,
     description: Optional[str] = Form(None),
     banner: Optional[UploadFile] = File(None),
@@ -119,7 +119,7 @@ async def update_university(
 
 
 @router.get("/universities/{uni_id}/faculties", response_model=List[FacultyOut])
-async def get_faculties(uni_id: int, db: Session = Depends(get_db)):
+def get_faculties(uni_id: int, db: Session = Depends(get_db)):
     """List approved faculties for a university."""
     faculties = db.query(Faculty).filter(Faculty.university_id == uni_id, Faculty.is_approved == True).all()  # noqa: E712
     result = []
@@ -132,7 +132,7 @@ async def get_faculties(uni_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/faculties", response_model=FacultyOut)
-async def create_faculty(
+def create_faculty(
     name: str = Form(...),
     description: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
@@ -163,13 +163,13 @@ async def create_faculty(
 
 
 @router.get("/faculties/{fac_id}/fields", response_model=List[FieldOfStudyOut])
-async def get_fields(fac_id: int, db: Session = Depends(get_db)):
+def get_fields(fac_id: int, db: Session = Depends(get_db)):
     """List approved fields of study for a faculty."""
     return db.query(FieldOfStudy).filter(FieldOfStudy.faculty_id == fac_id, FieldOfStudy.is_approved == True).all()  # noqa: E712
 
 
 @router.post("/fields", response_model=FieldOfStudyOut)
-async def create_field(
+def create_field(
     data: FieldOfStudyCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -190,7 +190,7 @@ async def create_field(
 
 
 @router.get("/fields/{field_id}/subjects", response_model=List[SubjectOut])
-async def get_subjects(
+def get_subjects(
     field_id: int, 
     semester: Optional[int] = None,
     db: Session = Depends(get_db)
@@ -203,7 +203,7 @@ async def get_subjects(
 
 
 @router.post("/subjects", response_model=SubjectOut)
-async def create_subject(
+def create_subject(
     data: SubjectCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -225,7 +225,7 @@ async def create_subject(
 
 
 @router.get("/universities/{uni_id}/reviews", response_model=List[ReviewOut])
-async def get_university_reviews(uni_id: int, db: Session = Depends(get_db)):
+def get_university_reviews(uni_id: int, db: Session = Depends(get_db)):
     """List reviews for a university."""
     return db.query(Review).options(
         joinedload(Review.user),
@@ -233,7 +233,7 @@ async def get_university_reviews(uni_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/universities/{uni_id}/image_request")
-async def request_image_change(
+def request_image_change(
     uni_id: int,
     image: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
