@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     SECRET_KEY: str = INSECURE_DEFAULT_SECRET_KEY
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
+    # Set when the frontend and the API run on different subdomains (e.g. ".example.com"),
+    # so the frontend can read the csrf_token cookie. Leave empty for a single host.
+    COOKIE_DOMAIN: str | None = None
 
     # Served publicly under /uploads (images).
     UPLOAD_DIR: str = str(_REPO_ROOT / "uploads")
