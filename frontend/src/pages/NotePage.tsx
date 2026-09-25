@@ -14,13 +14,14 @@ import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Star, Lock, Upload, FileText, Pencil, Clock, Share2, Flag, Download } from 'lucide-react';
-import { getNote, getCurrentUser, getNoteHistory, resolveUrl, createReport, type NoteHistoryEntry } from '../utils/api';
+import { getNote, getNoteHistory, resolveUrl, createReport, type NoteHistoryEntry } from '../utils/api';
 import { AddNoteModal } from '../components/addNoteModal';
 import { EditNoteModal } from '../components/EditNoteModal';
 import { FilePreview } from '../components/FilePreview';
 import { Attachment } from '../utils/types';
 import { useFileDownload } from '../hooks/useFileDownload';
 import { t } from '../utils/i18n';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 
 // Download button component for NotePage
 function DownloadButton({ fileUrl, filename }: { fileUrl: string; filename: string }) {
@@ -50,7 +51,6 @@ export default function NotePage() {
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportReason, setReportReason] = useState('spam');
   const [reportStatus, setReportStatus] = useState<'idle' | 'sending' | 'ok' | 'error'>('idle');
-  const token = localStorage.getItem('token');
 
   // Fetch note data
   const {
@@ -63,25 +63,21 @@ export default function NotePage() {
     enabled: !!noteId && !isNaN(noteId),
   });
 
-  // Fetch current user data (only if logged in)
-  const { data: currentUser } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: getCurrentUser,
-    enabled: !!token,
-  });
+  const { data: currentUser } = useCurrentUser();
+  const isLoggedIn = !!currentUser;
 
   // Fetch note history (only when modal open and user is owner/admin)
   const canEdit = !!note && !!currentUser && (currentUser.id === note.author?.id || currentUser.is_admin);
   const { data: history } = useQuery({
     queryKey: ['noteHistory', noteId],
     queryFn: () => getNoteHistory(noteId),
-    enabled: showHistory && !!token && !!noteId && !!canEdit,
+    enabled: showHistory && isLoggedIn && !!noteId && !!canEdit,
   });
 
   // Blur note when: not logged in, OR (logged in with 0 uploads and not the author)
   const isBlocked =
     note &&
-    (!token ||
+    (!isLoggedIn ||
       (currentUser &&
         currentUser.uploads_count === 0 &&
         currentUser.id !== note.author?.id));
@@ -193,7 +189,7 @@ export default function NotePage() {
                     >
                       <Share2 size={16} /> {linkCopied ? 'Copied!' : 'Share'}
                     </button>
-                    {token && (
+                    {isLoggedIn && (
                       <button
                         type="button"
                         onClick={() => setShowReportModal(true)}
@@ -349,7 +345,7 @@ export default function NotePage() {
                   {t('upload_barrier_desc')}
                 </p>
 
-                {!token ? (
+                {!isLoggedIn ? (
                   <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
                     <Link
                       to="/login"

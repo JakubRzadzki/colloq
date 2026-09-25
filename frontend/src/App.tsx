@@ -4,12 +4,13 @@
  * theme management, language state, and persistent Navbar.
  */
 import { useState, useEffect, Suspense, lazy } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { FeedbackWidget } from './components/FeedbackWidget';
 import { t as translate, getCurrentLanguage, setLanguage, type Language } from './utils/i18n';
-import { isAdmin } from './utils/api';
-import { jwtDecode } from 'jwt-decode';
+import { logout } from './utils/api';
+import { CURRENT_USER_KEY, useCurrentUser } from './hooks/useCurrentUser';
 import LoadingSpinner from './components/LoadingSpinner';
 
 // Lazy-loaded route components for code-splitting
@@ -30,31 +31,18 @@ function App() {
   // Theme state - dark mode by default
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
 
-  // Authentication token with proactive expiration check
-  const [token, setToken] = useState<string | null>(() => {
-    const t = localStorage.getItem('token');
-    if (!t) return null;
-    try {
-      const decoded = jwtDecode<{ exp: number }>(t);
-      if (decoded.exp * 1000 < Date.now()) {
-        localStorage.removeItem('token');
-        return null;
-      }
-      return t;
-    } catch {
-      localStorage.removeItem('token');
-      return null;
-    }
-  });
+  // Session: an httpOnly cookie; the UI only knows the user it belongs to.
+  const queryClient = useQueryClient();
+  const { data: currentUser, isLoading: userLoading } = useCurrentUser();
 
   // Listen for global auth expiration events from API interceptor
   useEffect(() => {
     const handleAuthExpired = () => {
-      setToken(null);
+      queryClient.setQueryData(CURRENT_USER_KEY, null);
     };
     window.addEventListener('auth-expired', handleAuthExpired);
     return () => window.removeEventListener('auth-expired', handleAuthExpired);
-  }, []);
+  }, [queryClient]);
 
   // Translation function that uses current lang state
   const tFunc = (key: string): string => translate(key, lang);
@@ -82,9 +70,15 @@ function App() {
   };
 
   // Handle user logout
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    setToken(null);
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } finally {
+      queryClient.setQueryData(CURRENT_USER_KEY, null);
+      // Drop data cached for the previous user. Not clear(): that would also detach
+      // the mounted useCurrentUser observers from the currentUser query.
+      queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== CURRENT_USER_KEY[0] });
+    }
   };
 
   // Build a translations-like object for legacy component compatibility
@@ -100,7 +94,7 @@ function App() {
       <div className="min-h-screen font-sans transition-colors duration-500">
         {/* Persistent Navbar - always rendered outside Suspense */}
         <Navbar
-          token={token}
+          user={currentUser ?? null}
           theme={theme}
           toggleTheme={toggleTheme}
           logout={handleLogout}
@@ -109,13 +103,13 @@ function App() {
           setLang={setLang}
         />
 
-        {token && <FeedbackWidget token={token} />}
+        {currentUser && <FeedbackWidget />}
 
         {/* Suspense boundary with glass LoadingSpinner */}
         <Suspense fallback={<LoadingSpinner />}>
           <Routes>
             <Route path="/" element={<HomePage />} />
-            <Route path="/login" element={<LoginPage setToken={setToken} t={tObj} />} />
+            <Route path="/login" element={<LoginPage t={tObj} />} />
             <Route path="/register" element={<RegisterPage t={tObj} />} />
             <Route path="/term" element={<TermPage t={tObj} />} />
             <Route path="/university/:id" element={<UniversityPage t={tObj} />} />
@@ -124,13 +118,14 @@ function App() {
             <Route path="/region/:regionName" element={<RegionPage t={tObj} />} />
             <Route
               path="/profile"
-              element={token ? <ProfilePage t={tObj} /> : <Navigate to="/login" />}
+              element={userLoading ? <LoadingSpinner /> : currentUser ? <ProfilePage t={tObj} /> : <Navigate to="/login" />}
             />
             <Route
               path="/admin"
               element={
-                !token ? <Navigate to="/login" replace /> :
-                !isAdmin() ? <Navigate to="/" replace /> :
+                userLoading ? <LoadingSpinner /> :
+                !currentUser ? <Navigate to="/login" replace /> :
+                !currentUser.is_admin ? <Navigate to="/" replace /> :
                 <AdminPage t={tObj} />
               }
             />

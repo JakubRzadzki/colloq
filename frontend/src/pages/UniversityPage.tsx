@@ -30,6 +30,7 @@ import { AddFacultyModal } from '../components/AddFacultyModal';
 import { NoteModal } from '../components/NoteModal';
 import type { TFunction } from '../utils/i18n';
 import type { Note, Review } from '../utils/types';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 
 type TabType = 'materials' | 'reviews' | 'about';
 
@@ -86,7 +87,8 @@ const FieldAccordion: React.FC<{ field: FieldOfStudy }> = ({ field }) => {
   const [showAdd, setShowAdd] = useState(false);
   const [subName, setSubName] = useState('');
   const [subSem, setSubSem] = useState(1);
-  const token = localStorage.getItem('token');
+  const { data: currentUser } = useCurrentUser();
+  const isLoggedIn = !!currentUser;
   const qc = useQueryClient();
 
   const { data: subjects, isLoading } = useQuery<Subject[]>({
@@ -121,7 +123,7 @@ const FieldAccordion: React.FC<{ field: FieldOfStudy }> = ({ field }) => {
             <span className="text-xs opacity-40 ml-auto">{field.degree_level}</span>
           )}
         </button>
-        {token && isOpen && (
+        {isLoggedIn && isOpen && (
           <button
             onClick={() => setShowAdd(!showAdd)}
             className="p-1 rounded-lg hover:bg-[var(--glass-bg)] transition-colors opacity-40 hover:opacity-100 flex-shrink-0"
@@ -193,7 +195,8 @@ const FacultyAccordion: React.FC<{ faculty: Faculty }> = ({ faculty }) => {
   const [showAdd, setShowAdd] = useState(false);
   const [fieldName, setFieldName] = useState('');
   const [degreeLevel, setDegreeLevel] = useState('Inżynierskie (I stopień)');
-  const token = localStorage.getItem('token');
+  const { data: currentUser } = useCurrentUser();
+  const isLoggedIn = !!currentUser;
   const qc = useQueryClient();
 
   const { data: fields, isLoading } = useQuery<FieldOfStudy[]>({
@@ -224,7 +227,7 @@ const FacultyAccordion: React.FC<{ faculty: Faculty }> = ({ faculty }) => {
           <Building2 size={16} className="text-[#5e5ce6]" />
           <span className="font-bold">{faculty.name}</span>
         </button>
-        {token && isOpen && (
+        {isLoggedIn && isOpen && (
           <button
             onClick={() => setShowAdd(!showAdd)}
             className="p-1.5 rounded-lg hover:bg-[var(--glass-bg)] transition-colors opacity-40 hover:opacity-100 flex-shrink-0"
@@ -292,7 +295,8 @@ const AcademicStructure: React.FC<{
   universityId: number;
   faculties: Faculty[];
 }> = ({ universityId, faculties }) => {
-  const token = localStorage.getItem('token');
+  const { data: currentUser } = useCurrentUser();
+  const isLoggedIn = !!currentUser;
 
   return (
     <div>
@@ -316,7 +320,7 @@ const AcademicStructure: React.FC<{
         <div className="empty-state !py-8">
           <Building2 size={36} className="empty-state-icon" />
           <p className="text-base font-semibold opacity-60">Brak wydziałów</p>
-          {token && <p className="text-sm opacity-40">Dodaj wydział przyciskiem "Add Faculty" obok wyszukiwania.</p>}
+          {isLoggedIn && <p className="text-sm opacity-40">Dodaj wydział przyciskiem "Add Faculty" obok wyszukiwania.</p>}
         </div>
       )}
     </div>
@@ -326,7 +330,8 @@ const AcademicStructure: React.FC<{
 export function UniversityPage({ t }: { t: TFunction }) {
   const { id } = useParams<{ id: string }>();
   const uniId = parseInt(id || '0');
-  const token = localStorage.getItem('token');
+  const { data: currentUser } = useCurrentUser();
+  const isLoggedIn = !!currentUser;
   const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<TabType>('materials');
@@ -381,7 +386,7 @@ export function UniversityPage({ t }: { t: TFunction }) {
   const { data: myFavorites = [] } = useQuery({
     queryKey: ['myFavorites'],
     queryFn: () => getMyFavorites(),
-    enabled: !!token,
+    enabled: isLoggedIn,
   });
   const favoriteIds = new Set((myFavorites as Note[]).map((n: Note) => n.id));
 
@@ -477,7 +482,7 @@ export function UniversityPage({ t }: { t: TFunction }) {
                 alt="Logo"
                 className="w-full h-full object-cover"
               />
-              {token && (
+              {isLoggedIn && (
                 <>
                   <div
                     className="absolute inset-0 bg-black/50 hidden group-hover:flex items-center justify-center rounded-2xl cursor-pointer transition-all"
@@ -535,7 +540,7 @@ export function UniversityPage({ t }: { t: TFunction }) {
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
-              {token && (
+              {isLoggedIn && (
                 <div className="flex flex-wrap sm:flex-nowrap gap-2 w-full sm:w-auto shrink-0">
                   <button
                     onClick={() => setAddFacultyOpen(true)}
@@ -634,7 +639,7 @@ export function UniversityPage({ t }: { t: TFunction }) {
                         <ThumbsUp size={13} /> Like
                       </button>
                       <button
-                        onClick={(e) => { e.stopPropagation(); token && favMutation.mutate(n.id); }}
+                        onClick={(e) => { e.stopPropagation(); isLoggedIn && favMutation.mutate(n.id); }}
                         className={`flex items-center gap-1 text-xs transition-all px-2 py-1 rounded-lg hover:bg-[#bf5af2]/10 ${favoriteIds.has(n.id) ? 'text-[#bf5af2]' : 'opacity-50 hover:opacity-100 hover:text-[#bf5af2]'}`}
                       >
                         <Heart size={13} fill={favoriteIds.has(n.id) ? 'currentColor' : 'none'} /> Save
@@ -660,7 +665,7 @@ export function UniversityPage({ t }: { t: TFunction }) {
         {/* --- REVIEWS TAB --- */}
         {activeTab === 'reviews' && (
           <div className="max-w-3xl fade-in">
-            {token ? (
+            {isLoggedIn ? (
               <ReviewForm
                 universityId={uniId}
                 onSuccess={() => queryClient.invalidateQueries({ queryKey: ['reviews'] })}
@@ -747,7 +752,7 @@ export function UniversityPage({ t }: { t: TFunction }) {
       </div>
 
       {/* MODALS */}
-      {token && (
+      {isLoggedIn && (
         <>
         <AddFacultyModal
           isOpen={isAddFacultyOpen}
@@ -766,7 +771,6 @@ export function UniversityPage({ t }: { t: TFunction }) {
         <NoteModal
           note={selectedNote}
           onClose={() => setSelectedNote(null)}
-          token={token}
           onUnlockWithUpload={() => {
             setSelectedNote(null);
             setNoteModalOpen(true);

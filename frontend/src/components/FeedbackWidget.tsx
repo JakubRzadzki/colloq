@@ -8,17 +8,18 @@ import { submitFeedback } from '../utils/api';
 
 const STORAGE_KEY = 'colloq_feedback_done';
 
-export function FeedbackWidget({ token }: { token: string | null }) {
+/** Rendered only for logged-in users. */
+export function FeedbackWidget() {
   const [visible, setVisible] = useState(false);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!token || localStorage.getItem(STORAGE_KEY)) return;
+    if (localStorage.getItem(STORAGE_KEY)) return;
     const timer = setTimeout(() => setVisible(true), 2000);
     return () => clearTimeout(timer);
-  }, [token]);
+  }, []);
 
   const handleClose = () => {
     setVisible(false);
