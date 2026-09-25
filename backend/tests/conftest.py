@@ -24,7 +24,11 @@ from app.main import app
 test_engine_url = os.environ["DATABASE_URL"]
 engine = create_engine(test_engine_url, pool_pre_ping=True)
 
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# create_savepoint: session.commit()/rollback() inside the code under test only
+# release/roll back a SAVEPOINT, so the outer per-test transaction stays intact.
+TestingSessionLocal = sessionmaker(
+    autocommit=False, autoflush=False, bind=engine, join_transaction_mode="create_savepoint"
+)
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_test_db():
