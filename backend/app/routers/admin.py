@@ -14,6 +14,7 @@ from app.models import (
     Subject,
     Note,
     ImageRequest,
+    Notification,
     Report,
     Feedback,
 )
@@ -25,7 +26,7 @@ from app.schemas import (
     FeedbackOut,
     BanUserBody,
 )
-from app.services.file_manager import delete_file
+from app.services.file_manager import DIR_UNIVERSITIES, delete_file, normalize_stored_path, save_upload
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -113,7 +114,6 @@ def approve_item(
     db: DbSession,
 ):
     """Approve a pending item."""
-    from app.models import Notification
     model_map = {
         "university": University,
         "faculty": Faculty,
@@ -257,8 +257,6 @@ def admin_update_university_image(
     image: UploadFile = File(...),
 ):
     """Directly update university image (admin only)."""
-    from app.services.file_manager import save_upload, normalize_stored_path
-    from app.routers.universities import DIR_UNIVERSITIES
     uni = db.query(University).filter(University.id == uni_id).first()
     if not uni:
         raise HTTPException(status_code=404, detail="University not found")
@@ -285,8 +283,6 @@ def admin_update_university(
     banner: Optional[UploadFile] = File(None),
 ):
     """Update university details (admin only)."""
-    from app.services.file_manager import save_upload, normalize_stored_path
-    from app.routers.universities import DIR_UNIVERSITIES
     uni = db.query(University).filter(University.id == uni_id).first()
     if not uni:
         raise HTTPException(status_code=404, detail="University not found")

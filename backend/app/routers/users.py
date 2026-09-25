@@ -3,7 +3,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import joinedload, selectinload
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 
 from app.core.deps import CurrentUser, DbSession
 from app.models import User, Note, UserFavorite, Review, Comment
@@ -85,16 +85,15 @@ def get_my_dashboard(
     db: DbSession,
 ):
     """User dashboard with stats, notes, favorites, and pending submissions."""
-    from sqlalchemy import func as sqlfunc
 
     # User stats
-    notes_count = db.query(sqlfunc.count(Note.id)).filter(Note.user_id == current_user.id).scalar() or 0
-    reviews_count = db.query(sqlfunc.count(Review.id)).filter(Review.user_id == current_user.id).scalar() or 0
-    comments_count = db.query(sqlfunc.count(Comment.id)).filter(Comment.user_id == current_user.id).scalar() or 0
-    favorites_count = db.query(sqlfunc.count(UserFavorite.id)).filter(UserFavorite.user_id == current_user.id).scalar() or 0
+    notes_count = db.query(func.count(Note.id)).filter(Note.user_id == current_user.id).scalar() or 0
+    reviews_count = db.query(func.count(Review.id)).filter(Review.user_id == current_user.id).scalar() or 0
+    comments_count = db.query(func.count(Comment.id)).filter(Comment.user_id == current_user.id).scalar() or 0
+    favorites_count = db.query(func.count(UserFavorite.id)).filter(UserFavorite.user_id == current_user.id).scalar() or 0
 
     # Reputation rank
-    rank = db.query(sqlfunc.count(User.id)).filter(
+    rank = db.query(func.count(User.id)).filter(
         User.reputation_points > (current_user.reputation_points or 0),
     ).scalar() or 0
     rank += 1  # 1-indexed
@@ -118,7 +117,7 @@ def get_my_dashboard(
     )
 
     # Pending submissions
-    pending_notes = db.query(sqlfunc.count(Note.id)).filter(
+    pending_notes = db.query(func.count(Note.id)).filter(
         Note.user_id == current_user.id, Note.is_approved == False,
     ).scalar() or 0
 

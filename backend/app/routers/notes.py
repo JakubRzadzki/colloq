@@ -1,9 +1,11 @@
 """Notes CRUD, comments, voting (atomic), favorites, tags. File cleanup on delete."""
+from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import joinedload, selectinload
-from sqlalchemy import desc, or_
+from sqlalchemy import desc, func, or_
 
 from app.core.database import SessionLocal
 from app.core.deps import CurrentUser, DbSession, OptionalUser
@@ -41,6 +43,7 @@ from app.services.file_manager import (
     delete_file,
     normalize_stored_path,
     DIR_NOTES,
+    _resolve_physical_path,
 )
 
 router = APIRouter(tags=["notes"])
@@ -174,13 +177,11 @@ def get_notes(
             query = query.join(NoteTag).filter(NoteTag.tag_id.in_(ids))
     if date_from:
         try:
-            from datetime import datetime
             query = query.filter(Note.created_at >= datetime.fromisoformat(date_from.replace("Z", "+00:00")))
         except Exception:
             pass
     if date_to:
         try:
-            from datetime import datetime
             query = query.filter(Note.created_at <= datetime.fromisoformat(date_to.replace("Z", "+00:00")))
         except Exception:
             pass
@@ -196,8 +197,7 @@ def get_notes(
 
     # Count total before pagination. Drop ORDER BY (invalid alongside an
     # aggregate) and count distinct note ids (filters may join to-many tables).
-    from sqlalchemy import func as sqlfunc
-    total = query.order_by(None).with_entities(sqlfunc.count(sqlfunc.distinct(Note.id))).scalar() or 0
+    total = query.order_by(None).with_entities(func.count(func.distinct(Note.id))).scalar() or 0
 
     # Apply pagination
     notes = query.distinct().offset((page - 1) * page_size).limit(page_size).all()
@@ -329,7 +329,6 @@ def download_note_file(
     db: DbSession,
 ):
     """Download a specific file from a note (requires login). Increments download counter."""
-    from fastapi.responses import FileResponse
 
     note = db.query(Note).filter(Note.id == note_id).first()
     if not note:
@@ -343,7 +342,6 @@ def download_note_file(
         raise HTTPException(status_code=404, detail="File not found")
 
     # Resolve file path
-    from app.services.file_manager import _resolve_physical_path
     file_path = _resolve_physical_path(note_file.file_url)
     if not file_path.is_file():
         raise HTTPException(status_code=404, detail="File not found on disk")
@@ -392,8 +390,7 @@ def vote_note(
     # Flush to ensure new or deleted votes are visible to the sum query
     db.flush()
     # Recalculate score from votes table
-    from sqlalchemy import func as sqlfunc
-    total_score = db.query(sqlfunc.coalesce(sqlfunc.sum(Vote.value), 0)).filter(
+    total_score = db.query(func.coalesce(func.sum(Vote.value), 0)).filter(
         Vote.note_id == note_id,
     ).scalar()
     note.score = float(total_score)

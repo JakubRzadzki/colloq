@@ -6,7 +6,7 @@ from sqlalchemy.orm import joinedload
 from sqlalchemy import desc, func
 
 from app.core.deps import CurrentUser, DbSession, OptionalUser
-from app.models import University, Faculty, FieldOfStudy, Subject, Review
+from app.models import ImageRequest, University, Faculty, FieldOfStudy, Subject, Review
 from app.schemas import (
     UniversityOut,
     FacultyOut,
@@ -216,7 +216,6 @@ def request_image_change(
     image: UploadFile = File(...),
 ):
     """Submit an image change request for a university."""
-    from app.models import ImageRequest
     url = save_upload(image, DIR_UNIVERSITIES)
     req = ImageRequest(
         university_id=uni_id,

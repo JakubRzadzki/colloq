@@ -14,6 +14,19 @@ from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.core.exceptions import DomainError
+from app.routers import (
+    admin,
+    auth,
+    feedback,
+    home,
+    notes,
+    notifications,
+    password_reset,
+    reports,
+    search,
+    universities,
+    users,
+)
 
 from app.seed import run_seed
 
@@ -77,21 +90,6 @@ os.makedirs(os.path.join(settings.UPLOAD_DIR, "avatars"), exist_ok=True)
 os.makedirs(os.path.join(settings.UPLOAD_DIR, "faculties"), exist_ok=True)
 
 app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
-
-# Include routers
-from app.routers import (  # noqa: E402
-    admin,
-    auth,
-    feedback,
-    home,
-    notes,
-    notifications,
-    password_reset,
-    reports,
-    search,
-    universities,
-    users,
-)
 
 for module in (auth, users, universities, notes, admin, password_reset, home, notifications, reports, feedback, search):
     app.include_router(module.router)
