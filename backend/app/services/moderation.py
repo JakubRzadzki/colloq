@@ -74,9 +74,11 @@ class UniversityModeration(ModerationHandler):
 
     def files_to_delete(self, item: University) -> list[str]:
         own = [p for p in (item.image_url, item.banner_url) if p]
-        # Notes and faculties are deleted by cascade together with the university.
+        # Notes, faculties and image requests are deleted by cascade together with the university.
         faculty_files = [path for faculty in item.faculties for path in _faculty_files(faculty)]
-        return own + _notes_files(item.notes) + faculty_files
+        requested = [request.new_image_url for request in item.image_requests]
+        # An approved request's file is also the current image_url; list each path once.
+        return list(dict.fromkeys(own + _notes_files(item.notes) + faculty_files + requested))
 
 
 class FacultyModeration(ModerationHandler):

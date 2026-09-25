@@ -38,7 +38,8 @@ class User(Base):
     is_banned: Mapped[bool | None] = mapped_column(Boolean, default=False)
     is_admin: Mapped[bool | None] = mapped_column(Boolean, default=False)
     is_verified: Mapped[bool | None] = mapped_column(Boolean, default=False)
-    university_id: Mapped[int | None] = mapped_column(ForeignKey("universities.id"))
+    # SET NULL: rejecting or deleting a university must not delete or block its students.
+    university_id: Mapped[int | None] = mapped_column(ForeignKey("universities.id", ondelete="SET NULL"))
     created_at: Mapped[CreatedAt]
 
     # Relationships
@@ -79,6 +80,9 @@ class University(Base):
     faculties: Mapped[list[Faculty]] = relationship(back_populates="university", cascade="all, delete-orphan")
     notes: Mapped[list[Note]] = relationship(back_populates="university", cascade="all, delete-orphan")
     reviews: Mapped[list[Review]] = relationship(back_populates="university", cascade="all, delete-orphan")
+    image_requests: Mapped[list[ImageRequest]] = relationship(
+        back_populates="university", cascade="all, delete-orphan"
+    )
 
 
 class Faculty(Base):
@@ -277,14 +281,14 @@ class ImageRequest(Base):
     __tablename__ = "image_requests"
 
     id: Mapped[IntPK]
-    university_id: Mapped[int] = mapped_column(ForeignKey("universities.id"))
+    university_id: Mapped[int] = mapped_column(ForeignKey("universities.id", ondelete="CASCADE"))
     new_image_url: Mapped[str] = mapped_column(String(500))
     status: Mapped[str | None] = mapped_column(String(20), default="pending")  # pending, approved, rejected
     submitted_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[CreatedAt]
 
     # Relationships
-    university: Mapped[University] = relationship(backref="image_requests")
+    university: Mapped[University] = relationship(back_populates="image_requests")
 
     @property
     def university_name(self) -> str | None:

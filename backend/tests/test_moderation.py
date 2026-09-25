@@ -200,3 +200,40 @@ def test_image_request_for_missing_university_writes_no_file(client, author_head
     assert resp.status_code == 404
     uploads = Path(settings.UPLOAD_DIR)
     assert not uploads.exists() or not any(p.is_file() for p in uploads.rglob("*"))
+
+
+# --- deleting a university with dependent rows ------------------------------------
+
+def test_reject_university_removes_its_image_requests_and_their_files(client, db_session, admin_headers, author):
+    uni = University(name="Pending With Request", city="C", region="", is_approved=False)
+    db_session.add(uni)
+    db_session.flush()
+    requested = "/uploads/universities/requested.png"
+    _disk(requested).parent.mkdir(parents=True, exist_ok=True)
+    _disk(requested).write_bytes(PNG)
+    db_session.add(ImageRequest(university_id=uni.id, new_image_url=requested, submitted_by_id=author.id))
+    db_session.commit()
+    uni_id = uni.id
+
+    resp = client.delete(f"/admin/reject/university/{uni_id}", headers=admin_headers)
+
+    assert resp.status_code == 200
+    db_session.expire_all()
+    assert db_session.query(ImageRequest).filter(ImageRequest.university_id == uni_id).count() == 0
+    assert not _disk(requested).exists()
+
+
+def test_reject_university_keeps_users_registered_with_it(client, db_session, admin_headers):
+    uni = University(name="Pending Home Uni", city="C", region="", is_approved=False)
+    db_session.add(uni)
+    db_session.flush()
+    student = User(email="student-of-pending@example.com", nickname="pending_student",
+                   hashed_password="x", university_id=uni.id)
+    db_session.add(student)
+    db_session.commit()
+
+    resp = client.delete(f"/admin/reject/university/{uni.id}", headers=admin_headers)
+
+    assert resp.status_code == 200
+    db_session.expire_all()
+    assert db_session.get(User, student.id).university_id is None
