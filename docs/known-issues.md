@@ -1,12 +1,13 @@
 # Known Issues / Security Follow-ups
 
 Tracking list for accepted-but-not-yet-fixed risks. Each entry should become a
-GitHub issue (the `gh` CLI was unavailable in the environment where these were
-recorded, so file them when convenient).
+GitHub issue when it is picked up.
 
 Status as of the `fix/bugs-and-rookie-mistakes` branch (September 2026).
 
-## Move JWT out of localStorage (M10) — open
+## Open
+
+### Move JWT out of localStorage (M10)
 
 **Severity:** Medium
 
@@ -30,78 +31,46 @@ bug-fix pass and left switched off. The risk is partially mitigated by the
 `nosniff`, `X-Frame-Options` and `Referrer-Policy` headers and by upload type
 validation (reduces stored-XSS surface).
 
-## Images are served publicly — accepted risk
+### FastAPI is pinned to 0.136.x
 
-**Severity:** Low
+**Severity:** Low (maintenance)
+
+**Where:** `backend/requirements.txt`.
+
+**Problem:** From FastAPI 0.137 included routers are wrapped in `_IncludedRouter`,
+which slowapi's middleware (0.1.9 / 0.1.10) cannot look into, so default rate
+limits would silently stop applying to every router endpoint.
+`tests/test_rate_limits.py::test_default_limit_applies_to_routes_without_their_own`
+fails if that happens.
+
+**Proposed fix:** upgrade once slowapi supports the new routing (or replace the
+middleware with a global dependency that applies the default limit).
+
+## Accepted risks
+
+### Images are served publicly
 
 **Where:** `/uploads` mount in `backend/app/main.py`, `UPLOAD_DIR`.
 
-**Problem:** University/faculty logos, avatars and note images are reachable by
-anyone who knows (or guesses) the URL, including images of notes that are still
-waiting for approval. File names are random (uuid4), which makes guessing
-impractical but does not enforce access control.
+University/faculty logos, avatars and note images are reachable by anyone who
+knows (or guesses) the URL, including images of notes that are still waiting for
+approval. File names are random (uuid4), which makes guessing impractical but
+does not enforce access control. These images are meant to be public once
+content is approved, and serving them through an authenticated endpoint would
+break plain `<img>` tags. Note attachments, the actually sensitive files, are
+stored in `PRIVATE_UPLOAD_DIR` and served only through the authenticated
+download endpoint.
 
-**Decision:** Accepted. These images are meant to be public once content is
-approved, and serving them through an authenticated endpoint would break plain
-`<img>` tags. Note attachments, the actually sensitive files, are stored in
-`PRIVATE_UPLOAD_DIR` and served only through the authenticated download endpoint.
+## Resolved
 
-## Rejecting a pending university that has image requests fails — open
-
-**Severity:** Medium (admin action fails with 500)
-
-**Where:** `ImageRequest.university` relationship in `backend/app/models.py`.
-
-**Problem:** `image_requests.university_id` is `NOT NULL` without `ON DELETE CASCADE`,
-and the relationship (a `backref`) has no delete cascade. Deleting a university
-with image requests makes SQLAlchemy set `university_id` to NULL, which raises an
-`IntegrityError`.
-
-**Proposed fix:** cascade the delete (ORM `cascade="all, delete-orphan"` plus a
-migration adding `ON DELETE CASCADE`) and remove the requested image files in
-`UniversityModeration.files_to_delete`.
-
-## Admin "delete university" button deletes a note — open
-
-**Severity:** High (data loss by an admin click)
-
-**Where:** `frontend/src/pages/AdminPage.tsx`, universities tab:
-`<UniversityEditRow ... onDelete={() => deleteNoteMutation.mutate(uni.id)} />`.
-
-**Problem:** The button calls `DELETE /notes/{university id}`, deleting whichever
-note happens to have that id. There is no endpoint for deleting approved
-universities.
-
-**Proposed fix:** remove the button, or add an admin endpoint for deleting a
-university (with the file cleanup used by moderation) and call that.
-
-## Rate limits are per process — open
-
-**Severity:** Low
-
-**Where:** `backend/app/core/rate_limit.py`.
-
-**Problem:** slowapi uses in-memory storage, so every uvicorn worker (or
-container replica) keeps its own counters and the effective limit is multiplied
-by the number of processes.
-
-**Proposed fix:** configure `storage_uri` with Redis when running more than one worker.
-
-Related: FastAPI is pinned to 0.136.x because from 0.137 slowapi's middleware no
-longer finds endpoints of included routers, so default limits would silently stop
-applying. `tests/test_rate_limits.py` fails if that happens; revisit the pin when
-slowapi supports the new routing.
-
-## Emails that differ only in case — open
-
-**Severity:** Low
-
-**Where:** `users.email` unique constraint.
-
-**Problem:** New registrations store emails in lowercase and look them up
-case-insensitively, but the unique constraint is still case-sensitive and
-accounts created earlier may have mixed-case emails. Two legacy accounts that
-differ only in case cannot both log in reliably.
-
-**Proposed fix:** a migration that lowercases existing emails (after resolving
-duplicates) and a unique index on `lower(email)`.
+- **Rejecting a pending university with image requests or registered users
+  failed with 500** — foreign keys now cascade / set NULL (migration
+  `84f4c65036b2`).
+- **Admin "delete university" button deleted a note** — it calls the new
+  `DELETE /admin/universities/{id}`; the edit form now saves every field.
+- **Rate limits were per process** — `RATE_LIMIT_STORAGE_URI` can point all
+  workers at Redis.
+- **Emails differing only in case** — unique index on `lower(email)` (migration
+  `5319ba427bf5`, which stops and lists conflicting accounts if any exist).
+- **CI never passed** — the bare `pytest` command could not import `app`, and
+  the frontend had no `package-lock.json` for `npm ci`.
