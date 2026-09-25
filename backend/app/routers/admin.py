@@ -1,275 +1,102 @@
-"""Admin: pending items, approve/reject (with file cleanup), reports, feedback."""
+"""Admin: pending items, approve/reject (with file cleanup), users, reports, feedback."""
 from typing import List, Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
-from sqlalchemy.orm import joinedload
-from sqlalchemy import desc
+from fastapi import APIRouter, File, Form, UploadFile
 
-from app.core.deps import AdminUser, DbSession
-from app.models import (
-    User,
-    University,
-    Faculty,
-    FieldOfStudy,
-    Subject,
-    Note,
-    ImageRequest,
-    Notification,
-    Report,
-    Feedback,
-)
+from app.core.deps import AdminServiceDep, AdminUser, ModerationServiceDep, UniversityServiceDep
 from app.schemas import (
-    UserOut,
-    PendingItemsResponse,
-    ImageRequestOut,
-    ReportOut,
-    FeedbackOut,
     BanUserBody,
+    FeedbackOut,
+    PendingItemsResponse,
+    ReportOut,
+    UniversityOut,
+    UserOut,
 )
-from app.repositories.note_repository import NoteRepository
-from app.services.file_manager import DIR_UNIVERSITIES, delete_file, normalize_stored_path, save_upload
+from app.services.moderation import ItemType
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
 @router.get("/pending_items", response_model=PendingItemsResponse)
-def get_pending_items(
-    current_user: AdminUser,
-    db: DbSession,
-):
+def get_pending_items(current_user: AdminUser, service: ModerationServiceDep):
     """List all pending items for admin review."""
-    notes = NoteRepository(db).list_pending()
-    universities = db.query(University).filter(University.is_approved == False).all()
-    faculties = db.query(Faculty).options(joinedload(Faculty.university)).filter(Faculty.is_approved == False).all()
-    fields = db.query(FieldOfStudy).options(
-        joinedload(FieldOfStudy.faculty).joinedload(Faculty.university),
-    ).filter(FieldOfStudy.is_approved == False).all()
-    subjects = db.query(Subject).options(
-        joinedload(Subject.field_of_study).joinedload(FieldOfStudy.faculty).joinedload(Faculty.university),
-    ).filter(Subject.is_approved == False).all()
-    image_requests_raw = db.query(ImageRequest).options(
-        joinedload(ImageRequest.university),
-    ).filter(ImageRequest.status == "pending").all()
-    image_requests = [
-        ImageRequestOut(
-            id=r.id,
-            university_id=r.university_id,
-            new_image_url=r.new_image_url,
-            status=r.status,
-            submitted_by_id=r.submitted_by_id,
-            created_at=r.created_at,
-            university_name=r.university.name if r.university else None,
-        )
-        for r in image_requests_raw
-    ]
-    return PendingItemsResponse(
-        notes=notes,
-        universities=universities,
-        faculties=faculties,
-        fields=fields,
-        subjects=subjects,
-        image_requests=image_requests,
-    )
+    return service.pending_items()
 
 
 @router.get("/users", response_model=List[UserOut])
-def admin_get_users(
-    current_user: AdminUser,
-    db: DbSession,
-):
+def admin_get_users(current_user: AdminUser, service: AdminServiceDep):
     """List all users (admin only)."""
-    return db.query(User).order_by(User.created_at.desc()).all()
+    return service.list_users()
 
 
 @router.patch("/users/{user_id}/ban")
-def admin_ban_user(
-    user_id: int,
-    body: BanUserBody,
-    current_user: AdminUser,
-    db: DbSession,
-):
+def admin_ban_user(user_id: int, body: BanUserBody, current_user: AdminUser, service: AdminServiceDep):
     """Ban or unban a user. Cannot ban self or another admin."""
-    banned = body.banned
-    target = db.query(User).filter(User.id == user_id).first()
-    if not target:
-        raise HTTPException(status_code=404, detail="User not found")
-    if target.id == current_user.id:
-        raise HTTPException(status_code=400, detail="Cannot ban yourself")
-    if target.is_admin:
-        raise HTTPException(status_code=400, detail="Cannot ban an admin")
-    target.is_banned = banned
-    db.commit()
-    return {"msg": "User banned" if banned else "User unbanned", "user_id": user_id}
+    service.set_banned(current_user, user_id, body.banned)
+    return {"msg": "User banned" if body.banned else "User unbanned", "user_id": user_id}
 
 
 @router.post("/approve/{item_type}/{item_id}")
-def approve_item(
-    item_type: str,
-    item_id: int,
-    current_user: AdminUser,
-    db: DbSession,
-):
-    """Approve a pending item."""
-    model_map = {
-        "university": University,
-        "faculty": Faculty,
-        "field": FieldOfStudy,
-        "subject": Subject,
-        "note": Note,
-    }
-    model = model_map.get(item_type)
-    if not model:
-        raise HTTPException(status_code=400, detail="Invalid item type")
-    item = db.query(model).filter(model.id == item_id).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="Item not found")
-    item.is_approved = True
-    if item_type == "note" and hasattr(item, "user_id"):
-        db.add(Notification(user_id=item.user_id, type="note_approved", message="Your note was approved.", related_id=item_id))
-    db.commit()
-    return {"msg": f"{item_type} approved"}
+def approve_item(item_type: ItemType, item_id: int, current_user: AdminUser, service: ModerationServiceDep):
+    """Approve a pending item. Already approved items return 409."""
+    service.approve(item_type, item_id)
+    return {"msg": f"{item_type.value} approved"}
 
 
 @router.delete("/reject/{item_type}/{item_id}")
-def reject_item(
-    item_type: str,
-    item_id: int,
-    current_user: AdminUser,
-    db: DbSession,
-):
-    """Reject and delete a pending item. Deletes associated files from disk."""
-    model_map = {
-        "university": University,
-        "faculty": Faculty,
-        "field": FieldOfStudy,
-        "subject": Subject,
-        "note": Note,
-    }
-    model = model_map.get(item_type)
-    if not model:
-        raise HTTPException(status_code=400, detail="Invalid item type")
-    item = db.query(model).filter(model.id == item_id).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="Item not found")
-    if item_type == "university":
-        if getattr(item, "image_url", None):
-            delete_file(item.image_url)
-        if getattr(item, "banner_url", None):
-            delete_file(item.banner_url)
-    elif item_type == "note":
-        note = db.query(Note).options(joinedload(Note.images)).filter(Note.id == item_id).first()
-        if note:
-            if getattr(note, "image_url", None):
-                delete_file(note.image_url)
-            for img in note.images or []:
-                if img.image_url:
-                    delete_file(img.image_url)
-    elif item_type == "faculty" and getattr(item, "image_url", None):
-        delete_file(item.image_url)
-    db.delete(item)
-    db.commit()
-    return {"msg": f"{item_type} rejected"}
+def reject_item(item_type: ItemType, item_id: int, current_user: AdminUser, service: ModerationServiceDep):
+    """Reject and delete a pending item and its files. Approved items return 409."""
+    service.reject(item_type, item_id)
+    return {"msg": f"{item_type.value} rejected"}
 
 
 @router.get("/reports", response_model=List[ReportOut])
-def admin_list_reports(
-    current_user: AdminUser,
-    db: DbSession,
-    status_filter: Optional[str] = None,
-):
+def admin_list_reports(current_user: AdminUser, service: AdminServiceDep, status_filter: Optional[str] = None):
     """List all reports (admin only)."""
-    q = db.query(Report).order_by(desc(Report.created_at))
-    if status_filter in ("pending", "resolved", "dismissed"):
-        q = q.filter(Report.status == status_filter)
-    return q.all()
+    return service.list_reports(status_filter)
 
 
 @router.patch("/reports/{report_id}")
-def admin_update_report(
-    report_id: int,
-    status: str,
-    current_user: AdminUser,
-    db: DbSession,
-):
+def admin_update_report(report_id: int, status: str, current_user: AdminUser, service: AdminServiceDep):
     """Set report status to resolved or dismissed."""
-    if status not in ("resolved", "dismissed"):
-        raise HTTPException(status_code=400, detail="Status must be resolved or dismissed")
-    r = db.query(Report).filter(Report.id == report_id).first()
-    if not r:
-        raise HTTPException(status_code=404, detail="Report not found")
-    r.status = status
-    db.commit()
+    service.update_report_status(report_id, status)
     return {"msg": "Report updated", "status": status}
 
 
 @router.get("/feedback", response_model=List[FeedbackOut])
-def admin_list_feedback(
-    current_user: AdminUser,
-    db: DbSession,
-):
+def admin_list_feedback(current_user: AdminUser, service: AdminServiceDep):
     """List all user feedback (admin only)."""
-    return db.query(Feedback).order_by(desc(Feedback.created_at)).all()
+    return service.list_feedback()
 
 
 @router.post("/approve_image_request/{req_id}")
-def approve_image_request(
-    req_id: int,
-    current_user: AdminUser,
-    db: DbSession,
-):
-    """Approve an image change request for a university."""
-    req = db.query(ImageRequest).filter(ImageRequest.id == req_id).first()
-    if not req:
-        raise HTTPException(status_code=404, detail="Request not found")
-    uni = db.query(University).filter(University.id == req.university_id).first()
-    if uni:
-        uni.image_url = req.new_image_url
-    req.status = "approved"
-    db.commit()
+def approve_image_request(req_id: int, current_user: AdminUser, service: ModerationServiceDep):
+    """Approve a pending image change request; the previous local image is deleted."""
+    service.approve_image_request(req_id)
     return {"msg": "Image request approved"}
 
 
 @router.post("/reject_image_request/{req_id}")
-def reject_image_request(
-    req_id: int,
-    current_user: AdminUser,
-    db: DbSession,
-):
-    """Reject an image change request and delete the uploaded file."""
-    req = db.query(ImageRequest).filter(ImageRequest.id == req_id).first()
-    if not req:
-        raise HTTPException(status_code=404, detail="Request not found")
-    delete_file(req.new_image_url)
-    req.status = "rejected"
-    db.commit()
+def reject_image_request(req_id: int, current_user: AdminUser, service: ModerationServiceDep):
+    """Reject a pending image change request and delete the uploaded file."""
+    service.reject_image_request(req_id)
     return {"msg": "Image request rejected"}
 
 
 @router.patch("/universities/{uni_id}/image")
 def admin_update_university_image(
-    uni_id: int,
-    current_user: AdminUser,
-    db: DbSession,
-    image: UploadFile = File(...),
+    uni_id: int, current_user: AdminUser, service: UniversityServiceDep, image: UploadFile = File(...)
 ):
     """Directly update university image (admin only)."""
-    uni = db.query(University).filter(University.id == uni_id).first()
-    if not uni:
-        raise HTTPException(status_code=404, detail="University not found")
-    old_url = uni.image_url
-    uni.image_url = save_upload(image, DIR_UNIVERSITIES)
-    if old_url and old_url.startswith("/uploads"):
-        delete_file(old_url)
-    db.commit()
-    db.refresh(uni)
-    return {"msg": "Image updated", "image_url": normalize_stored_path(uni.image_url)}
+    uni = service.admin_update_university_image(uni_id, image)
+    return {"msg": "Image updated", "image_url": UniversityOut.model_validate(uni).image_url}
 
 
 @router.put("/universities/{uni_id}")
 def admin_update_university(
     uni_id: int,
     current_user: AdminUser,
-    db: DbSession,
+    service: UniversityServiceDep,
     name: Optional[str] = Form(None),
     city: Optional[str] = Form(None),
     region: Optional[str] = Form(None),
@@ -279,38 +106,11 @@ def admin_update_university(
     banner: Optional[UploadFile] = File(None),
 ):
     """Update university details (admin only)."""
-    uni = db.query(University).filter(University.id == uni_id).first()
-    if not uni:
-        raise HTTPException(status_code=404, detail="University not found")
-    if name is not None:
-        uni.name = name.strip()
-    if city is not None:
-        uni.city = city.strip()
-    if region is not None:
-        uni.region = region.strip()
-    if country is not None:
-        uni.country = country.strip()
-    if description is not None:
-        uni.description = description.strip() if description else None
-    if image and image.filename:
-        old_url = uni.image_url
-        uni.image_url = save_upload(image, DIR_UNIVERSITIES)
-        if old_url and old_url.startswith("/uploads"):
-            delete_file(old_url)
-    if banner and banner.filename:
-        old_url = uni.banner_url
-        uni.banner_url = save_upload(banner, DIR_UNIVERSITIES)
-        if old_url and old_url.startswith("/uploads"):
-            delete_file(old_url)
-    db.commit()
-    db.refresh(uni)
-    return {"msg": "University updated", "university": {
-        "id": uni.id,
-        "name": uni.name,
-        "city": uni.city,
-        "region": uni.region,
-        "country": uni.country,
-        "description": uni.description,
-        "image_url": normalize_stored_path(uni.image_url) if uni.image_url else None,
-        "banner_url": normalize_stored_path(uni.banner_url) if uni.banner_url else None,
-    }}
+    uni = service.admin_update_university(
+        uni_id, name=name, city=city, region=region, country=country,
+        description=description, image=image, banner=banner,
+    )
+    out = UniversityOut.model_validate(uni)
+    return {"msg": "University updated", "university": out.model_dump(
+        include={"id", "name", "city", "region", "country", "description", "image_url", "banner_url"}
+    )}

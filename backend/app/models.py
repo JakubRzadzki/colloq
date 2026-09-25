@@ -254,6 +254,10 @@ class ImageRequest(Base):
     # Relationships
     university = relationship("University", backref="image_requests")
 
+    @property
+    def university_name(self) -> str | None:
+        return self.university.name if self.university else None
+
 
 class UserFavorite(Base):
     """User's favorite notes (many-to-many)."""

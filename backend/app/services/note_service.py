@@ -1,7 +1,6 @@
 """Business logic for notes. Owns the transaction; raises domain exceptions only."""
 from __future__ import annotations
 
-import logging
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -9,12 +8,25 @@ from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
 from app.core.exceptions import DomainError, NotFoundError, PermissionDeniedError
-from app.models import Comment, Note, NoteFile, NoteHistory, NoteImage, NoteTag, Notification, Tag, User, UserFavorite, Vote
+from app.models import (
+    Comment,
+    Note,
+    NoteFile,
+    NoteHistory,
+    NoteImage,
+    NoteTag,
+    Notification,
+    Subject,
+    Tag,
+    University,
+    User,
+    UserFavorite,
+    Vote,
+)
 from app.repositories.note_repository import NoteRepository
 from app.schemas import NoteFilters
-from app.services.storage import LocalFileStorage, Upload
-
-logger = logging.getLogger(__name__)
+from app.services import reputation
+from app.services.storage import LocalFileStorage, Upload, commit_or_discard, delete_files
 
 MAX_FILES_PER_NOTE = 10
 NOTE_NOT_FOUND = "Note not found"
@@ -61,20 +73,19 @@ class NoteService:
         return note
 
     def _delete_files(self, paths: list[str]) -> None:
-        for path in paths:
-            try:
-                self.storage.delete(path)
-            except OSError:
-                logger.warning("Could not delete file %s", path, exc_info=True)
+        delete_files(self.storage, paths)
 
     def _commit_or_discard(self, saved: list[str]) -> None:
-        """Commit; on failure roll back and remove files written during this request."""
-        try:
-            self.db.commit()
-        except Exception:
-            self.db.rollback()
-            self._delete_files(saved)
-            raise
+        commit_or_discard(self.db, self.storage, saved)
+
+    def _check_references(self, user: User, university_id: int, subject_id: int | None) -> None:
+        university = self.db.get(University, university_id)
+        if university is None or not (university.is_approved or user.is_admin):
+            raise NotFoundError("University not found")
+        if subject_id is not None:
+            subject = self.db.get(Subject, subject_id)
+            if subject is None or not (subject.is_approved or user.is_admin):
+                raise NotFoundError("Subject not found")
 
     def _check_file_limit(self, count: int) -> None:
         if count > MAX_FILES_PER_NOTE:
@@ -107,6 +118,7 @@ class NoteService:
     ) -> Note:
         new_images, new_files = _present(images), _present(files)
         self._check_file_limit(len(new_files))
+        self._check_references(user, university_id, subject_id)
 
         saved: list[str] = []
         try:
@@ -126,8 +138,9 @@ class NoteService:
             self.repo.add(note)
             self.repo.flush()
             self._attach_uploads(note, new_images, new_files, saved)
-            user.uploads_count = (user.uploads_count or 0) + 1
-            user.reputation_points = (user.reputation_points or 0) + 10
+            # Regular users are credited when an admin approves the note.
+            if note.is_approved:
+                reputation.note_approved(user)
         except Exception:
             self.db.rollback()
             self._delete_files(saved)
