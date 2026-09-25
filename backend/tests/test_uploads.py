@@ -69,9 +69,12 @@ def test_faculty_https_image_url_is_returned_unchanged(client, db_session, unive
     assert [f["image_url"] for f in resp.json()] == [url]
 
 
-@pytest.mark.parametrize("stored", ["/uploads/notes/pic.png", "notes/pic.png"])
-def test_delete_file_resolves_stored_urls_inside_upload_dir(stored):
-    target = Path(settings.UPLOAD_DIR) / "notes" / "pic.png"
+@pytest.mark.parametrize(
+    ("stored", "base"),
+    [("/uploads/notes/pic.png", "UPLOAD_DIR"), ("notes/7/pic.png", "PRIVATE_UPLOAD_DIR")],
+)
+def test_delete_file_resolves_stored_urls_inside_upload_dir(stored, base):
+    target = Path(getattr(settings, base)) / stored.removeprefix("/uploads/")
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(b"x")
 

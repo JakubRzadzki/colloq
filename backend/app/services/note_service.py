@@ -209,19 +209,21 @@ class NoteService:
         self._get_owned(note_id, user)
         return self.repo.list_history(note_id)
 
-    def get_download(self, user: User, note_id: int, file_id: int) -> tuple[Path, str]:
+    def get_download(self, user: User, note_id: int, file_id: int, *, count: bool = True) -> tuple[Path, str]:
+        """Attachment path and original name. `count=False` is for inline previews."""
         note = self._get_visible(note_id, user)
         note_file = self.repo.get_file(note_id, file_id)
         if note_file is None:
             raise NotFoundError("File not found")
         try:
-            path = self.storage.path_for(note_file.file_url)
+            path = self.storage.attachment_path(note_file.file_url)
         except ValueError:
             raise NotFoundError("File not found") from None
         if not path.is_file():
             raise NotFoundError("File not found on disk")
-        note.download_count = (note.download_count or 0) + 1
-        self.db.commit()
+        if count:
+            note.download_count = (note.download_count or 0) + 1
+            self.db.commit()
         return path, note_file.file_name
 
     # --- comments ------------------------------------------------------------------

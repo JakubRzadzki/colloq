@@ -38,7 +38,10 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
 
+    # Served publicly under /uploads (images).
     UPLOAD_DIR: str = str(_REPO_ROOT / "uploads")
+    # Never mounted: note attachments, served only through the authenticated download endpoint.
+    PRIVATE_UPLOAD_DIR: str = str(_REPO_ROOT / "private_uploads")
     API_URL: str = "http://localhost:8000"
 
     MAX_FILE_SIZE: int = 10 * 1024 * 1024

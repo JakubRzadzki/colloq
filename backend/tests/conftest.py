@@ -40,10 +40,11 @@ def setup_test_db():
 
 @pytest.fixture(autouse=True)
 def isolated_upload_dir(tmp_path, monkeypatch):
-    """Keep files written by tests out of the real uploads directory."""
+    """Keep files written by tests out of the real upload directories."""
     from app.core.config import settings
 
     monkeypatch.setattr(settings, "UPLOAD_DIR", str(tmp_path / "uploads"))
+    monkeypatch.setattr(settings, "PRIVATE_UPLOAD_DIR", str(tmp_path / "private_uploads"))
 
 
 @pytest.fixture(scope="function")

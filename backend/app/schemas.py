@@ -6,7 +6,16 @@ from datetime import datetime
 from enum import Enum
 from typing import Annotated, List, Optional
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
 from app.services.file_manager import normalize_stored_path
 
@@ -174,13 +183,18 @@ class CommentOut(BaseModel):
 # -----------------------------------------------------------------------------
 
 class NoteFileOut(BaseModel):
+    """Attachments are private: clients get the authenticated download URL, not the storage path."""
     model_config = ConfigDict(from_attributes=True)
     id: int
     note_id: int
-    file_url: NormalizedPath
     file_type: str
     file_name: str
     created_at: Optional[datetime] = None
+
+    @computed_field
+    @property
+    def download_url(self) -> str:
+        return f"/notes/{self.note_id}/download/{self.id}"
 
 
 class NoteImageOut(BaseModel):

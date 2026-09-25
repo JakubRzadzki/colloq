@@ -256,12 +256,12 @@ export default function NotePage() {
                     <div key={file.id} className="rounded-xl border border-white/10 bg-white/5 overflow-hidden">
                       <div className="flex items-center justify-between px-4 py-2 border-b border-white/10 bg-black/20">
                         <span className="text-sm font-medium truncate">{file.file_name}</span>
-                        <DownloadButton fileUrl={file.file_url} filename={file.file_name} />
+                        <DownloadButton fileUrl={file.download_url} filename={file.file_name} />
                       </div>
                       <FilePreview
                         attachment={{
                           id: file.id,
-                          file_url: file.file_url,
+                          download_url: file.download_url,
                           file_type: file.file_type,
                           is_blurred: !!isBlocked,
                           filename: file.file_name,

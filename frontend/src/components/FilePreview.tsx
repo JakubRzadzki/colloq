@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Download, Lock, Eye, EyeOff, FileText } from 'lucide-react';
-import { resolveUrl } from '../utils/api';
+import { fetchAttachment, resolveUrl } from '../utils/api';
 import { Attachment } from '../utils/types';
 import { useFileDownload } from '../hooks/useFileDownload';
 import { t } from '../utils/i18n';
@@ -50,6 +50,36 @@ function getDisplayUrl(fileUrl?: string): string {
   return resolveUrl(fileUrl);
 }
 
+/**
+ * Object URL for previewing a private attachment. Attachments are not publicly
+ * served, so <img>/<object> cannot load them directly; the file is fetched with
+ * the user's token and shown from memory.
+ */
+function useAttachmentPreview(downloadUrl?: string): { url: string; failed: boolean } {
+  const [state, setState] = useState({ url: '', failed: false });
+
+  useEffect(() => {
+    if (!downloadUrl) return;
+    let objectUrl = '';
+    let cancelled = false;
+    fetchAttachment(downloadUrl, true)
+      .then((blob) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setState({ url: objectUrl, failed: false });
+      })
+      .catch(() => {
+        if (!cancelled) setState({ url: '', failed: true });
+      });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [downloadUrl]);
+
+  return state;
+}
+
 /** Check if URL is localhost (Google Docs Viewer cannot fetch localhost) */
 function isLocalhostUrl(url: string): boolean {
   try {
@@ -70,7 +100,15 @@ export function FilePreview({ attachment, title, className = '' }: FilePreviewPr
   const [isImageLoaded, setIsImageLoaded] = useState(false);
   const [showFullImage, setShowFullImage] = useState(false);
 
-  if (!attachment?.file_url) {
+  const isPrivate = !!attachment?.download_url;
+  const sourceUrl = attachment?.download_url || attachment?.file_url || '';
+  // Private download URLs carry no extension, so the type comes from the file name.
+  const typeSource = isPrivate ? attachment.filename || '' : sourceUrl;
+  const fileType = getFileType(typeSource, attachment?.file_type);
+  const needsPreview = isPrivate && !attachment.is_blurred && (fileType === 'image' || fileType === 'pdf');
+  const preview = useAttachmentPreview(needsPreview ? attachment.download_url : undefined);
+
+  if (!sourceUrl) {
     return (
       <div className={`rounded-xl border border-white/10 bg-white/5 p-6 ${className}`}>
         <p className="text-sm opacity-60">No file URL available.</p>
@@ -78,11 +116,11 @@ export function FilePreview({ attachment, title, className = '' }: FilePreviewPr
     );
   }
 
-  const pathPart = attachment.file_url.replace(/\\/g, '/');
+  const pathPart = sourceUrl.replace(/\\/g, '/');
   const filename = attachment.filename || pathPart.split('/').pop() || 'file';
-  const fileType = getFileType(attachment.file_url, attachment.file_type);
-  const ext = getExtension(attachment.file_url);
-  const displayUrl = getDisplayUrl(attachment.file_url);
+  const ext = getExtension(typeSource);
+  const displayUrl = isPrivate ? preview.url : getDisplayUrl(attachment.file_url);
+  const previewUnavailable = isPrivate && (preview.failed || !preview.url);
 
   if (attachment.is_blurred) {
     return (
@@ -113,7 +151,7 @@ export function FilePreview({ attachment, title, className = '' }: FilePreviewPr
   }
 
   // Images (jpg, png, etc.) — standard <img>
-  if (fileType === 'image') {
+  if (fileType === 'image' && !(isPrivate && preview.failed)) {
     return (
       <div className={`rounded-xl overflow-hidden border border-white/10 ${className}`}>
         <div className="relative">
@@ -136,7 +174,7 @@ export function FilePreview({ attachment, title, className = '' }: FilePreviewPr
             >
               {showFullImage ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
-            <DownloadButton fileUrl={attachment.file_url} filename={filename} />
+            <DownloadButton fileUrl={sourceUrl} filename={filename} />
           </div>
         </div>
         <div className="p-3 bg-black/5">
@@ -147,7 +185,7 @@ export function FilePreview({ attachment, title, className = '' }: FilePreviewPr
   }
 
   // PDF — object tag with iframe fallback
-  if (fileType === 'pdf') {
+  if (fileType === 'pdf' && !(isPrivate && preview.failed)) {
     return (
       <div className={`rounded-xl overflow-hidden border border-white/10 bg-white/5 ${className}`}>
         <div className="flex items-center justify-between px-4 py-2 border-b border-white/10 bg-black/20">
@@ -159,10 +197,14 @@ export function FilePreview({ attachment, title, className = '' }: FilePreviewPr
             >
               <Eye size={14} /> Open
             </button>
-            <DownloadButton fileUrl={attachment.file_url} filename={filename} />
+            <DownloadButton fileUrl={sourceUrl} filename={filename} />
           </div>
         </div>
         <div className="w-full h-[min(70vh,600px)] bg-white">
+          {previewUnavailable ? (
+            <div className="w-full h-full animate-pulse bg-gradient-to-br from-gray-200 to-gray-300" />
+          ) : (
+          <>
           {/* Primary: object tag for PDF rendering */}
           <object
             data={displayUrl}
@@ -179,6 +221,8 @@ export function FilePreview({ attachment, title, className = '' }: FilePreviewPr
               <p>Your browser does not support PDF preview. <a href={displayUrl} target="_blank" rel="noopener noreferrer" className="text-[#5e5ce6]">Click here to download the PDF</a>.</p>
             </iframe>
           </object>
+          </>
+          )}
         </div>
       </div>
     );
@@ -186,7 +230,8 @@ export function FilePreview({ attachment, title, className = '' }: FilePreviewPr
 
   // DOC/DOCX — Google Docs Viewer (requires publicly accessible URL)
   if (fileType === 'doc') {
-    const canUseGoogleViewer = !isLocalhostUrl(displayUrl);
+    // Google's viewer needs a public URL; private attachments can only be downloaded.
+    const canUseGoogleViewer = !isPrivate && !isLocalhostUrl(displayUrl);
     const googleViewerUrl = canUseGoogleViewer
       ? `https://docs.google.com/gview?url=${encodeURIComponent(displayUrl)}&embedded=true`
       : null;
@@ -195,7 +240,7 @@ export function FilePreview({ attachment, title, className = '' }: FilePreviewPr
       <div className={`rounded-xl overflow-hidden border border-white/10 bg-white/5 ${className}`}>
         <div className="flex items-center justify-between px-4 py-2 border-b border-white/10 bg-black/20">
           <span className="text-sm font-medium opacity-80 truncate">{title || filename}</span>
-          <DownloadButton fileUrl={attachment.file_url} filename={filename} />
+          <DownloadButton fileUrl={sourceUrl} filename={filename} />
         </div>
         {googleViewerUrl ? (
           <iframe
@@ -209,7 +254,7 @@ export function FilePreview({ attachment, title, className = '' }: FilePreviewPr
             <p className="text-sm opacity-70 text-center mb-4">
               DOC/DOCX preview requires a publicly accessible URL. Download to view locally.
             </p>
-            <DownloadButton fileUrl={attachment.file_url} filename={filename} />
+            <DownloadButton fileUrl={sourceUrl} filename={filename} />
           </div>
         )}
       </div>
@@ -227,7 +272,7 @@ export function FilePreview({ attachment, title, className = '' }: FilePreviewPr
           <h3 className="font-semibold truncate">{title || filename}</h3>
           <p className="text-sm opacity-60">{ext || 'File'} • Preview not available</p>
         </div>
-        <DownloadButton fileUrl={attachment.file_url} filename={filename} />
+        <DownloadButton fileUrl={sourceUrl} filename={filename} />
       </div>
     </div>
   );

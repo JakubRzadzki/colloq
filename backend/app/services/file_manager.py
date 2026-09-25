@@ -57,6 +57,11 @@ def _normalize_path(path: str) -> str:
     return path.replace("\\", "/").replace("//", "/")
 
 
+def is_public_url(stored: str) -> bool:
+    """Images are stored as "/uploads/..." URLs; note attachments as paths relative to PRIVATE_UPLOAD_DIR."""
+    return _normalize_path(stored.strip()).lstrip("/").startswith(UPLOADS_URL_PREFIX)
+
+
 def _relative_path_from_url(url: Optional[str]) -> Optional[str]:
     """Convert a stored URL like /uploads/notes/abc.jpg to a path relative to UPLOAD_DIR (notes/abc.jpg)."""
     if not url or not url.strip():
@@ -117,8 +122,8 @@ def save_upload(file: UploadFile, directory: str) -> str:
 
 def save_upload_for_note(file: UploadFile, note_id: int) -> tuple[str, str, str]:
     """
-    Save file for a note to uploads/notes/{note_id}/{uuid}_{filename}.
-    Returns (file_url, file_type, file_name) - all with forward slashes in paths.
+    Save a note attachment to PRIVATE_UPLOAD_DIR/notes/{note_id}/{uuid}_{filename}.
+    Returns (file_url, file_type, file_name); file_url is relative to PRIVATE_UPLOAD_DIR.
     """
     validate_file_type(file)
     validate_file_size(file, settings.MAX_FILE_SIZE, "File")
@@ -132,7 +137,7 @@ def save_upload_for_note(file: UploadFile, note_id: int) -> tuple[str, str, str]
     stored_filename = f"{unique}_{safe_name}"
     subdir = f"{DIR_NOTES}/{note_id}"
     rel = f"{subdir}/{stored_filename}"
-    physical = resolve_physical_path(rel)
+    physical = resolve_physical_path(rel, settings.PRIVATE_UPLOAD_DIR)
     physical.parent.mkdir(parents=True, exist_ok=True)
     with open(physical, "wb") as f:
         shutil.copyfileobj(file.file, f)
@@ -141,16 +146,23 @@ def save_upload_for_note(file: UploadFile, note_id: int) -> tuple[str, str, str]
     return (file_url, file_type, filename)
 
 
+def attachment_path(stored: str) -> Path:
+    """Physical path of a note attachment. Raises ValueError for paths outside PRIVATE_UPLOAD_DIR."""
+    return resolve_physical_path(_relative_path_from_url(stored) or "", settings.PRIVATE_UPLOAD_DIR)
+
+
 def delete_file(relative_path: Optional[str]) -> bool:
     """
-    Delete file by relative path or URL path. Returns True if deleted or already missing.
+    Delete a stored file: "/uploads/..." URLs from UPLOAD_DIR, other paths (note
+    attachments) from PRIVATE_UPLOAD_DIR. Returns True if deleted or already missing.
     Safe to call with None or empty string; no-op and returns True.
     """
     rel = _relative_path_from_url(relative_path)
     if not rel:
         return True
+    base_dir = settings.UPLOAD_DIR if is_public_url(relative_path) else settings.PRIVATE_UPLOAD_DIR
     try:
-        physical = resolve_physical_path(rel)
+        physical = resolve_physical_path(rel, base_dir)
     except ValueError:
         logger.warning("Refusing to delete a path outside the upload directory: %r", relative_path)
         return False

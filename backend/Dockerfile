@@ -18,7 +18,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Utworzenie folderu na uploady
-RUN mkdir -p uploads
+RUN mkdir -p uploads private_uploads
 
 # Entrypoint runs `alembic upgrade head` before the app starts
 RUN chmod +x docker-entrypoint.sh

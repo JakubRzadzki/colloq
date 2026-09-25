@@ -190,6 +190,23 @@ Tests run against a PostgreSQL `colloq_test` database (connection configured in
 `tests/conftest.py`). Set `TESTING=1` to disable rate limiting during the run.
 Covers auth, notes, universities, and admin flows.
 
+### File storage
+
+- **Images** (university logos and banners, faculty logos, avatars, note images) are stored in
+  `UPLOAD_DIR` and served publicly under `/uploads`.
+- **Note attachments** are stored in `PRIVATE_UPLOAD_DIR`, which is never mounted. They are only
+  available through `GET /notes/{id}/download/{file_id}`, which requires login and applies the
+  same visibility rules as the note itself (`?inline=true` serves a preview without counting a
+  download). Keep `PRIVATE_UPLOAD_DIR` outside `UPLOAD_DIR`.
+- When upgrading an existing installation, move previously uploaded attachments out of the
+  public directory once (the script is idempotent, `--dry-run` only reports):
+
+  ```bash
+  cd backend
+  python -m app.scripts.move_note_attachments --dry-run
+  python -m app.scripts.move_note_attachments
+  ```
+
 ---
 
 ## 📁 Project Structure

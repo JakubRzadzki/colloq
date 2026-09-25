@@ -29,7 +29,9 @@ def _login(client: TestClient, email: str) -> dict:
 
 
 def _disk(stored: str) -> Path:
-    return Path(settings.UPLOAD_DIR) / stored.removeprefix("/uploads/")
+    if stored.startswith("/uploads/"):
+        return Path(settings.UPLOAD_DIR) / stored.removeprefix("/uploads/")
+    return Path(settings.PRIVATE_UPLOAD_DIR) / stored  # note attachments
 
 
 @pytest.fixture

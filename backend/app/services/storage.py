@@ -44,8 +44,16 @@ class LocalFileStorage:
             return
         file_manager.delete_file(path)
 
-    def path_for(self, stored_path: str) -> Path:
-        return file_manager.resolve_physical_path(stored_path)
+    def attachment_path(self, stored_path: str) -> Path:
+        """Physical path of a note attachment; raises ValueError for paths outside the private dir."""
+        path = file_manager.attachment_path(stored_path)
+        if not path.is_file():
+            # Attachments uploaded before PRIVATE_UPLOAD_DIR existed, until
+            # app/scripts/move_note_attachments.py has been run.
+            legacy = file_manager.resolve_physical_path(stored_path)
+            if legacy.is_file():
+                return legacy
+        return path
 
 
 def get_storage() -> LocalFileStorage:

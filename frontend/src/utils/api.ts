@@ -117,7 +117,8 @@ export const resolveUrl = (url?: string | null, fallback?: string): string => {
     return normalized;
   }
   let path = normalized.startsWith('/') ? normalized : `/${normalized}`;
-  if (/^\/(notes|universities|avatars|faculties)\//.test(path) && !path.startsWith('/uploads/')) {
+  const isDownloadEndpoint = /^\/notes\/\d+\/download\/\d+/.test(path);
+  if (!isDownloadEndpoint && /^\/(notes|universities|avatars|faculties)\//.test(path) && !path.startsWith('/uploads/')) {
     path = `/uploads${path}`;
   }
   return `${API_URL.replace(/\/$/, '')}${path}`;
@@ -287,6 +288,13 @@ export const getFields = async (id: number): Promise<FieldOfStudy[]> =>
 /** Get subjects for a specific field of study. */
 export const getSubjects = async (id: number): Promise<Subject[]> =>
   (await api.get(`/fields/${id}/subjects`)).data;
+
+/**
+ * Fetch a private note attachment with the user's token.
+ * `inline` asks for the real media type and does not count as a download (previews).
+ */
+export const fetchAttachment = async (downloadUrl: string, inline = false): Promise<Blob> =>
+  (await api.get(downloadUrl, { responseType: 'blob', params: inline ? { inline: true } : undefined })).data;
 
 /** Paginated notes response */
 export interface PaginatedNotesResponse {
@@ -524,14 +532,6 @@ export const getNoteHistory = async (id: number): Promise<NoteHistoryEntry[]> =>
 /** Delete a note (owner only). */
 export const deleteNote = async (id: number) =>
   await api.delete(`/notes/${id}`);
-
-/** Download a specific file from a note. */
-export const downloadNoteFile = async (noteId: number, fileId: number): Promise<Blob> => {
-  const res = await api.get(`/notes/${noteId}/download/${fileId}`, {
-    responseType: 'blob',
-  });
-  return res.data;
-};
 
 /** Request password reset (sends email with token). */
 export const forgotPassword = async (email: string) =>

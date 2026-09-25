@@ -1,4 +1,5 @@
 """Notes CRUD, comments, voting, favorites, tags and reviews."""
+import mimetypes
 from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, Query, UploadFile
@@ -90,10 +91,18 @@ def delete_note(note_id: int, current_user: CurrentUser, service: NoteServiceDep
 
 
 @router.get("/notes/{note_id}/download/{file_id}")
-def download_note_file(note_id: int, file_id: int, current_user: CurrentUser, service: NoteServiceDep):
-    """Download a note attachment (requires login). Increments the download counter."""
-    path, filename = service.get_download(current_user, note_id, file_id)
-    return FileResponse(path=str(path), filename=filename, media_type="application/octet-stream")
+def download_note_file(
+    note_id: int, file_id: int, current_user: CurrentUser, service: NoteServiceDep, inline: bool = False
+):
+    """Download a note attachment (requires login and a visible note).
+
+    inline=true serves it for in-page preview: real media type, no download counted.
+    """
+    path, filename = service.get_download(current_user, note_id, file_id, count=not inline)
+    if not inline:
+        return FileResponse(path=str(path), filename=filename, media_type="application/octet-stream")
+    media_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    return FileResponse(path=str(path), filename=filename, media_type=media_type, content_disposition_type="inline")
 
 
 @router.post("/notes/{note_id}/vote", response_model=VoteResponse)

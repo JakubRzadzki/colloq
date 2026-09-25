@@ -26,6 +26,8 @@ backend/.ruff_cache/
 
 # --- Uploaded files & local DB ---
 backend/uploads/
+backend/private_uploads/
+private_uploads/
 backend/data/
 
 # --- Node / JavaScript ---
