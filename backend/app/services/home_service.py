@@ -51,15 +51,21 @@ def _latest_activity(db: Session, approved_notes: Query) -> dict:
     }
 
 
-def _counts_per_user(db: Session, model: type[Note] | type[Review] | type[Comment], user_ids: list[int]) -> dict:
-    rows = db.query(model.user_id, func.count(model.id)).filter(model.user_id.in_(user_ids)).group_by(model.user_id)
+def _counts_per_user(
+    db: Session, model: type[Note] | type[Review] | type[Comment], user_ids: list[int], *filters: Any
+) -> dict:
+    rows = (
+        db.query(model.user_id, func.count(model.id))
+        .filter(model.user_id.in_(user_ids), *filters)
+        .group_by(model.user_id)
+    )
     return {user_id: count for user_id, count in rows}
 
 
 def _leaderboard(db: Session) -> list[dict]:
     top_users = db.query(User).order_by(desc(User.reputation_points)).limit(LEADERBOARD_SIZE).all()
     user_ids = [u.id for u in top_users]
-    notes = _counts_per_user(db, Note, user_ids) if user_ids else {}
+    notes = _counts_per_user(db, Note, user_ids, Note.is_approved.is_(True)) if user_ids else {}
     reviews = _counts_per_user(db, Review, user_ids) if user_ids else {}
     comments = _counts_per_user(db, Comment, user_ids) if user_ids else {}
 

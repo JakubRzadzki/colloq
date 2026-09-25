@@ -3,7 +3,8 @@ from fastapi import APIRouter, HTTPException, Request
 
 from app.core.deps import CurrentUser, DbSession
 from app.core.rate_limit import limiter
-from app.models import Note, Report, User
+from app.models import Report, User
+from app.repositories.note_repository import NoteRepository
 from app.schemas import ReportCreate, ReportOut
 
 router = APIRouter(tags=["reports"])
@@ -15,7 +16,8 @@ def create_report(request: Request, payload: ReportCreate, current_user: Current
     """Report a note or user."""
     if not payload.note_id and not payload.reported_user_id:
         raise HTTPException(status_code=400, detail="Provide note_id or reported_user_id")
-    if payload.note_id and not db.query(Note).filter(Note.id == payload.note_id).first():
+    # Hidden (unapproved) notes answer 404 here too, so reports cannot probe for them.
+    if payload.note_id and not NoteRepository(db).get_visible(payload.note_id, current_user):
         raise HTTPException(status_code=404, detail="Note not found")
     if payload.reported_user_id and not db.query(User).filter(User.id == payload.reported_user_id).first():
         raise HTTPException(status_code=404, detail="User not found")
