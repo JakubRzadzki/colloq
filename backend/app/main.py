@@ -8,13 +8,15 @@ import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import joinedload
 from sqlalchemy import desc, func
 
 from app.core.config import settings
+from app.core.exceptions import DomainError
 
 from app.models import (
     User,
@@ -64,6 +66,13 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Colloq API", version="2.1.0", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.exception_handler(DomainError)
+async def domain_error_handler(request: Request, exc: DomainError) -> JSONResponse:
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
