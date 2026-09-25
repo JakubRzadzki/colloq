@@ -99,6 +99,13 @@ def admin_update_university_image(
     return {"msg": "Image updated", "image_url": UniversityOut.model_validate(uni).image_url}
 
 
+@router.delete("/universities/{uni_id}")
+def admin_delete_university(uni_id: int, current_user: AdminUser, service: ModerationServiceDep):
+    """Delete a university with its faculties, notes and files (admin only)."""
+    service.delete(ItemType.university, uni_id)
+    return {"msg": "University deleted"}
+
+
 @router.put("/universities/{uni_id}")
 def admin_update_university(
     uni_id: int,

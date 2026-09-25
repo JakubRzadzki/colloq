@@ -6,7 +6,7 @@ from typing import TypeGuard
 from sqlalchemy import desc, func
 from sqlalchemy.orm import Session, joinedload
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import DomainError, NotFoundError
 from app.models import Faculty, FieldOfStudy, ImageRequest, Review, Subject, University, User
 from app.schemas import FieldOfStudyCreate, SubjectCreate
 from app.services.file_manager import DIR_FACULTIES, DIR_UNIVERSITIES
@@ -18,6 +18,13 @@ DEFAULT_UNIVERSITY_IMAGE = "https://placehold.co/400x200/5e5ce6/ffffff?text=Coll
 def _visible(item, user: User | None) -> bool:
     """Unapproved hierarchy items exist only for admins."""
     return item is not None and bool(item.is_approved or (user is not None and user.is_admin))
+
+
+def _required(value: str, label: str) -> str:
+    value = value.strip()
+    if not value:
+        raise DomainError(f"{label} must not be empty")
+    return value
 
 
 def _has_file(upload: Upload | None) -> TypeGuard[Upload]:
@@ -180,9 +187,9 @@ class UniversityService:
     ) -> University:
         uni = self._get_university_for_admin(uni_id)
         if name is not None:
-            uni.name = name.strip()
+            uni.name = _required(name, "Name")
         if city is not None:
-            uni.city = city.strip()
+            uni.city = _required(city, "City")
         if region is not None:
             uni.region = region.strip()
         if country is not None:

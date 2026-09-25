@@ -99,3 +99,16 @@ def test_admin_update_university_replaces_files_and_deletes_old_ones(client, db_
     assert body["image_url"] != old_image
     assert not old_path.exists()
     assert (Path(settings.UPLOAD_DIR) / body["image_url"].removeprefix("/uploads/")).is_file()
+
+
+@pytest.mark.parametrize("field", ["name", "city"])
+def test_admin_update_rejects_blank_required_fields(client, db_session, admin_headers, field):
+    uni = University(name="Keep", city="Keep", region="", is_approved=True)
+    db_session.add(uni)
+    db_session.commit()
+
+    resp = client.put(f"/admin/universities/{uni.id}", data={field: "   "}, headers=admin_headers)
+
+    assert resp.status_code == 400
+    db_session.refresh(uni)
+    assert getattr(uni, field) == "Keep"

@@ -149,13 +149,25 @@ class ModerationService:
         handler.on_approve(self.db, item)
         self.db.commit()
 
-    def reject(self, item_type: ItemType, item_id: int) -> None:
-        """Delete a pending item. Files are removed only after the delete is committed."""
-        handler, item = self._get_pending(item_type, item_id)
+    def _delete(self, handler: ModerationHandler, item) -> None:
+        """Delete an item with its cascaded children; files go only after the commit."""
         paths = handler.files_to_delete(item)
         self.db.delete(item)
         self.db.commit()
         self._delete_files(paths)
+
+    def reject(self, item_type: ItemType, item_id: int) -> None:
+        """Delete a pending item."""
+        handler, item = self._get_pending(item_type, item_id)
+        self._delete(handler, item)
+
+    def delete(self, item_type: ItemType, item_id: int) -> None:
+        """Delete an item regardless of its approval state (admin clean-up)."""
+        handler = HANDLERS[item_type]
+        item = self.db.get(handler.model, item_id)
+        if item is None:
+            raise NotFoundError(f"{item_type.value.capitalize()} not found")
+        self._delete(handler, item)
 
     def _get_pending_image_request(self, req_id: int) -> ImageRequest:
         req = self.db.get(ImageRequest, req_id)

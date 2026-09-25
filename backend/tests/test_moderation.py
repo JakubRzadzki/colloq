@@ -237,3 +237,29 @@ def test_reject_university_keeps_users_registered_with_it(client, db_session, ad
     assert resp.status_code == 200
     db_session.expire_all()
     assert db_session.get(User, student.id).university_id is None
+
+
+# --- admin deletion of approved universities ------------------------------------------
+
+def test_admin_can_delete_an_approved_university_with_its_files(client, db_session, admin_headers):
+    logo = "/uploads/universities/approved-logo.png"
+    _disk(logo).parent.mkdir(parents=True, exist_ok=True)
+    _disk(logo).write_bytes(PNG)
+    uni = University(name="Approved To Delete", city="C", region="", is_approved=True, image_url=logo)
+    db_session.add(uni)
+    db_session.commit()
+
+    resp = client.delete(f"/admin/universities/{uni.id}", headers=admin_headers)
+
+    assert resp.status_code == 200
+    db_session.expire_all()
+    assert db_session.get(University, uni.id) is None
+    assert not _disk(logo).exists()
+
+
+def test_delete_university_requires_admin(client, author_headers, university):
+    assert client.delete(f"/admin/universities/{university.id}", headers=author_headers).status_code == 403
+
+
+def test_delete_missing_university_returns_404(client, admin_headers):
+    assert client.delete("/admin/universities/999999", headers=admin_headers).status_code == 404

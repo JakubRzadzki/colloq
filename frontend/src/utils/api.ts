@@ -674,14 +674,27 @@ export const getFeedback = async (): Promise<FeedbackItem[]> =>
 
 /** University update payload (admin) */
 export interface UniversityUpdateData {
+  name?: string;
+  city?: string;
+  region?: string;
+  country?: string;
   description?: string;
+  image?: File;
   banner?: File;
 }
 
-/** Admin-specific update university details (admin only). */
+/** Update university details (admin only). Only the fields present in `data` are changed. */
 export const adminUpdateUniversity = async (id: number, data: UniversityUpdateData) => {
   const fd = new FormData();
-  if (data.description) fd.append('description', data.description);
+  for (const key of ['name', 'city', 'region', 'country', 'description'] as const) {
+    const value = data[key];
+    if (value !== undefined) fd.append(key, value);
+  }
+  if (data.image) fd.append('image', data.image);
   if (data.banner) fd.append('banner', data.banner);
   return await api.put(`/admin/universities/${id}`, fd);
 };
+
+/** Delete a university with its faculties, notes and files (admin only). */
+export const adminDeleteUniversity = async (id: number) =>
+  (await api.delete(`/admin/universities/${id}`)).data;
