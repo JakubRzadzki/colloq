@@ -1,30 +1,30 @@
-version: '3.8'
-
 # Database for local development. Run the backend on the host (backend/run.ps1)
 # with these settings in .env so a dev admin account gets seeded:
 #   ENV=dev
 #   SEED_ADMIN_EMAIL=admin@localhost.dev
 #   SEED_ADMIN_PASSWORD=<choose-a-password>
+#
+# Postgres and pgAdmin are published on 127.0.0.1 only, so they are not reachable
+# from other machines. Credentials can be overridden in .env (PGADMIN_PASSWORD etc.).
 
 services:
   postgres:
     image: postgres:15-alpine
     container_name: colloq_postgres
     environment:
-      POSTGRES_USER: colloq_user
-      POSTGRES_PASSWORD: colloq_password
+      POSTGRES_USER: ${POSTGRES_USER:-colloq_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-colloq_password}
       POSTGRES_DB: colloq_dev
-      # Uruchomi init-dbs.sql, aby utworzyć tę bazę dla pytest
-      POSTGRES_MULTIPLE_DATABASES: "colloq_test" 
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Creates the colloq_test database used by pytest (only on the first start).
       - ./backend/init-dbs.sql:/docker-entrypoint-initdb.d/init-dbs.sql
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     networks:
       - colloq_network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U colloq_user -d colloq_dev"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d colloq_dev"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -33,14 +33,14 @@ services:
     image: dpage/pgadmin4
     container_name: colloq_pgadmin
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@colloq.pl
-      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@colloq.pl}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
       PGADMIN_CONFIG_SERVER_MODE: 'False'
     volumes:
       - pgadmin_data:/var/lib/pgadmin
       - ./servers.json:/pgadmin4/servers.json
     ports:
-      - "5050:80"
+      - "127.0.0.1:5050:80"
     depends_on:
       postgres:
         condition: service_healthy
