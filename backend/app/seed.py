@@ -216,22 +216,6 @@ def _seed_reference_data(db: Session) -> None:
         db.flush()
         logger.info("Seed: created faculties, fields of study and subjects for %s", pk.name)
 
-    # Fallback university if the DB is completely empty
-    if (db.query(func.count(University.id)).scalar() or 0) == 0:
-        colloq = University(
-            name="Colloq Academy",
-            name_en="Colloq Academy",
-            name_pl="Colloq Akademia",
-            city="Kraków",
-            region="Małopolskie",
-            country="Poland",
-            description="Default university for Colloq platform.",
-            image_url="https://placehold.co/400x200/5e5ce6/ffffff?text=Colloq+Academy",
-            is_approved=True,
-        )
-        db.add(colloq)
-        db.flush()
-
 
 def _seed_dev_admin(db: Session) -> None:
     if settings.ENV != "dev":
