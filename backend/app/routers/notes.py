@@ -1,80 +1,34 @@
-"""Notes CRUD, comments, voting, favorites, tags. File cleanup on delete."""
-from datetime import datetime
-from typing import List, Optional
+"""Notes CRUD, comments, voting, favorites, tags and reviews."""
+from typing import Annotated, List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, Form, Query, UploadFile
 from fastapi.responses import FileResponse
-from sqlalchemy.orm import joinedload, selectinload
-from sqlalchemy import desc, func, or_
 
-from app.core.database import SessionLocal
-from app.core.deps import CurrentUser, DbSession, OptionalUser
-from app.models import (
-    User,
-    Note,
-    NoteFile,
-    NoteImage,
-    NoteHistory,
-    NoteTag,
-    Tag,
-    Comment,
-    Review,
-    UserFavorite,
-    Notification,
-    Subject,
-    Vote,
-)
+from app.core.deps import CurrentUser, NoteServiceDep, OptionalUser, ReviewServiceDep
 from app.schemas import (
-    NoteOut,
-    NoteHistoryOut,
     CommentCreate,
     CommentOut,
+    FavoriteResponse,
+    NoteFilters,
+    NoteHistoryOut,
+    NoteOut,
+    NoteTagsUpdate,
+    PaginatedNotesResponse,
     ReviewCreate,
     ReviewOut,
-    TagOut,
     TagCreate,
-    NoteTagsUpdate,
+    TagOut,
     VoteResponse,
-    FavoriteResponse,
 )
-from app.services.file_manager import (
-    save_upload,
-    save_upload_for_note,
-    delete_file,
-    DIR_NOTES,
-    _resolve_physical_path,
-)
+from app.services.note_service import increment_view_count
 
 router = APIRouter(tags=["notes"])
-
-
-MAX_FILES_PER_NOTE = 10
-
-
-def is_note_visible(note: Note, user: Optional[User]) -> bool:
-    """Unapproved notes are visible only to their author and to admins."""
-    if note.is_approved:
-        return True
-    return user is not None and (user.is_admin or user.id == note.user_id)
-
-
-def _increment_view_count(note_id: int) -> None:
-    """Fire-and-forget view counter. Uses its own session because the request
-    session is already closed by the time the background task runs."""
-    db = SessionLocal()
-    try:
-        db.query(Note).filter(Note.id == note_id).update(
-            {Note.view_count: Note.view_count + 1}, synchronize_session=False
-        )
-        db.commit()
-    finally:
-        db.close()
 
 
 @router.post("/notes", response_model=NoteOut)
 def create_note(
     current_user: CurrentUser,
-    db: DbSession,
+    service: NoteServiceDep,
     title: str = Form(None),
     content: Optional[str] = Form(None),
     university_id: int = Form(...),
@@ -84,134 +38,24 @@ def create_note(
     files: List[UploadFile] = File(default=[]),
 ):
     """Create a note with optional images and up to 10 file attachments."""
-    if len(files) > MAX_FILES_PER_NOTE:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Maximum {MAX_FILES_PER_NOTE} files per note allowed.",
-        )
-    image_url = None
-    if image and image.filename:
-        image_url = save_upload(image, DIR_NOTES)
-    note = Note(
-        title=title,
-        content=content,
-        image_url=image_url,
-        user_id=current_user.id,
-        university_id=university_id,
-        subject_id=subject_id,
-        is_approved=current_user.is_admin,  # Regular users' notes require admin approval
+    return service.create(
+        current_user, title=title, content=content, university_id=university_id,
+        subject_id=subject_id, image=image, images=images, files=files,
     )
-    db.add(note)
-    db.flush()
-    for idx, img_file in enumerate(images):
-        if img_file and img_file.filename:
-            url = save_upload(img_file, DIR_NOTES)
-            db.add(NoteImage(note_id=note.id, image_url=url, position=idx))
-    for f in files:
-        if f and f.filename:
-            file_url, file_type, file_name = save_upload_for_note(f, note.id)
-            db.add(NoteFile(note_id=note.id, file_url=file_url, file_type=file_type, file_name=file_name))
-    current_user.uploads_count = (current_user.uploads_count or 0) + 1
-    current_user.reputation_points = (current_user.reputation_points or 0) + 10
-    db.commit()
-    db.refresh(note)
-    note = db.query(Note).options(
-        joinedload(Note.author),
-        joinedload(Note.subject),
-        selectinload(Note.images),
-        selectinload(Note.files),
-        selectinload(Note.tags),
-    ).filter(Note.id == note.id).first()
-    return note
 
 
-@router.get("/notes")
-def get_notes(
-    db: DbSession,
-    university_id: Optional[int] = None,
-    subject_id: Optional[int] = None,
-    semester: Optional[int] = None,
-    tag_ids: Optional[str] = None,
-    date_from: Optional[str] = None,
-    date_to: Optional[str] = None,
-    search: Optional[str] = None,
-    sort: Optional[str] = None,
-    page: int = 1,
-    page_size: int = 20,
-):
-    """List notes with filters, search, and pagination."""
-    page = max(1, page)
-    page_size = max(1, min(page_size, 100))
-
-    query = db.query(Note).options(
-        joinedload(Note.author),
-        joinedload(Note.subject),
-        selectinload(Note.images),
-        selectinload(Note.files),
-        selectinload(Note.tags),
-    ).filter(Note.is_approved == True)
-    if university_id:
-        query = query.filter(Note.university_id == university_id)
-    if subject_id:
-        query = query.filter(Note.subject_id == subject_id)
-    if semester is not None:
-        query = query.join(Note.subject).filter(Subject.semester == semester)
-    if tag_ids:
-        ids = [int(x) for x in tag_ids.split(",") if x.strip().isdigit()]
-        if ids:
-            query = query.join(NoteTag).filter(NoteTag.tag_id.in_(ids))
-    if date_from:
-        try:
-            query = query.filter(Note.created_at >= datetime.fromisoformat(date_from.replace("Z", "+00:00")))
-        except Exception:
-            pass
-    if date_to:
-        try:
-            query = query.filter(Note.created_at <= datetime.fromisoformat(date_to.replace("Z", "+00:00")))
-        except Exception:
-            pass
-    if search and search.strip():
-        q = f"%{search.strip()}%"
-        query = query.filter(or_(Note.title.ilike(q), Note.content.ilike(q)))
-    if sort == "score":
-        query = query.order_by(desc(Note.score), desc(Note.created_at))
-    elif sort == "views":
-        query = query.order_by(desc(Note.view_count), desc(Note.created_at))
-    else:
-        query = query.order_by(desc(Note.created_at))
-
-    # Count total before pagination. Drop ORDER BY (invalid alongside an
-    # aggregate) and count distinct note ids (filters may join to-many tables).
-    total = query.order_by(None).with_entities(func.count(func.distinct(Note.id))).scalar() or 0
-
-    notes = query.distinct().offset((page - 1) * page_size).limit(page_size).all()
-    return {
-        "items": [NoteOut.model_validate(n) for n in notes],
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-    }
-
+@router.get("/notes", response_model=PaginatedNotesResponse)
+def get_notes(filters: Annotated[NoteFilters, Query()], service: NoteServiceDep):
+    """List approved notes with filters, search, and pagination."""
+    notes, total = service.list_public(filters)
+    return {"items": notes, "total": total, "page": filters.page, "page_size": filters.page_size}
 
 
 @router.get("/notes/{note_id}", response_model=NoteOut)
-def get_note(
-    note_id: int,
-    background_tasks: BackgroundTasks,
-    current_user: OptionalUser,
-    db: DbSession,
-):
+def get_note(note_id: int, background_tasks: BackgroundTasks, current_user: OptionalUser, service: NoteServiceDep):
     """Get a note by ID; increment view count asynchronously."""
-    note = db.query(Note).options(
-        joinedload(Note.author),
-        joinedload(Note.subject),
-        selectinload(Note.images),
-        selectinload(Note.files),
-        selectinload(Note.tags),
-    ).filter(Note.id == note_id).first()
-    if not note or not is_note_visible(note, current_user):
-        raise HTTPException(status_code=404, detail="Note not found")
-    background_tasks.add_task(_increment_view_count, note_id)
+    note = service.get_for_view(note_id, current_user)
+    background_tasks.add_task(increment_view_count, note_id)
     return note
 
 
@@ -219,303 +63,86 @@ def get_note(
 def update_note(
     note_id: int,
     current_user: CurrentUser,
-    db: DbSession,
+    service: NoteServiceDep,
     title: Optional[str] = Form(None),
     content: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
     images: List[UploadFile] = File(default=[]),
     files: List[UploadFile] = File(default=[]),
 ):
-    """Update a note (owner only). Saves previous version to history."""
-    note = db.query(Note).options(selectinload(Note.images), selectinload(Note.files)).filter(Note.id == note_id).first()
-    if not note:
-        raise HTTPException(status_code=404, detail="Note not found")
-    if note.user_id != current_user.id and not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    if len(files) > MAX_FILES_PER_NOTE:
-        raise HTTPException(status_code=400, detail=f"Maximum {MAX_FILES_PER_NOTE} files per note allowed.")
-    db.add(NoteHistory(note_id=note.id, title=note.title, content=note.content, edited_by=current_user.id))
-    if title is not None:
-        note.title = title
-    if content is not None:
-        note.content = content
-    if image and image.filename:
-        note.image_url = save_upload(image, DIR_NOTES)
-    existing_count = len(note.images) if note.images else 0
-    for idx, img_file in enumerate(images):
-        if img_file and img_file.filename:
-            url = save_upload(img_file, DIR_NOTES)
-            db.add(NoteImage(note_id=note.id, image_url=url, position=existing_count + idx))
-    for f in files:
-        if f and f.filename:
-            file_url, file_type, file_name = save_upload_for_note(f, note.id)
-            db.add(NoteFile(note_id=note.id, file_url=file_url, file_type=file_type, file_name=file_name))
-    db.commit()
-    db.refresh(note)
-    note = db.query(Note).options(
-        joinedload(Note.author),
-        joinedload(Note.subject),
-        selectinload(Note.images),
-        selectinload(Note.files),
-        selectinload(Note.tags),
-    ).filter(Note.id == note.id).first()
-    return note
+    """Update a note (owner or admin). Saves the previous version to history."""
+    return service.update(
+        current_user, note_id, title=title, content=content, image=image, images=images, files=files,
+    )
 
 
 @router.get("/notes/{note_id}/history", response_model=List[NoteHistoryOut])
-def get_note_history(
-    note_id: int,
-    current_user: CurrentUser,
-    db: DbSession,
-):
+def get_note_history(note_id: int, current_user: CurrentUser, service: NoteServiceDep):
     """Get version history for a note (owner or admin)."""
-    note = db.query(Note).filter(Note.id == note_id).first()
-    if not note:
-        raise HTTPException(status_code=404, detail="Note not found")
-    if note.user_id != current_user.id and not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    history = db.query(NoteHistory).filter(
-        NoteHistory.note_id == note_id,
-    ).order_by(desc(NoteHistory.edited_at)).all()
-    return history
+    return service.history(current_user, note_id)
 
 
 @router.delete("/notes/{note_id}")
-def delete_note(
-    note_id: int,
-    current_user: CurrentUser,
-    db: DbSession,
-):
-    """Delete a note (owner or admin). Removes DB record and all files from disk."""
-    note = db.query(Note).options(selectinload(Note.images), selectinload(Note.files)).filter(Note.id == note_id).first()
-    if not note:
-        raise HTTPException(status_code=404, detail="Note not found")
-    if note.user_id != current_user.id and not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    if note.image_url:
-        delete_file(note.image_url)
-    for img in note.images or []:
-        if img.image_url:
-            delete_file(img.image_url)
-    for f in note.files or []:
-        if f.file_url:
-            delete_file(f.file_url)
-    db.delete(note)
-    db.commit()
+def delete_note(note_id: int, current_user: CurrentUser, service: NoteServiceDep):
+    """Delete a note (owner or admin) together with its files."""
+    service.delete(current_user, note_id)
     return {"msg": "Note deleted"}
 
 
 @router.get("/notes/{note_id}/download/{file_id}")
-def download_note_file(
-    note_id: int,
-    file_id: int,
-    current_user: CurrentUser,
-    db: DbSession,
-):
-    """Download a specific file from a note (requires login). Increments download counter."""
-
-    note = db.query(Note).filter(Note.id == note_id).first()
-    if not note:
-        raise HTTPException(status_code=404, detail="Note not found")
-
-    note_file = db.query(NoteFile).filter(
-        NoteFile.id == file_id,
-        NoteFile.note_id == note_id,
-    ).first()
-    if not note_file:
-        raise HTTPException(status_code=404, detail="File not found")
-
-    file_path = _resolve_physical_path(note_file.file_url)
-    if not file_path.is_file():
-        raise HTTPException(status_code=404, detail="File not found on disk")
-
-    note.download_count = (note.download_count or 0) + 1
-    db.commit()
-
-    return FileResponse(
-        path=str(file_path),
-        filename=note_file.file_name,
-        media_type="application/octet-stream",
-    )
-
+def download_note_file(note_id: int, file_id: int, current_user: CurrentUser, service: NoteServiceDep):
+    """Download a note attachment (requires login). Increments the download counter."""
+    path, filename = service.get_download(current_user, note_id, file_id)
+    return FileResponse(path=str(path), filename=filename, media_type="application/octet-stream")
 
 
 @router.post("/notes/{note_id}/vote", response_model=VoteResponse)
-def vote_note(
-    note_id: int,
-    current_user: CurrentUser,
-    db: DbSession,
-):
+def vote_note(note_id: int, current_user: CurrentUser, service: NoteServiceDep):
     """Toggle upvote on a note. Vote again to remove your vote."""
-    note = db.query(Note).filter(Note.id == note_id).first()
-    if not note:
-        raise HTTPException(status_code=404, detail="Note not found")
-
-    existing_vote = db.query(Vote).filter(
-        Vote.user_id == current_user.id,
-        Vote.note_id == note_id,
-    ).first()
-
-    if existing_vote:
-        db.delete(existing_vote)
-        author = db.query(User).filter(User.id == note.user_id).first()
-        if author:
-            author.reputation_points = max((author.reputation_points or 0) - 1, 0)
-    else:
-        db.add(Vote(user_id=current_user.id, note_id=note_id, value=1))
-        author = db.query(User).filter(User.id == note.user_id).first()
-        if author:
-            author.reputation_points = (author.reputation_points or 0) + 1
-
-    # Flush to ensure new or deleted votes are visible to the sum query
-    db.flush()
-    total_score = db.query(func.coalesce(func.sum(Vote.value), 0)).filter(
-        Vote.note_id == note_id,
-    ).scalar()
-    note.score = float(total_score)
-
-    db.commit()
-    user_has_voted = db.query(Vote).filter(
-        Vote.user_id == current_user.id,
-        Vote.note_id == note_id,
-    ).first() is not None
-    return {"msg": "Vote toggled", "new_score": note.score, "user_has_voted": user_has_voted}
-
+    score, has_voted = service.vote(current_user, note_id)
+    return {"msg": "Vote toggled", "new_score": score, "user_has_voted": has_voted}
 
 
 @router.post("/notes/{note_id}/favorite", response_model=FavoriteResponse)
-def toggle_favorite(
-    note_id: int,
-    current_user: CurrentUser,
-    db: DbSession,
-):
+def toggle_favorite(note_id: int, current_user: CurrentUser, service: NoteServiceDep):
     """Toggle favorite for current user."""
-    note = db.query(Note).filter(Note.id == note_id).first()
-    if not note:
-        raise HTTPException(status_code=404, detail="Note not found")
-    existing = db.query(UserFavorite).filter(
-        UserFavorite.user_id == current_user.id,
-        UserFavorite.note_id == note_id,
-    ).first()
-    if existing:
-        db.delete(existing)
-        db.commit()
-        return {"msg": "Removed from favorites", "is_favorited": False}
-    db.add(UserFavorite(user_id=current_user.id, note_id=note_id))
-    db.commit()
-    return {"msg": "Added to favorites", "is_favorited": True}
+    if service.toggle_favorite(current_user, note_id):
+        return {"msg": "Added to favorites", "is_favorited": True}
+    return {"msg": "Removed from favorites", "is_favorited": False}
 
 
 @router.get("/notes/{note_id}/comments", response_model=List[CommentOut])
-def get_comments(
-    note_id: int,
-    current_user: OptionalUser,
-    db: DbSession,
-):
+def get_comments(note_id: int, current_user: OptionalUser, service: NoteServiceDep):
     """List comments for a note."""
-    note = db.query(Note).filter(Note.id == note_id).first()
-    if not note or not is_note_visible(note, current_user):
-        raise HTTPException(status_code=404, detail="Note not found")
-    return db.query(Comment).options(
-        joinedload(Comment.user),
-    ).filter(Comment.note_id == note_id).order_by(desc(Comment.created_at)).all()
+    return service.list_comments(note_id, current_user)
 
 
 @router.post("/notes/{note_id}/comments", response_model=CommentOut)
-def add_comment(
-    note_id: int,
-    payload: CommentCreate,
-    current_user: CurrentUser,
-    db: DbSession,
-):
+def add_comment(note_id: int, payload: CommentCreate, current_user: CurrentUser, service: NoteServiceDep):
     """Add a comment to a note."""
-    note = db.query(Note).filter(Note.id == note_id).first()
-    if not note:
-        raise HTTPException(status_code=404, detail="Note not found")
-    comment = Comment(content=payload.content, user_id=current_user.id, note_id=note_id)
-    db.add(comment)
-    if note.user_id != current_user.id:
-        msg = f"{current_user.nickname} commented on your note: {(note.title or 'Untitled')[:50]}"
-        db.add(Notification(user_id=note.user_id, type="comment", message=msg, related_id=note_id))
-    db.commit()
-    db.refresh(comment)
-    return comment
+    return service.add_comment(current_user, note_id, payload.content)
 
 
 @router.post("/reviews", response_model=ReviewOut)
-def add_review(
-    review: ReviewCreate,
-    current_user: CurrentUser,
-    db: DbSession,
-):
+def add_review(review: ReviewCreate, current_user: CurrentUser, service: ReviewServiceDep):
     """Add a review to a note or university."""
-    new_review = Review(
-        rating=review.rating,
-        content=review.content,
-        user_id=current_user.id,
-        note_id=review.note_id,
-        university_id=review.university_id,
-    )
-    db.add(new_review)
-    if review.note_id:
-        note = db.query(Note).filter(Note.id == review.note_id).first()
-        if note:
-            reviews = db.query(Review).filter(Review.note_id == review.note_id).all()
-            total = sum(r.rating for r in reviews) + review.rating
-            count = len(reviews) + 1
-            note.avg_rating = total / count
-            note.rating_count = count
-            author = db.query(User).filter(User.id == note.user_id).first()
-            if author:
-                author.reputation_points = (author.reputation_points or 0) + 1
-    db.commit()
-    db.refresh(new_review)
-    return new_review
+    return service.add_review(current_user, review)
 
 
 @router.get("/tags", response_model=List[TagOut])
-def list_tags(db: DbSession):
+def list_tags(service: NoteServiceDep):
     """List all tags."""
-    return db.query(Tag).order_by(Tag.name).all()
+    return service.list_tags()
 
 
 @router.post("/tags", response_model=TagOut)
-def create_tag(
-    payload: TagCreate,
-    current_user: CurrentUser,
-    db: DbSession,
-):
-    """Create a tag."""
-    name = (payload.name or "").strip()
-    if not name:
-        raise HTTPException(status_code=400, detail="Tag name required")
-    existing = db.query(Tag).filter(Tag.name == name).first()
-    if existing:
-        return existing
-    tag = Tag(name=name)
-    db.add(tag)
-    db.commit()
-    db.refresh(tag)
-    return tag
+def create_tag(payload: TagCreate, current_user: CurrentUser, service: NoteServiceDep):
+    """Create a tag, or return the existing one with the same name."""
+    return service.create_tag(payload.name)
 
 
 @router.put("/notes/{note_id}/tags")
-def set_note_tags(
-    note_id: int,
-    payload: NoteTagsUpdate,
-    current_user: CurrentUser,
-    db: DbSession,
-):
-    """Set tags for a note (owner or admin). Body: { \"tag_ids\": [1, 2, 3] }."""
-    tag_ids = payload.tag_ids
-    note = db.query(Note).filter(Note.id == note_id).first()
-    if not note:
-        raise HTTPException(status_code=404, detail="Note not found")
-    if note.user_id != current_user.id and not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    db.query(NoteTag).filter(NoteTag.note_id == note_id).delete()
-    for tid in tag_ids:
-        if db.query(Tag).filter(Tag.id == tid).first():
-            db.add(NoteTag(note_id=note_id, tag_id=tid))
-    db.commit()
-    return {"msg": "Tags updated", "tag_ids": payload.tag_ids}
+def set_note_tags(note_id: int, payload: NoteTagsUpdate, current_user: CurrentUser, service: NoteServiceDep):
+    """Set tags for a note (owner or admin). Body: { "tag_ids": [1, 2, 3] }."""
+    assigned = service.set_tags(current_user, note_id, payload.tag_ids)
+    return {"msg": "Tags updated", "tag_ids": assigned}

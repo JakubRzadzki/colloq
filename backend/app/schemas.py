@@ -3,9 +3,10 @@ Colloq API — Consolidated Pydantic schemas.
 Define child models before parents to avoid forward-reference issues.
 """
 from datetime import datetime
+from enum import Enum
 from typing import Annotated, List, Optional
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.services.file_manager import normalize_stored_path
 
@@ -306,6 +307,42 @@ class FeedbackOut(BaseModel):
 
 class BanUserBody(BaseModel):
     banned: bool = False
+
+
+class NoteSort(str, Enum):
+    date = "date"
+    score = "score"
+    views = "views"
+
+
+class NoteFilters(BaseModel):
+    """Query parameters of GET /notes."""
+    university_id: Optional[int] = None
+    subject_id: Optional[int] = None
+    semester: Optional[int] = None
+    # The frontend sends tag ids as a single comma-separated value: tag_ids=1,2,3
+    tag_ids: List[int] = []
+    date_from: Optional[datetime] = None
+    date_to: Optional[datetime] = None
+    search: Optional[str] = None
+    sort: NoteSort = NoteSort.date
+    page: int = Field(default=1, ge=1)
+    page_size: int = Field(default=20, ge=1, le=100)
+
+    @field_validator("tag_ids", mode="before")
+    @classmethod
+    def _split_tag_ids(cls, value: object) -> object:
+        if value is None:
+            return []
+        raw = [value] if isinstance(value, str) else value
+        if not isinstance(raw, list):
+            return value
+        return [part.strip() for item in raw for part in str(item).split(",") if part.strip()]
+
+    @field_validator("search")
+    @classmethod
+    def _blank_search_to_none(cls, value: Optional[str]) -> Optional[str]:
+        return value.strip() or None if value else None
 
 
 class PaginatedNotesResponse(BaseModel):

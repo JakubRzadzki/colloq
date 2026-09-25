@@ -26,6 +26,7 @@ from app.schemas import (
     FeedbackOut,
     BanUserBody,
 )
+from app.repositories.note_repository import NoteRepository
 from app.services.file_manager import DIR_UNIVERSITIES, delete_file, normalize_stored_path, save_upload
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -37,12 +38,7 @@ def get_pending_items(
     db: DbSession,
 ):
     """List all pending items for admin review."""
-    notes = db.query(Note).options(
-        joinedload(Note.subject),
-        joinedload(Note.university),
-        joinedload(Note.author),
-        joinedload(Note.images),
-    ).filter(Note.is_approved == False).all()
+    notes = NoteRepository(db).list_pending()
     universities = db.query(University).filter(University.is_approved == False).all()
     faculties = db.query(Faculty).options(joinedload(Faculty.university)).filter(Faculty.is_approved == False).all()
     fields = db.query(FieldOfStudy).options(

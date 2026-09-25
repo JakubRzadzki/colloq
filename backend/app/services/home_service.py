@@ -1,8 +1,9 @@
-from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import desc, func, or_
 
 from app.models import User, Note, University, Review, Comment
 from app.schemas import NoteOut, UniversityOut
+from app.repositories.note_repository import NoteRepository
 
 def _public_reviews(db: Session):
     """Reviews that are not attached to an unapproved note."""
@@ -64,7 +65,7 @@ def get_home_data(db: Session):
     activities.sort(key=lambda x: x.get("created_at") or "", reverse=True)
     activity_feed = activities[:5]
     
-    recent_notes = approved_notes.options(joinedload(Note.author), joinedload(Note.subject), selectinload(Note.images), selectinload(Note.files)).order_by(desc(Note.created_at)).limit(6).all()
+    recent_notes = NoteRepository(db).list_recent_public(limit=6)
     universities_list = db.query(University).filter(University.is_approved == True).all()
     
     recent_notes_out = [NoteOut.model_validate(n).model_dump() for n in recent_notes]

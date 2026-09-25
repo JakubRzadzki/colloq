@@ -2,12 +2,12 @@
 from typing import List, Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
-from sqlalchemy.orm import joinedload, selectinload
-from sqlalchemy import desc, func
+from sqlalchemy import func
 
 from app.core.deps import CurrentUser, DbSession
 from app.models import User, Note, UserFavorite, Review, Comment
 from app.schemas import UserOut, PublicUserOut, NoteOut
+from app.repositories.note_repository import NoteRepository
 from app.services.file_manager import save_upload, DIR_AVATARS
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -54,20 +54,7 @@ def get_my_favorites(
     db: DbSession,
 ):
     """List current user's favorite notes."""
-    notes = (
-        db.query(Note)
-        .options(
-            joinedload(Note.author),
-            joinedload(Note.subject),
-            selectinload(Note.images),
-            selectinload(Note.tags),
-        )
-        .join(UserFavorite, UserFavorite.note_id == Note.id)
-        .filter(UserFavorite.user_id == current_user.id)
-        .order_by(desc(UserFavorite.created_at))
-        .all()
-    )
-    return notes
+    return NoteRepository(db).list_favorites(current_user.id)
 
 
 @router.get("/me/dashboard")
@@ -87,21 +74,9 @@ def get_my_dashboard(
     ).scalar() or 0
     rank += 1  # 1-indexed
 
-    my_notes = db.query(Note).options(
-        joinedload(Note.author),
-        joinedload(Note.subject),
-        selectinload(Note.images),
-    ).filter(Note.user_id == current_user.id).order_by(desc(Note.created_at)).limit(10).all()
-
-    my_favs = (
-        db.query(Note)
-        .options(joinedload(Note.author), joinedload(Note.subject), selectinload(Note.images))
-        .join(UserFavorite, UserFavorite.note_id == Note.id)
-        .filter(UserFavorite.user_id == current_user.id)
-        .order_by(desc(UserFavorite.created_at))
-        .limit(10)
-        .all()
-    )
+    notes = NoteRepository(db)
+    my_notes = notes.list_by_author(current_user.id, limit=10)
+    my_favs = notes.list_favorites(current_user.id, limit=10)
 
     pending_notes = db.query(func.count(Note.id)).filter(
         Note.user_id == current_user.id, Note.is_approved == False,

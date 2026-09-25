@@ -10,9 +10,10 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from fastapi import HTTPException, UploadFile
+from fastapi import UploadFile
 
 from app.core.config import settings
+from app.core.exceptions import DomainError
 
 # Subdirs under UPLOAD_DIR
 DIR_AVATARS = "avatars"
@@ -36,12 +37,12 @@ def validate_file_type(file: UploadFile) -> None:
     """Reject uploads whose extension or content-type is not in the allow-list."""
     ext = Path(file.filename or "").suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(status_code=400, detail=f"File type {ext or '(none)'} not allowed")
+        raise DomainError(f"File type {ext or '(none)'} not allowed")
     content_type = (file.content_type or "").lower()
     if content_type and not (
         content_type.startswith("image/") or content_type in ALLOWED_CONTENT_TYPES
     ):
-        raise HTTPException(status_code=400, detail=f"Content type {content_type} not allowed")
+        raise DomainError(f"Content type {content_type} not allowed")
 
 
 def _normalize_path(path: str) -> str:
@@ -61,7 +62,7 @@ def _relative_path_from_url(url: Optional[str]) -> Optional[str]:
     return _normalize_path(path)
 
 
-def _resolve_physical_path(relative_path: str) -> Path:
+def resolve_physical_path(relative_path: str) -> Path:
     """Resolve relative path (with /) to absolute file path. Prevents path traversal."""
     normalized = _normalize_path(relative_path)
     normalized = re.sub(r"\.\.+", "", normalized)
@@ -70,15 +71,12 @@ def _resolve_physical_path(relative_path: str) -> Path:
 
 
 def validate_file_size(file: UploadFile, max_size: int, file_type: str = "file") -> None:
-    """Validate file size against limit. Raises HTTPException if too large."""
+    """Validate file size against limit. Raises DomainError (400) if too large."""
     file.file.seek(0, 2)
     size = file.file.tell()
     file.file.seek(0)
     if size > max_size:
-        raise HTTPException(
-            status_code=400,
-            detail=f"{file_type} size exceeds limit of {max_size // (1024*1024)}MB"
-        )
+        raise DomainError(f"{file_type} size exceeds limit of {max_size // (1024*1024)}MB")
 
 
 def save_upload(file: UploadFile, directory: str) -> str:
@@ -99,7 +97,7 @@ def save_upload(file: UploadFile, directory: str) -> str:
     name = f"{uuid.uuid4().hex[:12]}{safe_ext}"
     subdir = directory.strip().strip("/")
     rel = f"{subdir}/{name}"
-    physical = _resolve_physical_path(rel)
+    physical = resolve_physical_path(rel)
     physical.parent.mkdir(parents=True, exist_ok=True)
     with open(physical, "wb") as f:
         shutil.copyfileobj(file.file, f)
@@ -123,7 +121,7 @@ def save_upload_for_note(file: UploadFile, note_id: int) -> tuple[str, str, str]
     stored_filename = f"{unique}_{safe_name}"
     subdir = f"{DIR_NOTES}/{note_id}"
     rel = f"{subdir}/{stored_filename}"
-    physical = _resolve_physical_path(rel)
+    physical = resolve_physical_path(rel)
     physical.parent.mkdir(parents=True, exist_ok=True)
     with open(physical, "wb") as f:
         shutil.copyfileobj(file.file, f)
@@ -140,7 +138,7 @@ def delete_file(relative_path: Optional[str]) -> bool:
     rel = _relative_path_from_url(relative_path)
     if not rel:
         return True
-    physical = _resolve_physical_path(rel)
+    physical = resolve_physical_path(rel)
     try:
         if physical.is_file():
             physical.unlink()

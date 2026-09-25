@@ -3,7 +3,9 @@ from fastapi import APIRouter
 from sqlalchemy.orm import joinedload
 
 from app.core.deps import DbSession
-from app.models import Faculty, FieldOfStudy, Note, Subject, University
+from app.core.sql import LIKE_ESCAPE, escape_like
+from app.models import Faculty, FieldOfStudy, Subject, University
+from app.repositories.note_repository import NoteRepository
 
 router = APIRouter(tags=["search"])
 
@@ -13,30 +15,24 @@ def global_search(db: DbSession, q: str = ""):
     """Search across notes, universities, fields of study, and subjects."""
     if not q.strip():
         return {"notes": [], "universities": [], "fields": [], "subjects": []}
-    # The query is parameterized; dropping LIKE wildcards only makes "%" and "_" match literally.
-    search_term = q.strip()[:100].replace("%", "").replace("_", "")
-    pattern = f"%{search_term}%"
+    term = q.strip()[:100]
+    pattern = f"%{escape_like(term)}%"
 
-    notes_q = db.query(Note).options(
-        joinedload(Note.author), joinedload(Note.subject),
-    ).filter(
-        Note.is_approved == True,
-        Note.title.ilike(pattern),
-    ).limit(20).all()
+    notes_q = NoteRepository(db).search_public(term, limit=20)
 
     unis = db.query(University).filter(
         University.is_approved == True,
-        University.name.ilike(pattern),
+        University.name.ilike(pattern, escape=LIKE_ESCAPE),
     ).limit(20).all()
 
     fields = db.query(FieldOfStudy).options(joinedload(FieldOfStudy.faculty).joinedload(Faculty.university)).filter(
         FieldOfStudy.is_approved == True,
-        FieldOfStudy.name.ilike(pattern),
+        FieldOfStudy.name.ilike(pattern, escape=LIKE_ESCAPE),
     ).limit(20).all()
 
     subjects = db.query(Subject).options(joinedload(Subject.field_of_study).joinedload(FieldOfStudy.faculty).joinedload(Faculty.university)).filter(
         Subject.is_approved == True,
-        Subject.name.ilike(pattern),
+        Subject.name.ilike(pattern, escape=LIKE_ESCAPE),
     ).limit(20).all()
 
     return {
