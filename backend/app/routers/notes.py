@@ -63,6 +63,13 @@ def _note_out(note: Note) -> NoteOut:
 MAX_FILES_PER_NOTE = 10
 
 
+def is_note_visible(note: Note, user: Optional[User]) -> bool:
+    """Unapproved notes are visible only to their author and to admins."""
+    if note.is_approved:
+        return True
+    return user is not None and (user.is_admin or user.id == note.user_id)
+
+
 def _increment_view_count(note_id: int) -> None:
     """Fire-and-forget view counter. Uses its own session because the request
     session is already closed by the time the background task runs."""
@@ -204,7 +211,12 @@ async def get_notes(
 
 
 @router.get("/notes/{note_id}", response_model=NoteOut)
-async def get_note(note_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+async def get_note(
+    note_id: int,
+    background_tasks: BackgroundTasks,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
+):
     """Get a note by ID; increment view count asynchronously."""
     note = db.query(Note).options(
         joinedload(Note.author),
@@ -213,7 +225,7 @@ async def get_note(note_id: int, background_tasks: BackgroundTasks, db: Session 
         selectinload(Note.files),
         selectinload(Note.tags),
     ).filter(Note.id == note_id).first()
-    if not note:
+    if not note or not is_note_visible(note, current_user):
         raise HTTPException(status_code=404, detail="Note not found")
     background_tasks.add_task(_increment_view_count, note_id)
     return _note_out(note)
@@ -420,8 +432,15 @@ async def toggle_favorite(
 
 
 @router.get("/notes/{note_id}/comments", response_model=List[CommentOut])
-async def get_comments(note_id: int, db: Session = Depends(get_db)):
+async def get_comments(
+    note_id: int,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
+):
     """List comments for a note."""
+    note = db.query(Note).filter(Note.id == note_id).first()
+    if not note or not is_note_visible(note, current_user):
+        raise HTTPException(status_code=404, detail="Note not found")
     return db.query(Comment).options(
         joinedload(Comment.user),
     ).filter(Comment.note_id == note_id).order_by(desc(Comment.created_at)).all()

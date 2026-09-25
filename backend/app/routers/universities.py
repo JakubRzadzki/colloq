@@ -85,10 +85,14 @@ async def get_universities(
 
 
 @router.get("/universities/{uni_id}", response_model=UniversityOut)
-async def get_university(uni_id: int, db: Session = Depends(get_db)):
-    """Get a single university by ID."""
+async def get_university(
+    uni_id: int,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
+):
+    """Get a single university by ID. Unapproved universities are visible to admins only."""
     uni = db.query(University).filter(University.id == uni_id).first()
-    if not uni:
+    if not uni or not (uni.is_approved or (current_user and current_user.is_admin)):
         raise HTTPException(status_code=404, detail="University not found")
     return _uni_out(uni)
 
@@ -116,8 +120,8 @@ async def update_university(
 
 @router.get("/universities/{uni_id}/faculties", response_model=List[FacultyOut])
 async def get_faculties(uni_id: int, db: Session = Depends(get_db)):
-    """List faculties for a university."""
-    faculties = db.query(Faculty).filter(Faculty.university_id == uni_id).all()
+    """List approved faculties for a university."""
+    faculties = db.query(Faculty).filter(Faculty.university_id == uni_id, Faculty.is_approved == True).all()  # noqa: E712
     result = []
     for f in faculties:
         out = FacultyOut.model_validate(f)
@@ -160,8 +164,8 @@ async def create_faculty(
 
 @router.get("/faculties/{fac_id}/fields", response_model=List[FieldOfStudyOut])
 async def get_fields(fac_id: int, db: Session = Depends(get_db)):
-    """List fields of study for a faculty."""
-    return db.query(FieldOfStudy).filter(FieldOfStudy.faculty_id == fac_id).all()
+    """List approved fields of study for a faculty."""
+    return db.query(FieldOfStudy).filter(FieldOfStudy.faculty_id == fac_id, FieldOfStudy.is_approved == True).all()  # noqa: E712
 
 
 @router.post("/fields", response_model=FieldOfStudyOut)
@@ -191,8 +195,8 @@ async def get_subjects(
     semester: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
-    """List subjects for a field. Supports optional semester filtering."""
-    q = db.query(Subject).filter(Subject.field_of_study_id == field_id)
+    """List approved subjects for a field. Supports optional semester filtering."""
+    q = db.query(Subject).filter(Subject.field_of_study_id == field_id, Subject.is_approved == True)  # noqa: E712
     if semester is not None:
         q = q.filter(Subject.semester == semester)
     return q.all()

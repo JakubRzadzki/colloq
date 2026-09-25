@@ -392,7 +392,7 @@ export const createUniversity = async (data: UniversityCreateData) => {
   fd.append('country', data.country ?? 'Poland');
   if (data.description) fd.append('description', data.description);
   if (data.image instanceof File) fd.append('image', data.image);
-  return (await api.post('/universities', fd)).data;
+  return (await api.post<University>('/universities', fd)).data;
 };
 
 /** Request university image change. */
@@ -414,7 +414,7 @@ export const createNote = async (fd: FormData) =>
   (await api.post('/notes', fd)).data;
 
 /** Create a new faculty. */
-export const createFaculty = async (fd: FormData) =>
+export const createFaculty = async (fd: FormData): Promise<Faculty> =>
   (await api.post('/faculties', fd)).data;
 
 /** Create a new field of study. */
@@ -422,14 +422,14 @@ export const createFieldOfStudy = async (data: {
   name: string;
   degree_level: string;
   faculty_id: number;
-}) => (await api.post('/fields', data)).data;
+}): Promise<FieldOfStudy> => (await api.post('/fields', data)).data;
 
 /** Create a new subject. */
 export const createSubject = async (data: {
   name: string;
   semester: number;
   field_of_study_id: number;
-}) => (await api.post('/subjects', data)).data;
+}): Promise<Subject> => (await api.post('/subjects', data)).data;
 
 // =============================================================================
 // INTERACTIONS

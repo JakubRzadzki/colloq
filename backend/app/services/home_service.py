@@ -1,18 +1,26 @@
 from sqlalchemy.orm import Session, joinedload, selectinload
-from sqlalchemy import desc, func
+from sqlalchemy import desc, func, or_
 
 from app.models import User, Note, University, Review, Comment
 from app.schemas import NoteOut, UniversityOut
 from app.services.file_manager import normalize_stored_path
 
+def _public_reviews(db: Session):
+    """Reviews that are not attached to an unapproved note."""
+    return db.query(Review).outerjoin(Note, Review.note_id == Note.id).filter(
+        or_(Review.note_id.is_(None), Note.is_approved == True)  # noqa: E712
+    )
+
+
 def get_home_data(db: Session):
+    approved_notes = db.query(Note).filter(Note.is_approved == True)  # noqa: E712
     users_count = db.query(func.count(User.id)).scalar() or 0
-    notes_count = db.query(func.count(Note.id)).scalar() or 0
+    notes_count = approved_notes.with_entities(func.count(Note.id)).scalar() or 0
     universities_count = db.query(func.count(University.id)).filter(University.is_approved == True).scalar() or 0
     
-    latest_note = db.query(Note).order_by(desc(Note.created_at)).first()
+    latest_note = approved_notes.order_by(desc(Note.created_at)).first()
     latest_user = db.query(User).order_by(desc(User.created_at)).first()
-    latest_review = db.query(Review).order_by(desc(Review.created_at)).first()
+    latest_review = _public_reviews(db).order_by(desc(Review.created_at)).first()
     
     latest_activity = {
         "latest_note": {"id": latest_note.id, "title": latest_note.title, "created_at": str(latest_note.created_at) if latest_note else None, "university_id": latest_note.university_id} if latest_note else None,
@@ -46,8 +54,8 @@ def get_home_data(db: Session):
             "total_activity": nc + rvc + cc,
         })
         
-    recent_notes_act = db.query(Note).options(joinedload(Note.author)).order_by(desc(Note.created_at)).limit(5).all()
-    recent_reviews_act = db.query(Review).options(joinedload(Review.user), joinedload(Review.note)).order_by(desc(Review.created_at)).limit(5).all()
+    recent_notes_act = approved_notes.options(joinedload(Note.author)).order_by(desc(Note.created_at)).limit(5).all()
+    recent_reviews_act = _public_reviews(db).options(joinedload(Review.user), joinedload(Review.note)).order_by(desc(Review.created_at)).limit(5).all()
     
     activities = []
     for note in recent_notes_act:
@@ -57,7 +65,7 @@ def get_home_data(db: Session):
     activities.sort(key=lambda x: x.get("created_at") or "", reverse=True)
     activity_feed = activities[:5]
     
-    recent_notes = db.query(Note).options(joinedload(Note.author), joinedload(Note.subject), selectinload(Note.images), selectinload(Note.files)).order_by(desc(Note.created_at)).limit(6).all()
+    recent_notes = approved_notes.options(joinedload(Note.author), joinedload(Note.subject), selectinload(Note.images), selectinload(Note.files)).order_by(desc(Note.created_at)).limit(6).all()
     universities_list = db.query(University).filter(University.is_approved == True).all()
     
     recent_notes_out = []

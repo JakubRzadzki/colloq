@@ -261,10 +261,16 @@ async def global_search(q: str = "", db: Session = Depends(get_db)):
     ).limit(20).all()
 
     # Search fields
-    fields = db.query(FieldOfStudy).options(joinedload(FieldOfStudy.faculty).joinedload(Faculty.university)).filter(FieldOfStudy.name.ilike(pattern)).limit(20).all()
+    fields = db.query(FieldOfStudy).options(joinedload(FieldOfStudy.faculty).joinedload(Faculty.university)).filter(
+        FieldOfStudy.is_approved == True,
+        FieldOfStudy.name.ilike(pattern),
+    ).limit(20).all()
 
     # Search subjects
-    subjects = db.query(Subject).options(joinedload(Subject.field_of_study).joinedload(FieldOfStudy.faculty).joinedload(Faculty.university)).filter(Subject.name.ilike(pattern)).limit(20).all()
+    subjects = db.query(Subject).options(joinedload(Subject.field_of_study).joinedload(FieldOfStudy.faculty).joinedload(Faculty.university)).filter(
+        Subject.is_approved == True,
+        Subject.name.ilike(pattern),
+    ).limit(20).all()
 
     return {
         "notes": [{"id": n.id, "title": n.title, "score": n.score, "university_id": n.university_id, "user_nickname": n.author.nickname if n.author else None} for n in notes_q],
