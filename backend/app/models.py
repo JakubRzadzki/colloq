@@ -315,6 +315,7 @@ class Tag(Base):
 class NoteTag(Base):
     """Many-to-many: notes <-> tags."""
     __tablename__ = "note_tags"
+    __table_args__ = (UniqueConstraint("note_id", "tag_id", name="uq_note_tag"),)
 
     id = Column(Integer, primary_key=True, index=True)
     note_id = Column(Integer, ForeignKey("notes.id", ondelete="CASCADE"), nullable=False, index=True)
