@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     MAX_IMAGE_SIZE: int = 5 * 1024 * 1024
 
     RATE_LIMIT_PER_MINUTE: str = "60/minute"
+    # Counters live in this process by default. With several uvicorn workers or
+    # replicas use shared storage, e.g. redis://redis:6379/0 (needs the `redis` package).
+    RATE_LIMIT_STORAGE_URI: str = "memory://"
     # Kept as a comma-separated string: pydantic-settings would expect JSON for list[str].
     ALLOWED_ORIGINS: str = (
         "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,"

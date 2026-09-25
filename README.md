@@ -198,6 +198,11 @@ and trusts `X-Forwarded-For` only from the addresses in `FORWARDED_ALLOW_IPS`
 otherwise every request looks like it comes from the proxy and all users share one limit.
 Never set it to `*` when the API is reachable directly, as clients could then spoof their IP.
 
+Rate-limit counters are kept in process memory by default (`RATE_LIMIT_STORAGE_URI=memory://`).
+When running several uvicorn workers or containers, point them at a shared Redis
+(`RATE_LIMIT_STORAGE_URI=redis://redis:6379/0`, requires `pip install redis`), otherwise each
+process enforces its own limit.
+
 ### File storage
 
 - **Images** (university logos and banners, faculty logos, avatars, note images) are stored in
