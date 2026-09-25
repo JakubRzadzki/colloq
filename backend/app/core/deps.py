@@ -1,13 +1,14 @@
 """Reusable FastAPI dependency aliases for endpoint signatures."""
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import get_current_active_admin, get_current_user, get_current_user_optional
 from app.models import User
 from app.repositories.note_repository import NoteRepository
+from app.schemas import PageParams
 from app.services.admin_service import AdminService
 from app.services.auth_service import AuthService
 from app.services.moderation import ModerationService
@@ -22,6 +23,17 @@ CurrentUser = Annotated[User, Depends(get_current_user)]
 OptionalUser = Annotated[User | None, Depends(get_current_user_optional)]
 AdminUser = Annotated[User, Depends(get_current_active_admin)]
 StorageDep = Annotated[LocalFileStorage, Depends(get_storage)]
+
+
+def get_page(
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> PageParams:
+    # Plain query params instead of a Query() model, which cannot be combined with other query params.
+    return PageParams(limit=limit, offset=offset)
+
+
+Page = Annotated[PageParams, Depends(get_page)]
 
 
 def get_note_service(db: DbSession, storage: StorageDep) -> NoteService:

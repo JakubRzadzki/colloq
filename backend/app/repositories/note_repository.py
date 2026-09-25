@@ -8,7 +8,7 @@ from __future__ import annotations
 from sqlalchemy import desc, func, or_
 from sqlalchemy.orm import Query, Session, joinedload, selectinload
 
-from app.core.sql import LIKE_ESCAPE, escape_like
+from app.core.sql import LIKE_ESCAPE, escape_like, paginate
 from app.models import (
     Comment,
     Note,
@@ -144,14 +144,14 @@ class NoteRepository:
             .all()
         )
 
-    def list_comments(self, note_id: int) -> list[Comment]:
-        return (
+    def list_comments(self, note_id: int, limit: int, offset: int) -> tuple[list[Comment], int]:
+        query = (
             self.db.query(Comment)
             .options(joinedload(Comment.user))
             .filter(Comment.note_id == note_id)
-            .order_by(desc(Comment.created_at))
-            .all()
+            .order_by(desc(Comment.created_at), desc(Comment.id))
         )
+        return paginate(query, limit, offset)
 
     # --- files -------------------------------------------------------------
 

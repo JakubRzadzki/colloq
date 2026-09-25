@@ -25,7 +25,7 @@ from app.models import (
     Vote,
 )
 from app.repositories.note_repository import NoteRepository
-from app.schemas import NoteFilters
+from app.schemas import NoteFilters, PageParams
 from app.services import reputation
 from app.services.storage import LocalFileStorage, Upload, commit_or_discard, delete_files
 
@@ -228,9 +228,9 @@ class NoteService:
 
     # --- comments ------------------------------------------------------------------
 
-    def list_comments(self, note_id: int, user: User | None) -> list[Comment]:
+    def list_comments(self, note_id: int, user: User | None, page: PageParams) -> tuple[list[Comment], int]:
         self._get_visible(note_id, user)
-        return self.repo.list_comments(note_id)
+        return self.repo.list_comments(note_id, page.limit, page.offset)
 
     def add_comment(self, user: User, note_id: int, content: str) -> Comment:
         note = self._get_visible(note_id, user)

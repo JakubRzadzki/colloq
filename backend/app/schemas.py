@@ -379,6 +379,12 @@ class NoteFilters(BaseModel):
         return value.strip() or None if value else None
 
 
+class PageParams(BaseModel):
+    """limit/offset query parameters; the total goes into the X-Total-Count header."""
+    limit: int = Field(default=50, ge=1, le=100)
+    offset: int = Field(default=0, ge=0)
+
+
 class PaginatedNotesResponse(BaseModel):
     """Paginated response for notes listing."""
     items: List[NoteOut] = []

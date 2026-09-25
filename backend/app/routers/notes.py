@@ -2,10 +2,10 @@
 import mimetypes
 from typing import Annotated, List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, File, Form, Query, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, Form, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse
 
-from app.core.deps import CurrentUser, NoteServiceDep, OptionalUser, ReviewServiceDep
+from app.core.deps import CurrentUser, NoteServiceDep, OptionalUser, Page, ReviewServiceDep
 from app.core.rate_limit import limiter
 from app.schemas import (
     CommentCreate,
@@ -124,9 +124,11 @@ def toggle_favorite(note_id: int, current_user: CurrentUser, service: NoteServic
 
 
 @router.get("/notes/{note_id}/comments", response_model=List[CommentOut])
-def get_comments(note_id: int, current_user: OptionalUser, service: NoteServiceDep):
-    """List comments for a note."""
-    return service.list_comments(note_id, current_user)
+def get_comments(note_id: int, page: Page, response: Response, current_user: OptionalUser, service: NoteServiceDep):
+    """List comments for a note, newest first. The total count is in X-Total-Count."""
+    comments, total = service.list_comments(note_id, current_user, page)
+    response.headers["X-Total-Count"] = str(total)
+    return comments
 
 
 @router.post("/notes/{note_id}/comments", response_model=CommentOut)

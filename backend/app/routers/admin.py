@@ -1,9 +1,9 @@
 """Admin: pending items, approve/reject (with file cleanup), users, reports, feedback."""
 from typing import List, Optional
 
-from fastapi import APIRouter, File, Form, UploadFile
+from fastapi import APIRouter, File, Form, Response, UploadFile
 
-from app.core.deps import AdminServiceDep, AdminUser, ModerationServiceDep, UniversityServiceDep
+from app.core.deps import AdminServiceDep, AdminUser, ModerationServiceDep, Page, UniversityServiceDep
 from app.schemas import (
     BanUserBody,
     FeedbackOut,
@@ -24,9 +24,11 @@ def get_pending_items(current_user: AdminUser, service: ModerationServiceDep):
 
 
 @router.get("/users", response_model=List[UserOut])
-def admin_get_users(current_user: AdminUser, service: AdminServiceDep):
-    """List all users (admin only)."""
-    return service.list_users()
+def admin_get_users(page: Page, response: Response, current_user: AdminUser, service: AdminServiceDep):
+    """List users, newest first (admin only). The total count is in X-Total-Count."""
+    users, total = service.list_users(page)
+    response.headers["X-Total-Count"] = str(total)
+    return users
 
 
 @router.patch("/users/{user_id}/ban")
@@ -51,9 +53,13 @@ def reject_item(item_type: ItemType, item_id: int, current_user: AdminUser, serv
 
 
 @router.get("/reports", response_model=List[ReportOut])
-def admin_list_reports(current_user: AdminUser, service: AdminServiceDep, status_filter: Optional[str] = None):
-    """List all reports (admin only)."""
-    return service.list_reports(status_filter)
+def admin_list_reports(
+    page: Page, response: Response, current_user: AdminUser, service: AdminServiceDep, status_filter: Optional[str] = None
+):
+    """List reports, newest first (admin only). The total count is in X-Total-Count."""
+    reports, total = service.list_reports(status_filter, page)
+    response.headers["X-Total-Count"] = str(total)
+    return reports
 
 
 @router.patch("/reports/{report_id}")
@@ -64,9 +70,11 @@ def admin_update_report(report_id: int, status: str, current_user: AdminUser, se
 
 
 @router.get("/feedback", response_model=List[FeedbackOut])
-def admin_list_feedback(current_user: AdminUser, service: AdminServiceDep):
-    """List all user feedback (admin only)."""
-    return service.list_feedback()
+def admin_list_feedback(page: Page, response: Response, current_user: AdminUser, service: AdminServiceDep):
+    """List user feedback, newest first (admin only). The total count is in X-Total-Count."""
+    feedback, total = service.list_feedback(page)
+    response.headers["X-Total-Count"] = str(total)
+    return feedback
 
 
 @router.post("/approve_image_request/{req_id}")
