@@ -36,3 +36,18 @@ def test_cors_rejects_unknown_origin(client):
     )
 
     assert "access-control-allow-origin" not in resp.headers
+
+
+def test_security_headers_on_api_responses(client):
+    resp = client.get("/health")
+
+    assert resp.headers["x-frame-options"] == "DENY"
+    assert resp.headers["referrer-policy"] == "strict-origin-when-cross-origin"
+    assert resp.headers["x-content-type-options"] == "nosniff"
+
+
+def test_security_headers_on_error_responses(client):
+    resp = client.get("/notes/999999")
+
+    assert resp.status_code == 404
+    assert resp.headers["x-frame-options"] == "DENY"

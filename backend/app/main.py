@@ -81,9 +81,14 @@ app.add_middleware(
 
 @app.middleware("http")
 async def add_security_headers(request, call_next):
-    """Prevent MIME-sniffing of user-uploaded files served from /uploads."""
+    """Harden every response, including user-uploaded files served from /uploads."""
     response = await call_next(request)
+    # Uploaded files must not be MIME-sniffed into something executable.
     response.headers["X-Content-Type-Options"] = "nosniff"
+    # The API is never meant to be framed (clickjacking).
+    response.headers["X-Frame-Options"] = "DENY"
+    # Do not leak full URLs (with ids and query strings) to other origins.
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     return response
 
 
