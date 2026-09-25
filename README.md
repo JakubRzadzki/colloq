@@ -190,6 +190,15 @@ Tests run against a PostgreSQL `colloq_test` database (connection configured in
 `tests/conftest.py`). Set `TESTING=1` to disable rate limiting during the run.
 Covers auth, notes, universities, and admin flows.
 
+### Authentication
+
+`POST /token` sets the session as an httpOnly `access_token` cookie (Secure unless `ENV=dev`,
+SameSite=Lax) plus a readable `csrf_token` cookie. Writes authenticated by the cookie must send
+the `X-CSRF-Token` header with the value of `csrf_token`; the frontend does this automatically.
+API clients can keep using `Authorization: Bearer <token>` (the token is still in the response body).
+The frontend and the API must be on the same site; if they use different subdomains, set
+`COOKIE_DOMAIN` (e.g. `.example.com`) so the frontend can read `csrf_token`.
+
 ### Behind a reverse proxy
 
 Rate limits are keyed by client IP. The Docker image starts uvicorn with `--proxy-headers`

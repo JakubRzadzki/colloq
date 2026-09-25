@@ -9,7 +9,6 @@
  * - Rich Notes: multi-image upload support
  */
 import axios from 'axios';
-import { jwtDecode } from 'jwt-decode';
 import {
   University,
   Faculty,
@@ -46,7 +45,17 @@ export const API_URL =
 const api = axios.create({
   baseURL: API_URL,
   timeout: 30000,
+  // The session is an httpOnly cookie set by POST /token; it is sent automatically.
+  withCredentials: true,
 });
+
+const CSRF_COOKIE = 'csrf_token';
+const UNSAFE_METHODS = ['post', 'put', 'patch', 'delete'];
+
+const readCookie = (name: string): string | null => {
+  const match = document.cookie.split('; ').find((c) => c.startsWith(`${name}=`));
+  return match ? decodeURIComponent(match.slice(name.length + 1)) : null;
+};
 
 /**
  * Human-readable message from an API error. FastAPI returns `detail` as a string
@@ -72,9 +81,7 @@ api.interceptors.response.use(
     const detail = error.response?.data?.detail;
 
     if (status === 401) {
-      // Token expired or invalid - clean up and let the app handle redirect
-      localStorage.removeItem('token');
-      console.warn('[API] Session expired. Token removed.');
+      // Session cookie expired or invalid; the app resets the current user.
       window.dispatchEvent(new Event('auth-expired'));
     } else if (status === 403) {
       console.warn('[API] Forbidden:', detail || 'Access denied');
@@ -89,18 +96,12 @@ api.interceptors.response.use(
   }
 );
 
-// SECURITY (tracked, see GitHub issue "Move JWT out of localStorage"):
-// The JWT is currently read from localStorage, which is accessible to any
-// JavaScript and therefore vulnerable to token theft via XSS. The intended
-// long-term fix is to issue the token as an httpOnly, Secure, SameSite cookie
-// from the backend and drop localStorage entirely. When that lands, this
-// interceptor should stop attaching the Authorization header (the browser
-// will send the cookie automatically) and `logout()` must call a backend
-// endpoint that clears the cookie.
+// CSRF double submit: the backend accepts cookie-authenticated writes only when
+// X-CSRF-Token matches the csrf_token cookie, which other sites cannot read.
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  const csrf = readCookie(CSRF_COOKIE);
+  if (csrf && UNSAFE_METHODS.includes((config.method || 'get').toLowerCase())) {
+    config.headers['X-CSRF-Token'] = csrf;
   }
   return config;
 });
@@ -128,38 +129,6 @@ export const resolveUrl = (url?: string | null, fallback?: string): string => {
 // HELPER FUNCTIONS
 // =============================================================================
 
-/**
- * Get authorization header with Bearer token.
- */
-export const getAuthHeader = () => {
-  const token = localStorage.getItem('token');
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
-
-/**
- * Check if current user is admin by decoding JWT token.
- */
-interface JwtPayload {
-  sub?: string;
-  is_admin?: boolean;
-}
-
-export const isAdmin = (): boolean => {
-  const token = localStorage.getItem('token');
-  if (!token) return false;
-  try {
-    const decoded = jwtDecode(token) as JwtPayload;
-    return decoded.is_admin === true;
-  } catch {
-    return false;
-  }
-};
-
-/**
- * Logout user by removing token from localStorage.
- */
-export const logout = () => localStorage.removeItem('token');
-
 // =============================================================================
 // AUTHENTICATION
 // =============================================================================
@@ -172,7 +141,13 @@ export const login = async (username: string, password: string) => {
   const params = new URLSearchParams();
   params.append('username', username);
   params.append('password', password);
-  return (await api.post('/token', params)).data;
+  // The response sets the session cookies; the token in the body is not stored.
+  await api.post('/token', params);
+};
+
+/** End the session: the backend clears the httpOnly cookie. */
+export const logout = async () => {
+  await api.post('/logout');
 };
 
 /** User creation payload for registration */
@@ -195,6 +170,21 @@ export const register = async (userData: UserCreateData) =>
 export const getCurrentUser = async (): Promise<User> => {
   const res = await api.get('/users/me');
   return { ...res.data, username: res.data.nickname };
+};
+
+/**
+ * The logged-in user, or null. The session cookie itself is httpOnly, so the
+ * readable csrf_token cookie (set and cleared together with it) is used to skip
+ * the request for visitors who are clearly not logged in.
+ */
+export const fetchSessionUser = async (): Promise<User | null> => {
+  if (!readCookie(CSRF_COOKIE)) return null;
+  try {
+    return await getCurrentUser();
+  } catch (err) {
+    if ((err as { response?: { status?: number } }).response?.status === 401) return null;
+    throw err;
+  }
 };
 
 /** Profile update payload */

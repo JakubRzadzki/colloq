@@ -2,7 +2,8 @@ import React, { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Camera, Save, AlertCircle, Heart, FileText, PlusCircle } from 'lucide-react';
-import { getCurrentUser, updateProfile, resolveUrl, getMyFavorites, type User } from '../utils/api';
+import { updateProfile, resolveUrl, getMyFavorites, type User } from '../utils/api';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 import type { Note } from '../utils/types';
 import { t } from '../utils/i18n';
 import { AddNoteModal } from '../components/addNoteModal';
@@ -16,11 +17,7 @@ const ProfilePage: React.FC<{ t: import('../utils/i18n').TFunction }> = () => {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { data: user, isLoading, error: userError } = useQuery<User>({
-    queryKey: ['currentUser'],
-    queryFn: getCurrentUser,
-    retry: 1,
-  });
+  const { data: user, isLoading, error: userError } = useCurrentUser();
   const { data: favorites = [] } = useQuery<Note[]>({
     queryKey: ['myFavorites'],
     queryFn: getMyFavorites,

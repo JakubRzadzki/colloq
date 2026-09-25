@@ -12,12 +12,11 @@ import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { LogOut, Sun, Moon, Search, Shield, User as UserIcon, Bell } from 'lucide-react';
-import { jwtDecode } from 'jwt-decode';
-import { resolveUrl, getCurrentUser, getNotifications, markNotificationRead, markAllNotificationsRead } from '../utils/api';
+import { resolveUrl, getNotifications, markNotificationRead, markAllNotificationsRead } from '../utils/api';
 import type { User } from '../utils/types';
 
 interface NavbarProps {
-  token: string | null;
+  user: User | null;
   theme: string;
   toggleTheme: () => void;
   logout: () => void;
@@ -26,8 +25,7 @@ interface NavbarProps {
   setLang: (lang: 'pl' | 'en') => void;
 }
 
-export function Navbar({ token, theme, toggleTheme, logout, t, lang, setLang }: NavbarProps) {
-  const [user, setUser] = useState<User | null>(null);
+export function Navbar({ user, theme, toggleTheme, logout, t, lang, setLang }: NavbarProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -37,20 +35,9 @@ export function Navbar({ token, theme, toggleTheme, logout, t, lang, setLang }: 
   const { data: notifications = [] } = useQuery({
     queryKey: ['notifications'],
     queryFn: () => getNotifications(false),
-    enabled: !!token,
+    enabled: !!user,
   });
   const unreadCount = notifications.filter((n: { read_at?: string | null }) => !n.read_at).length;
-
-  // Fetch current user data when token is available
-  useEffect(() => {
-    if (token) {
-      getCurrentUser()
-        .then(setUser)
-        .catch(() => setUser(null));
-    } else {
-      setUser(null);
-    }
-  }, [token]);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -63,16 +50,6 @@ export function Navbar({ token, theme, toggleTheme, logout, t, lang, setLang }: 
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Check admin status from JWT
-  const checkIsAdmin = (): boolean => {
-    if (!token) return false;
-    try {
-      const decoded = jwtDecode(token) as { is_admin?: boolean };
-      return decoded.is_admin === true;
-    } catch {
-      return false;
-    }
-  };
 
   // Dynamic glass styling based on theme
   const isDark = theme === 'dark';
@@ -152,7 +129,7 @@ export function Navbar({ token, theme, toggleTheme, logout, t, lang, setLang }: 
         {/* Right Side: Notifications, Theme, User */}
         <div className="flex items-center gap-2">
           {/* Notifications Bell (logged in only) */}
-          {token && (
+          {user && (
             <div className="relative" ref={notifRef}>
               <button
                 onClick={() => setNotifOpen(!notifOpen)}
@@ -230,7 +207,7 @@ export function Navbar({ token, theme, toggleTheme, logout, t, lang, setLang }: 
             {isDark ? <Sun size={18} /> : <Moon size={18} />}
           </button>
 
-          {token ? (
+          {user ? (
             /* Logged-in User Avatar & Dropdown */
             <div className="relative" ref={dropdownRef}>
               <button
@@ -271,7 +248,7 @@ export function Navbar({ token, theme, toggleTheme, logout, t, lang, setLang }: 
                       <UserIcon size={15} /> {t('profile')}
                     </Link>
 
-                    {checkIsAdmin() && (
+                    {user?.is_admin && (
                       <Link
                         to="/admin"
                         onClick={() => setDropdownOpen(false)}

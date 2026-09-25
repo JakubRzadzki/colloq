@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { X, MessageSquare, Maximize2, Minimize2, ChevronRight, ChevronLeft, Edit, Trash2, Lock, Upload } from 'lucide-react';
-import { API_URL, resolveUrl, addComment, getNoteComments, getCurrentUser, voteNote, toggleFavorite, updateNote, deleteNote } from '../utils/api';
+import { API_URL, resolveUrl, addComment, getNoteComments, voteNote, toggleFavorite, updateNote, deleteNote } from '../utils/api';
 import { FilePreview } from './FilePreview';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { jwtDecode } from 'jwt-decode';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 import { t } from '../utils/i18n';
 
 /**
@@ -15,12 +15,10 @@ import { t } from '../utils/i18n';
 export function NoteModal({
   note,
   onClose,
-  token,
   onUnlockWithUpload,
 }: {
   note: import('../utils/types').Note;
   onClose: () => void;
-  token: string | null;
   onUnlockWithUpload?: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -39,35 +37,25 @@ export function NoteModal({
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isResizing, setIsResizing] = useState(false);
 
-  const { data: currentUser } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: getCurrentUser,
-    enabled: !!token,
-  });
+  const { data: currentUser } = useCurrentUser();
+  const isLoggedIn = !!currentUser;
 
   const { data: comments } = useQuery({
     queryKey: ['comments', note.id],
     queryFn: () => getNoteComments(note.id),
-    enabled: !!note && !!token,
+    enabled: !!note && isLoggedIn,
   });
 
   const isBlocked =
     note &&
-    (!token ||
+    (!isLoggedIn ||
       (currentUser &&
         currentUser.uploads_count === 0 &&
         currentUser.id !== note.author?.id &&
         currentUser.id !== note.user_id));
 
-  const isOwner = (): boolean => {
-    if (!token || !note.author?.id) return false;
-    try {
-      const decoded = jwtDecode(token) as { sub?: string; is_admin?: boolean };
-      return decoded.sub === String(note.author.id);
-    } catch {
-      return false;
-    }
-  };
+  const isOwner = (): boolean =>
+    !!currentUser && (currentUser.id === note.user_id || currentUser.id === note.author?.id);
 
   const commentMutation = useMutation({
     mutationFn: (content: string) => addComment(note.id, content),
@@ -196,7 +184,7 @@ export function NoteModal({
                    </div>
                    <h3 className="text-xl font-bold mb-2">{t('upload_barrier_title')}</h3>
                    <p className="opacity-90 text-sm mb-4 leading-relaxed">{t('upload_barrier_desc')}</p>
-                   {!token ? (
+                   {!isLoggedIn ? (
                      <div className="flex flex-col sm:flex-row gap-2 justify-center">
                        <Link to="/login" className="btn btn-primary btn-sm no-underline" onClick={onClose}>
                          {t('login')}

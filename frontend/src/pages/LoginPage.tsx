@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { login } from '../utils/api';
+import { CURRENT_USER_KEY } from '../hooks/useCurrentUser';
 import type { TFunction } from '../utils/i18n';
 
-export function LoginPage({ setToken, t }: { setToken: (token: string) => void; t: TFunction }) {
+export function LoginPage({ t }: { t: TFunction }) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -16,18 +19,10 @@ export function LoginPage({ setToken, t }: { setToken: (token: string) => void; 
     setLoading(true);
 
     try {
-      const data = await login(username, password);
-
-      if (data.access_token) {
-        // SECURITY: storing the JWT in localStorage exposes it to XSS-based
-        // theft. Tracked for migration to an httpOnly cookie (see GitHub issue
-        // "Move JWT out of localStorage").
-        localStorage.setItem('token', data.access_token);
-        setToken(data.access_token);
-        navigate('/');
-      } else {
-        setError('Błąd: Serwer nie zwrócił tokena.');
-      }
+      // The session cookie is set by the response; load the user it belongs to.
+      await login(username, password);
+      await queryClient.invalidateQueries({ queryKey: CURRENT_USER_KEY });
+      navigate('/');
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { detail?: string } } };
       // Sprawdzamy czy to błąd sieci (brak response)

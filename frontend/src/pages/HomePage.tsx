@@ -31,6 +31,7 @@ import { getHome, resolveUrl } from '../utils/api';
 import type { ActivityFeedEntry, LeaderboardEntry } from '../utils/api';
 import { AddUniversityModal } from '../components/AddUniversityModal';
 import { useTranslation } from '../utils/i18n';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 
 interface HomePageProps {
   t?: unknown; // Kept for backwards compatibility if passed, but hook is preferred
@@ -40,7 +41,8 @@ export default function HomePage() {
   const { t } = useTranslation();
   const [search, setSearch] = useState('');
   const [isAddUniOpen, setAddUniOpen] = useState(false);
-  const token = localStorage.getItem('token');
+  const { data: currentUser } = useCurrentUser();
+  const isLoggedIn = !!currentUser;
 
   const uniSectionRef = useRef<HTMLElement>(null);
   const regionSectionRef = useRef<HTMLElement>(null);
@@ -339,7 +341,7 @@ export default function HomePage() {
           <h2 className="text-3xl font-bold flex gap-3 items-center">
             <Building2 className="text-[#5e5ce6]" /> {t('available_universities')}
           </h2>
-          {token && (
+          {isLoggedIn && (
             <button
               onClick={() => setAddUniOpen(true)}
               className="flex items-center gap-2 px-4 py-2 rounded-full glass-panel text-sm font-medium opacity-70 hover:opacity-100 transition-all hover:scale-105"
