@@ -1,1 +1,1 @@
-# Core: config, enums, and shared application concerns
+# Core: config, database, security and shared dependencies

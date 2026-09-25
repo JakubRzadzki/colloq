@@ -71,9 +71,9 @@ def _resolve_physical_path(relative_path: str) -> Path:
 
 def validate_file_size(file: UploadFile, max_size: int, file_type: str = "file") -> None:
     """Validate file size against limit. Raises HTTPException if too large."""
-    file.file.seek(0, 2)  # Seek to end
+    file.file.seek(0, 2)
     size = file.file.tell()
-    file.file.seek(0)  # Reset to beginning
+    file.file.seek(0)
     if size > max_size:
         raise HTTPException(
             status_code=400,
@@ -87,7 +87,6 @@ def save_upload(file: UploadFile, directory: str) -> str:
     directory: one of DIR_AVATARS, DIR_NOTES, DIR_UNIVERSITIES, DIR_FACULTIES.
     """
     validate_file_type(file)
-    # Validate file size based on directory type
     if directory in [DIR_AVATARS, DIR_UNIVERSITIES, DIR_FACULTIES]:
         validate_file_size(file, settings.MAX_IMAGE_SIZE, "Image")
     else:

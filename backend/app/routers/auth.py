@@ -32,8 +32,7 @@ def login(
 def register(request: Request, payload: RegisterRequest, db: DbSession):
     """Register a new user account."""
     user_data = payload.user
-    
-    # Password validation
+
     if len(user_data.password) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters long")
     

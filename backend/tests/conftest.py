@@ -24,12 +24,11 @@ from app.main import app
 test_engine_url = os.environ["DATABASE_URL"]
 engine = create_engine(test_engine_url, pool_pre_ping=True)
 
-# Dla testów sessionmaker bez autocommitu
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_test_db():
-    """Tworzy schemat bazy DOKŁADNIE RAZ przed wszystkimi testami"""
+    """Create the schema once for the whole test session."""
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     yield
@@ -45,23 +44,22 @@ def isolated_upload_dir(tmp_path, monkeypatch):
 
 @pytest.fixture(scope="function")
 def db_session() -> Generator[Session, None, None]:
-    """Szybkie czyszczenie danych: odpala wszystko w transakcji, która na koniec robi ROLLBACK"""
+    """Run each test inside a transaction that is rolled back afterwards, so tests do not leak data."""
     connection = engine.connect()
     transaction = connection.begin()
     
-    # Tworzymy sesję przypiętą do konkretnego połączenia i transakcji
     session = TestingSessionLocal(bind=connection)
     
     try:
         yield session
     finally:
         session.close()
-        transaction.rollback() # Dane dodane w teście magicznie znikają!
+        transaction.rollback()
         connection.close()
 
 @pytest.fixture(scope="function")
 def client(db_session: Session) -> Generator[TestClient, None, None]:
-    """TestClient z podmienioną bazą. Tabele i schemat już istnieją."""
+    """TestClient whose get_db dependency yields the per-test session."""
     def override_get_db():
         yield db_session
 

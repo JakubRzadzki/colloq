@@ -1,4 +1,4 @@
-"""Notes CRUD, comments, voting (atomic), favorites, tags. File cleanup on delete."""
+"""Notes CRUD, comments, voting, favorites, tags. File cleanup on delete."""
 from datetime import datetime
 from typing import List, Optional
 
@@ -199,7 +199,6 @@ def get_notes(
     # aggregate) and count distinct note ids (filters may join to-many tables).
     total = query.order_by(None).with_entities(func.count(func.distinct(Note.id))).scalar() or 0
 
-    # Apply pagination
     notes = query.distinct().offset((page - 1) * page_size).limit(page_size).all()
     return {
         "items": [_note_out(n) for n in notes],
@@ -341,12 +340,10 @@ def download_note_file(
     if not note_file:
         raise HTTPException(status_code=404, detail="File not found")
 
-    # Resolve file path
     file_path = _resolve_physical_path(note_file.file_url)
     if not file_path.is_file():
         raise HTTPException(status_code=404, detail="File not found on disk")
 
-    # Increment download counter
     note.download_count = (note.download_count or 0) + 1
     db.commit()
 
@@ -375,13 +372,11 @@ def vote_note(
     ).first()
 
     if existing_vote:
-        # Remove existing vote (toggle off)
         db.delete(existing_vote)
         author = db.query(User).filter(User.id == note.user_id).first()
         if author:
             author.reputation_points = max((author.reputation_points or 0) - 1, 0)
     else:
-        # Add new vote
         db.add(Vote(user_id=current_user.id, note_id=note_id, value=1))
         author = db.query(User).filter(User.id == note.user_id).first()
         if author:
@@ -389,7 +384,6 @@ def vote_note(
 
     # Flush to ensure new or deleted votes are visible to the sum query
     db.flush()
-    # Recalculate score from votes table
     total_score = db.query(func.coalesce(func.sum(Vote.value), 0)).filter(
         Vote.note_id == note_id,
     ).scalar()

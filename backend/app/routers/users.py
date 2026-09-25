@@ -86,26 +86,22 @@ def get_my_dashboard(
 ):
     """User dashboard with stats, notes, favorites, and pending submissions."""
 
-    # User stats
     notes_count = db.query(func.count(Note.id)).filter(Note.user_id == current_user.id).scalar() or 0
     reviews_count = db.query(func.count(Review.id)).filter(Review.user_id == current_user.id).scalar() or 0
     comments_count = db.query(func.count(Comment.id)).filter(Comment.user_id == current_user.id).scalar() or 0
     favorites_count = db.query(func.count(UserFavorite.id)).filter(UserFavorite.user_id == current_user.id).scalar() or 0
 
-    # Reputation rank
     rank = db.query(func.count(User.id)).filter(
         User.reputation_points > (current_user.reputation_points or 0),
     ).scalar() or 0
     rank += 1  # 1-indexed
 
-    # My notes
     my_notes = db.query(Note).options(
         joinedload(Note.author),
         joinedload(Note.subject),
         selectinload(Note.images),
     ).filter(Note.user_id == current_user.id).order_by(desc(Note.created_at)).limit(10).all()
 
-    # My favorites
     my_favs = (
         db.query(Note)
         .options(joinedload(Note.author), joinedload(Note.subject), selectinload(Note.images))
@@ -116,7 +112,6 @@ def get_my_dashboard(
         .all()
     )
 
-    # Pending submissions
     pending_notes = db.query(func.count(Note.id)).filter(
         Note.user_id == current_user.id, Note.is_approved == False,
     ).scalar() or 0

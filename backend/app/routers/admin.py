@@ -239,7 +239,7 @@ def reject_image_request(
     current_user: AdminUser,
     db: DbSession,
 ):
-    """Reject an image change request. Optionally delete the uploaded file."""
+    """Reject an image change request and delete the uploaded file."""
     req = db.query(ImageRequest).filter(ImageRequest.id == req_id).first()
     if not req:
         raise HTTPException(status_code=404, detail="Request not found")

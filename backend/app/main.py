@@ -1,6 +1,5 @@
 """
-Colloq API — Production-ready MVP.
-Minimal entry point: config, upload dirs, CORS, routers, static files.
+Colloq API entry point: app setup, middleware, exception handlers, routers and static files.
 Run: uvicorn app.main:app --host 0.0.0.0 --port 8000
 """
 import logging
@@ -85,7 +84,6 @@ async def add_security_headers(request, call_next):
     return response
 
 
-# Ensure upload directories exist (cross-platform)
 os.makedirs(os.path.join(settings.UPLOAD_DIR, "universities"), exist_ok=True)
 os.makedirs(os.path.join(settings.UPLOAD_DIR, "notes"), exist_ok=True)
 os.makedirs(os.path.join(settings.UPLOAD_DIR, "avatars"), exist_ok=True)
