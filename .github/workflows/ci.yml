@@ -25,6 +25,10 @@ jobs:
         run: cd backend && ruff check app/
       - name: Type check (mypy)
         run: cd backend && mypy app/
+      - name: Migrations apply and match the models
+        run: cd backend && alembic upgrade head && alembic check
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/colloq_test
       - run: cd backend && pytest tests/ -v
         env:
           TESTING: "1"
