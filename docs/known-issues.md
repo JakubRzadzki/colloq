@@ -7,30 +7,6 @@ Status as of the `fix/bugs-and-rookie-mistakes` branch (September 2026).
 
 ## Open
 
-### Move JWT out of localStorage (M10)
-
-**Severity:** Medium
-
-**Where:** `frontend/src/utils/api.ts` (request interceptor), `frontend/src/pages/LoginPage.tsx`.
-
-**Problem:** The access token is stored in `localStorage`, which is readable by
-any JavaScript running on the page. A single XSS vulnerability would let an
-attacker exfiltrate the token and impersonate the user.
-
-**Proposed fix:**
-- Issue the JWT from the backend as an `httpOnly`, `Secure`, `SameSite=Lax`
-  cookie on `POST /token`.
-- Stop attaching the `Authorization` header in the Axios request interceptor;
-  rely on the browser sending the cookie automatically.
-- Add a `POST /logout` endpoint that clears the cookie, and have `logout()` call it.
-- Add CSRF protection (e.g. double-submit token) since auth moves to cookies.
-
-**Why deferred:** Cross-cutting change touching auth on both backend and
-frontend plus CSRF handling. It was planned as the optional phase 7 of the
-bug-fix pass and left switched off. The risk is partially mitigated by the
-`nosniff`, `X-Frame-Options` and `Referrer-Policy` headers and by upload type
-validation (reduces stored-XSS surface).
-
 ### FastAPI is pinned to 0.136.x
 
 **Severity:** Low (maintenance)
@@ -63,6 +39,10 @@ download endpoint.
 
 ## Resolved
 
+- **M10: JWT in localStorage** — the token is an httpOnly, Secure, SameSite=Lax
+  cookie set by `POST /token` and cleared by `POST /logout`; cookie-authenticated
+  writes need a matching `X-CSRF-Token` header (double submit). The frontend no
+  longer stores or decodes the token.
 - **Rejecting a pending university with image requests or registered users
   failed with 500** — foreign keys now cascade / set NULL (migration
   `84f4c65036b2`).
