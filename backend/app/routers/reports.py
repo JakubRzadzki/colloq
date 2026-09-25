@@ -1,7 +1,8 @@
 """User reports of notes and other users."""
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from app.core.deps import CurrentUser, DbSession
+from app.core.rate_limit import limiter
 from app.models import Note, Report, User
 from app.schemas import ReportCreate, ReportOut
 
@@ -9,7 +10,8 @@ router = APIRouter(tags=["reports"])
 
 
 @router.post("/reports", response_model=ReportOut)
-def create_report(payload: ReportCreate, current_user: CurrentUser, db: DbSession):
+@limiter.limit("5/minute")
+def create_report(request: Request, payload: ReportCreate, current_user: CurrentUser, db: DbSession):
     """Report a note or user."""
     if not payload.note_id and not payload.reported_user_id:
         raise HTTPException(status_code=400, detail="Provide note_id or reported_user_id")

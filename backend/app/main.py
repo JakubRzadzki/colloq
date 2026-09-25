@@ -31,6 +31,7 @@ from app.seed import run_seed
 
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from app.core.rate_limit import limiter
 
 # The only logging configuration in the app; modules just call logging.getLogger(__name__).
@@ -67,6 +68,8 @@ async def domain_error_handler(request: Request, exc: DomainError) -> JSONRespon
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
 
+# Applies settings.RATE_LIMIT_PER_MINUTE to every route without its own @limiter.limit.
+app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,

@@ -2,10 +2,11 @@
 import mimetypes
 from typing import Annotated, List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, File, Form, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, Form, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 
 from app.core.deps import CurrentUser, NoteServiceDep, OptionalUser, ReviewServiceDep
+from app.core.rate_limit import limiter
 from app.schemas import (
     CommentCreate,
     CommentOut,
@@ -27,7 +28,9 @@ router = APIRouter(tags=["notes"])
 
 
 @router.post("/notes", response_model=NoteOut)
+@limiter.limit("20/hour")
 def create_note(
+    request: Request,
     current_user: CurrentUser,
     service: NoteServiceDep,
     title: str = Form(None),
@@ -127,7 +130,10 @@ def get_comments(note_id: int, current_user: OptionalUser, service: NoteServiceD
 
 
 @router.post("/notes/{note_id}/comments", response_model=CommentOut)
-def add_comment(note_id: int, payload: CommentCreate, current_user: CurrentUser, service: NoteServiceDep):
+@limiter.limit("10/minute")
+def add_comment(
+    request: Request, note_id: int, payload: CommentCreate, current_user: CurrentUser, service: NoteServiceDep
+):
     """Add a comment to a note."""
     return service.add_comment(current_user, note_id, payload.content)
 
@@ -145,7 +151,8 @@ def list_tags(service: NoteServiceDep):
 
 
 @router.post("/tags", response_model=TagOut)
-def create_tag(payload: TagCreate, current_user: CurrentUser, service: NoteServiceDep):
+@limiter.limit("10/minute")
+def create_tag(request: Request, payload: TagCreate, current_user: CurrentUser, service: NoteServiceDep):
     """Create a tag, or return the existing one with the same name."""
     return service.create_tag(payload.name)
 

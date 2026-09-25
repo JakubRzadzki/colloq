@@ -29,5 +29,7 @@ EXPOSE 8000
 # Apply migrations, then run the container command
 ENTRYPOINT ["./docker-entrypoint.sh"]
 
-# Komenda startowa
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Trust X-Forwarded-* only from FORWARDED_ALLOW_IPS (the reverse proxy), so rate
+# limits see the real client IP instead of the proxy's.
+ENV FORWARDED_ALLOW_IPS=127.0.0.1
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips \"$FORWARDED_ALLOW_IPS\""]
