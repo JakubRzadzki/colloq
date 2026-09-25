@@ -15,6 +15,8 @@ from fastapi import UploadFile
 from app.core.config import settings
 from app.core.exceptions import DomainError
 
+UPLOADS_URL_PREFIX = "uploads/"
+
 # Subdirs under UPLOAD_DIR
 DIR_AVATARS = "avatars"
 DIR_NOTES = "notes"
@@ -53,13 +55,14 @@ def _normalize_path(path: str) -> str:
 
 
 def _relative_path_from_url(url: Optional[str]) -> Optional[str]:
-    """Convert URL like /uploads/notes/abc.jpg to relative path uploads/notes/abc.jpg."""
+    """Convert a stored URL like /uploads/notes/abc.jpg to a path relative to UPLOAD_DIR (notes/abc.jpg)."""
     if not url or not url.strip():
         return None
-    path = url.strip()
-    if path.startswith("/"):
-        path = path.lstrip("/")
-    return _normalize_path(path)
+    path = _normalize_path(url.strip()).lstrip("/")
+    # save_upload stores "/uploads/<dir>/<name>", while UPLOAD_DIR is the uploads directory itself.
+    if path.startswith(UPLOADS_URL_PREFIX):
+        path = path[len(UPLOADS_URL_PREFIX):]
+    return path
 
 
 def resolve_physical_path(relative_path: str) -> Path:

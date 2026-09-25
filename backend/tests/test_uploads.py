@@ -5,7 +5,10 @@ normalization.
 import pytest
 from fastapi.testclient import TestClient
 
+from pathlib import Path
+
 from app.core.config import settings
+from app.services.file_manager import delete_file
 from app.core.security import get_password_hash
 from app.models import Faculty, University, User
 
@@ -64,3 +67,13 @@ def test_faculty_https_image_url_is_returned_unchanged(client, db_session, unive
 
     assert resp.status_code == 200
     assert [f["image_url"] for f in resp.json()] == [url]
+
+
+@pytest.mark.parametrize("stored", ["/uploads/notes/pic.png", "notes/pic.png"])
+def test_delete_file_resolves_stored_urls_inside_upload_dir(stored):
+    target = Path(settings.UPLOAD_DIR) / "notes" / "pic.png"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(b"x")
+
+    assert delete_file(stored) is True
+    assert not target.exists()
