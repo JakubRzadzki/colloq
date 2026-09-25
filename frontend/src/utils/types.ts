@@ -81,7 +81,8 @@ export interface NoteImage {
 export interface NoteFile {
   id: number;
   note_id: number;
-  file_url: string;
+  /** Authenticated endpoint serving the attachment (attachments are not public). */
+  download_url: string;
   file_type: string;
   file_name: string;
   created_at?: string;
@@ -215,7 +216,10 @@ export interface LeaderboardUser {
  */
 export interface Attachment {
   id: number;
-  file_url: string;
+  /** Private attachment: fetched with the user's token. */
+  download_url?: string;
+  /** Legacy public file (Note.file_url). */
+  file_url?: string;
   file_type: string;
   is_blurred: boolean;
   filename?: string;

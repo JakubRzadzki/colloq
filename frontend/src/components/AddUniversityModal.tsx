@@ -15,11 +15,13 @@ export function AddUniversityModal({ isOpen, onClose }: Props) {
 
   const mutation = useMutation({
     mutationFn: createUniversity,
-    onSuccess: () => {
+    onSuccess: (university) => {
       queryClient.invalidateQueries({ queryKey: ['universities'] });
       queryClient.invalidateQueries({ queryKey: ['home'] });
       onClose();
-      alert('University added successfully! ✅');
+      alert(university.is_approved
+        ? 'University added successfully! ✅'
+        : 'University submitted for review. It will appear once an administrator approves it.');
     },
     onError: (err: unknown) => {
       const e = err as { response?: { status?: number; data?: { detail?: string | Array<{ msg: string }> } }; message?: string };

@@ -1,0 +1,34 @@
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["venv", "alembic/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+# The enums are (str, Enum) on purpose; StrEnum would change str() of the members.
+ignore = ["UP042"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI declares parameters with these calls as defaults by design.
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.File",
+    "fastapi.Form",
+    "fastapi.Query",
+    "fastapi.params.Depends",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+check_untyped_defs = true
+exclude = ["^venv/", "^alembic/"]
+
+[tool.pytest.ini_options]
+# The bare `pytest` command (used in CI) does not put the current directory on
+# sys.path, so without this conftest.py cannot import `app`.
+pythonpath = ["."]
+testpaths = ["tests"]

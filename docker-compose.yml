@@ -1,4 +1,5 @@
-version: '3.8'
+# Local development stack (code mounted, uvicorn --reload). The database is
+# published on 127.0.0.1 only; its credentials can be overridden in .env.
 
 services:
   backend:
@@ -11,9 +12,16 @@ services:
       - ./backend:/app
       - ./backend/uploads:/app/uploads
     environment:
-      - DATABASE_URL=postgresql://colloq:colloq123@db:5432/colloq
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-colloq}:${POSTGRES_PASSWORD:-colloq123}@db:5432/${POSTGRES_DB:-colloq}
       - SECRET_KEY=${SECRET_KEY}
       - UPLOAD_DIR=/app/uploads
+      # Note attachments; deliberately not under UPLOAD_DIR, which is served publicly.
+      - PRIVATE_UPLOAD_DIR=/app/private_uploads
+      # "prod" by default: no admin account is seeded. For local development set
+      # ENV=dev plus SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD in the root .env.
+      - ENV=${ENV:-prod}
+      - SEED_ADMIN_EMAIL=${SEED_ADMIN_EMAIL:-}
+      - SEED_ADMIN_PASSWORD=${SEED_ADMIN_PASSWORD:-}
     depends_on:
       db:
         condition: service_healthy
@@ -36,15 +44,15 @@ services:
   db:
     image: postgres:15-alpine
     environment:
-      - POSTGRES_USER=colloq
-      - POSTGRES_PASSWORD=colloq123
-      - POSTGRES_DB=colloq
+      - POSTGRES_USER=${POSTGRES_USER:-colloq}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-colloq123}
+      - POSTGRES_DB=${POSTGRES_DB:-colloq}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U colloq -d colloq"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5

@@ -48,6 +48,22 @@ const api = axios.create({
   timeout: 30000,
 });
 
+/**
+ * Human-readable message from an API error. FastAPI returns `detail` as a string
+ * for handled errors and as a list of field errors for validation failures (422).
+ */
+export const getErrorMessage = (err: unknown, fallback: string): string => {
+  const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((d) => (typeof d?.msg === 'string' ? d.msg.replace(/^Value error, /, '') : ''))
+      .filter(Boolean);
+    if (messages.length) return messages.join('; ');
+  }
+  return fallback;
+};
+
 // Global response interceptor for error handling
 api.interceptors.response.use(
   (response) => response,
@@ -101,7 +117,8 @@ export const resolveUrl = (url?: string | null, fallback?: string): string => {
     return normalized;
   }
   let path = normalized.startsWith('/') ? normalized : `/${normalized}`;
-  if (/^\/(notes|universities|avatars|faculties)\//.test(path) && !path.startsWith('/uploads/')) {
+  const isDownloadEndpoint = /^\/notes\/\d+\/download\/\d+/.test(path);
+  if (!isDownloadEndpoint && /^\/(notes|universities|avatars|faculties)\//.test(path) && !path.startsWith('/uploads/')) {
     path = `/uploads${path}`;
   }
   return `${API_URL.replace(/\/$/, '')}${path}`;
@@ -272,6 +289,29 @@ export const getFields = async (id: number): Promise<FieldOfStudy[]> =>
 export const getSubjects = async (id: number): Promise<Subject[]> =>
   (await api.get(`/fields/${id}/subjects`)).data;
 
+const PAGE_LIMIT = 100;
+
+/**
+ * Fetch every page of a limit/offset list endpoint. The API returns at most
+ * 100 items per request and the total in the X-Total-Count header.
+ */
+const getAllPages = async <T>(url: string, params: Record<string, string | number> = {}): Promise<T[]> => {
+  const items: T[] = [];
+  for (;;) {
+    const res = await api.get<T[]>(url, { params: { ...params, limit: PAGE_LIMIT, offset: items.length } });
+    items.push(...res.data);
+    const total = Number(res.headers['x-total-count'] ?? items.length);
+    if (res.data.length === 0 || items.length >= total) return items;
+  }
+};
+
+/**
+ * Fetch a private note attachment with the user's token.
+ * `inline` asks for the real media type and does not count as a download (previews).
+ */
+export const fetchAttachment = async (downloadUrl: string, inline = false): Promise<Blob> =>
+  (await api.get(downloadUrl, { responseType: 'blob', params: inline ? { inline: true } : undefined })).data;
+
 /** Paginated notes response */
 export interface PaginatedNotesResponse {
   items: Note[];
@@ -392,7 +432,7 @@ export const createUniversity = async (data: UniversityCreateData) => {
   fd.append('country', data.country ?? 'Poland');
   if (data.description) fd.append('description', data.description);
   if (data.image instanceof File) fd.append('image', data.image);
-  return (await api.post('/universities', fd)).data;
+  return (await api.post<University>('/universities', fd)).data;
 };
 
 /** Request university image change. */
@@ -414,7 +454,7 @@ export const createNote = async (fd: FormData) =>
   (await api.post('/notes', fd)).data;
 
 /** Create a new faculty. */
-export const createFaculty = async (fd: FormData) =>
+export const createFaculty = async (fd: FormData): Promise<Faculty> =>
   (await api.post('/faculties', fd)).data;
 
 /** Create a new field of study. */
@@ -422,14 +462,14 @@ export const createFieldOfStudy = async (data: {
   name: string;
   degree_level: string;
   faculty_id: number;
-}) => (await api.post('/fields', data)).data;
+}): Promise<FieldOfStudy> => (await api.post('/fields', data)).data;
 
 /** Create a new subject. */
 export const createSubject = async (data: {
   name: string;
   semester: number;
   field_of_study_id: number;
-}) => (await api.post('/subjects', data)).data;
+}): Promise<Subject> => (await api.post('/subjects', data)).data;
 
 // =============================================================================
 // INTERACTIONS
@@ -461,7 +501,7 @@ export const addReview = async (data: ReviewCreateData) =>
 
 /** Get comments for a note. */
 export const getNoteComments = async (id: number): Promise<Comment[]> =>
-  (await api.get(`/notes/${id}/comments`)).data;
+  getAllPages<Comment>(`/notes/${id}/comments`);
 
 /** Add a comment to a note. */
 export const addComment = async (id: number, content: string) =>
@@ -508,14 +548,6 @@ export const getNoteHistory = async (id: number): Promise<NoteHistoryEntry[]> =>
 /** Delete a note (owner only). */
 export const deleteNote = async (id: number) =>
   await api.delete(`/notes/${id}`);
-
-/** Download a specific file from a note. */
-export const downloadNoteFile = async (noteId: number, fileId: number): Promise<Blob> => {
-  const res = await api.get(`/notes/${noteId}/download/${fileId}`, {
-    responseType: 'blob',
-  });
-  return res.data;
-};
 
 /** Request password reset (sends email with token). */
 export const forgotPassword = async (email: string) =>
@@ -592,8 +624,7 @@ export const getPendingItems = async (): Promise<PendingItems> =>
   (await api.get('/admin/pending_items')).data;
 
 /** Get all users (admin only). */
-export const getAllUsers = async (): Promise<User[]> =>
-  (await api.get('/admin/users')).data;
+export const getAllUsers = async (): Promise<User[]> => getAllPages<User>('/admin/users');
 
 /** Ban or unban user (admin only). */
 export const banUser = async (userId: number, banned: boolean) =>
@@ -634,10 +665,8 @@ export interface ReportItem {
 }
 
 /** List reports (admin only). */
-export const getReports = async (status?: string): Promise<ReportItem[]> => {
-  const q = status ? `?status_filter=${status}` : '';
-  return (await api.get(`/admin/reports${q}`)).data;
-};
+export const getReports = async (status?: string): Promise<ReportItem[]> =>
+  getAllPages<ReportItem>('/admin/reports', status ? { status_filter: status } : {});
 
 /** Update report status (admin only). */
 export const updateReportStatus = async (reportId: number, status: 'resolved' | 'dismissed') =>
@@ -653,51 +682,31 @@ export interface FeedbackItem {
 }
 
 /** List feedback (admin only). */
-export const getFeedback = async (): Promise<FeedbackItem[]> =>
-  (await api.get('/admin/feedback')).data;
+export const getFeedback = async (): Promise<FeedbackItem[]> => getAllPages<FeedbackItem>('/admin/feedback');
 
 /** University update payload (admin) */
 export interface UniversityUpdateData {
+  name?: string;
+  city?: string;
+  region?: string;
+  country?: string;
   description?: string;
+  image?: File;
   banner?: File;
 }
 
-/** Update university details (admin only). */
-export const updateUniversity = async (id: number, data: UniversityUpdateData) => {
-  const fd = new FormData();
-  if (data.description) fd.append('description', data.description);
-  if (data.banner) fd.append('banner', data.banner);
-  return await api.put(`/universities/${id}`, fd);
-};
-
-/** Admin-specific update university details (admin only). */
+/** Update university details (admin only). Only the fields present in `data` are changed. */
 export const adminUpdateUniversity = async (id: number, data: UniversityUpdateData) => {
   const fd = new FormData();
-  if (data.description) fd.append('description', data.description);
+  for (const key of ['name', 'city', 'region', 'country', 'description'] as const) {
+    const value = data[key];
+    if (value !== undefined) fd.append(key, value);
+  }
+  if (data.image) fd.append('image', data.image);
   if (data.banner) fd.append('banner', data.banner);
   return await api.put(`/admin/universities/${id}`, fd);
 };
 
-// =============================================================================
-// STATISTICS & GAMIFICATION
-// =============================================================================
-
-/** Platform-wide statistics. */
-export const getStats = async (): Promise<{
-  users: number;
-  notes: number;
-  universities: number;
-  users_count: number;
-  notes_count: number;
-  universities_count: number;
-  latest_activity: LatestActivity;
-}> => (await api.get('/stats')).data;
-
-/** Leaderboard - top 5 users by reputation. */
-export const getLeaderboard = async (): Promise<{
-  leaderboard: LeaderboardEntry[];
-  total_users: number;
-}> => (await api.get('/leaderboard')).data;
-
-/** Activity feed - last 5 activities. */
-export const getActivityFeed = async (): Promise<ActivityFeedEntry[]> => (await api.get('/activity-feed')).data;
+/** Delete a university with its faculties, notes and files (admin only). */
+export const adminDeleteUniversity = async (id: number) =>
+  (await api.delete(`/admin/universities/${id}`)).data;

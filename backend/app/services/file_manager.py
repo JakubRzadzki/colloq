@@ -4,15 +4,20 @@ Ensures paths use forward slashes for cross-platform (Windows/Linux) previews.
 """
 from __future__ import annotations
 
-import os
+import logging
 import re
+import shutil
 import uuid
 from pathlib import Path
-from typing import Optional
 
-from fastapi import HTTPException, UploadFile
+from fastapi import UploadFile
 
 from app.core.config import settings
+from app.core.exceptions import DomainError
+
+logger = logging.getLogger(__name__)
+
+UPLOADS_URL_PREFIX = "uploads/"
 
 # Subdirs under UPLOAD_DIR
 DIR_AVATARS = "avatars"
@@ -36,12 +41,12 @@ def validate_file_type(file: UploadFile) -> None:
     """Reject uploads whose extension or content-type is not in the allow-list."""
     ext = Path(file.filename or "").suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(status_code=400, detail=f"File type {ext or '(none)'} not allowed")
+        raise DomainError(f"File type {ext or '(none)'} not allowed")
     content_type = (file.content_type or "").lower()
     if content_type and not (
         content_type.startswith("image/") or content_type in ALLOWED_CONTENT_TYPES
     ):
-        raise HTTPException(status_code=400, detail=f"Content type {content_type} not allowed")
+        raise DomainError(f"Content type {content_type} not allowed")
 
 
 def _normalize_path(path: str) -> str:
@@ -51,35 +56,42 @@ def _normalize_path(path: str) -> str:
     return path.replace("\\", "/").replace("//", "/")
 
 
-def _relative_path_from_url(url: Optional[str]) -> Optional[str]:
-    """Convert URL like /uploads/notes/abc.jpg to relative path uploads/notes/abc.jpg."""
+def is_public_url(stored: str) -> bool:
+    """Images are stored as "/uploads/..." URLs; note attachments as paths relative to PRIVATE_UPLOAD_DIR."""
+    return _normalize_path(stored.strip()).lstrip("/").startswith(UPLOADS_URL_PREFIX)
+
+
+def _relative_path_from_url(url: str | None) -> str | None:
+    """Convert a stored URL like /uploads/notes/abc.jpg to a path relative to UPLOAD_DIR (notes/abc.jpg)."""
     if not url or not url.strip():
         return None
-    path = url.strip()
-    if path.startswith("/"):
-        path = path.lstrip("/")
-    return _normalize_path(path)
+    path = _normalize_path(url.strip()).lstrip("/")
+    # save_upload stores "/uploads/<dir>/<name>", while UPLOAD_DIR is the uploads directory itself.
+    if path.startswith(UPLOADS_URL_PREFIX):
+        path = path[len(UPLOADS_URL_PREFIX):]
+    return path
 
 
-def _resolve_physical_path(relative_path: str) -> Path:
-    """Resolve relative path (with /) to absolute file path. Prevents path traversal."""
-    normalized = _normalize_path(relative_path)
-    normalized = re.sub(r"\.\.+", "", normalized)
-    parts = [p for p in normalized.split("/") if p]
-    return Path(settings.UPLOAD_DIR).joinpath(*parts)
+def resolve_physical_path(relative_path: str, base_dir: str | None = None) -> Path:
+    """Resolve a stored relative path inside base_dir (UPLOAD_DIR by default).
+
+    Raises ValueError when the resolved path would leave the base directory
+    (e.g. "../../etc/passwd" or an absolute path).
+    """
+    base = Path(base_dir or settings.UPLOAD_DIR).resolve()
+    candidate = (base / _normalize_path(relative_path).lstrip("/")).resolve()
+    if not candidate.is_relative_to(base):
+        raise ValueError(f"Path escapes the upload directory: {relative_path!r}")
+    return candidate
 
 
 def validate_file_size(file: UploadFile, max_size: int, file_type: str = "file") -> None:
-    """Validate file size against limit. Raises HTTPException if too large."""
-    from fastapi import HTTPException
-    file.file.seek(0, 2)  # Seek to end
+    """Validate file size against limit. Raises DomainError (400) if too large."""
+    file.file.seek(0, 2)
     size = file.file.tell()
-    file.file.seek(0)  # Reset to beginning
+    file.file.seek(0)
     if size > max_size:
-        raise HTTPException(
-            status_code=400,
-            detail=f"{file_type} size exceeds limit of {max_size // (1024*1024)}MB"
-        )
+        raise DomainError(f"{file_type} size exceeds limit of {max_size // (1024*1024)}MB")
 
 
 def save_upload(file: UploadFile, directory: str) -> str:
@@ -88,7 +100,6 @@ def save_upload(file: UploadFile, directory: str) -> str:
     directory: one of DIR_AVATARS, DIR_NOTES, DIR_UNIVERSITIES, DIR_FACULTIES.
     """
     validate_file_type(file)
-    # Validate file size based on directory type
     if directory in [DIR_AVATARS, DIR_UNIVERSITIES, DIR_FACULTIES]:
         validate_file_size(file, settings.MAX_IMAGE_SIZE, "Image")
     else:
@@ -101,49 +112,58 @@ def save_upload(file: UploadFile, directory: str) -> str:
     name = f"{uuid.uuid4().hex[:12]}{safe_ext}"
     subdir = directory.strip().strip("/")
     rel = f"{subdir}/{name}"
-    physical = _resolve_physical_path(rel)
+    physical = resolve_physical_path(rel)
     physical.parent.mkdir(parents=True, exist_ok=True)
-    content = file.file.read()
     with open(physical, "wb") as f:
-        f.write(content)
+        shutil.copyfileobj(file.file, f)
     return _normalize_path(f"/uploads/{rel}")
 
 
 def save_upload_for_note(file: UploadFile, note_id: int) -> tuple[str, str, str]:
     """
-    Save file for a note to uploads/notes/{note_id}/{uuid}_{filename}.
-    Returns (file_url, file_type, file_name) - all with forward slashes in paths.
+    Save a note attachment to PRIVATE_UPLOAD_DIR/notes/{note_id}/{uuid}_{filename}.
+    Returns (file_url, file_type, file_name); file_url is relative to PRIVATE_UPLOAD_DIR.
     """
     validate_file_type(file)
+    validate_file_size(file, settings.MAX_FILE_SIZE, "File")
     filename = file.filename or "file"
     ext = ""
     if "." in filename:
         ext = "." + filename.rsplit(".", 1)[-1].lower()
-    safe_ext = ext if re.match(r"^\.\w+$", ext) else ""
     safe_name = re.sub(r"[^\w.\-]", "_", filename)[:200]
     unique = uuid.uuid4().hex[:12]
     stored_filename = f"{unique}_{safe_name}"
     subdir = f"{DIR_NOTES}/{note_id}"
     rel = f"{subdir}/{stored_filename}"
-    physical = _resolve_physical_path(rel)
+    physical = resolve_physical_path(rel, settings.PRIVATE_UPLOAD_DIR)
     physical.parent.mkdir(parents=True, exist_ok=True)
-    content = file.file.read()
     with open(physical, "wb") as f:
-        f.write(content)
+        shutil.copyfileobj(file.file, f)
     file_url = _normalize_path(f"notes/{note_id}/{stored_filename}")
     file_type = (ext.lstrip(".") or "bin").lower()
     return (file_url, file_type, filename)
 
 
-def delete_file(relative_path: Optional[str]) -> bool:
+def attachment_path(stored: str) -> Path:
+    """Physical path of a note attachment. Raises ValueError for paths outside PRIVATE_UPLOAD_DIR."""
+    return resolve_physical_path(_relative_path_from_url(stored) or "", settings.PRIVATE_UPLOAD_DIR)
+
+
+def delete_file(relative_path: str | None) -> bool:
     """
-    Delete file by relative path or URL path. Returns True if deleted or already missing.
+    Delete a stored file: "/uploads/..." URLs from UPLOAD_DIR, other paths (note
+    attachments) from PRIVATE_UPLOAD_DIR. Returns True if deleted or already missing.
     Safe to call with None or empty string; no-op and returns True.
     """
     rel = _relative_path_from_url(relative_path)
-    if not rel:
+    if not relative_path or not rel:
         return True
-    physical = _resolve_physical_path(rel)
+    base_dir = settings.UPLOAD_DIR if is_public_url(relative_path) else settings.PRIVATE_UPLOAD_DIR
+    try:
+        physical = resolve_physical_path(rel, base_dir)
+    except ValueError:
+        logger.warning("Refusing to delete a path outside the upload directory: %r", relative_path)
+        return False
     try:
         if physical.is_file():
             physical.unlink()
@@ -152,6 +172,17 @@ def delete_file(relative_path: Optional[str]) -> bool:
         return False
 
 
-def normalize_stored_path(url_or_path: Optional[str]) -> Optional[str]:
-    """Normalize a stored image_url/file_url to forward slashes for API responses."""
-    return _normalize_path(url_or_path) if url_or_path else None
+EXTERNAL_URL_PREFIXES = ("http://", "https://", "data:")
+
+
+def normalize_stored_path(url_or_path: str | None) -> str | None:
+    """Normalize a stored image_url/file_url to forward slashes for API responses.
+
+    External URLs are returned untouched: collapsing "//" would turn
+    "https://host" into "https:/host".
+    """
+    if not url_or_path:
+        return None
+    if url_or_path.lower().startswith(EXTERNAL_URL_PREFIXES):
+        return url_or_path
+    return _normalize_path(url_or_path)

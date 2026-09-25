@@ -3,9 +3,38 @@ Colloq API — Consolidated Pydantic schemas.
 Define child models before parents to avoid forward-reference issues.
 """
 from datetime import datetime
-from typing import List, Optional
+from enum import Enum
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
+
+from app.services.file_manager import normalize_stored_path
+
+# Stored upload paths are returned with forward slashes; external URLs pass through unchanged.
+NormalizedPath = Annotated[str | None, AfterValidator(normalize_stored_path)]
+
+MIN_PASSWORD_LENGTH = 8
+MAX_PASSWORD_BYTES = 72  # bcrypt silently ignores everything after 72 bytes
+
+
+def validate_password(value: str) -> str:
+    if len(value) < MIN_PASSWORD_LENGTH:
+        raise ValueError(f"Password must be at least {MIN_PASSWORD_LENGTH} characters long")
+    if len(value.encode()) > MAX_PASSWORD_BYTES:
+        raise ValueError(f"Password must be at most {MAX_PASSWORD_BYTES} bytes long")
+    return value
+
+
+Password = Annotated[str, AfterValidator(validate_password)]
 
 
 # -----------------------------------------------------------------------------
@@ -14,8 +43,8 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 class UserCreate(BaseModel):
     email: EmailStr
-    password: str
-    university_id: Optional[int] = None
+    password: Password
+    university_id: int | None = None
 
 
 class UserOut(BaseModel):
@@ -23,27 +52,25 @@ class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     email: str
-    nickname: Optional[str] = None
-    bio: Optional[str] = None
-    avatar_url: Optional[str] = None
+    nickname: str | None = None
+    bio: str | None = None
+    avatar_url: NormalizedPath = None
     is_admin: bool = False
     is_banned: bool = False
     is_verified: bool = False
     reputation_points: int = 0
     uploads_count: int = 0
-    university_id: Optional[int] = None
-    created_at: Optional[datetime] = None
+    university_id: int | None = None
+    created_at: datetime | None = None
 
-
-UserResponse = UserOut
 
 
 class PublicUserOut(BaseModel):
     """Public-facing user info (no email). Used for nested author/user fields."""
     model_config = ConfigDict(from_attributes=True)
     id: int
-    nickname: Optional[str] = None
-    avatar_url: Optional[str] = None
+    nickname: str | None = None
+    avatar_url: NormalizedPath = None
     reputation_points: int = 0
 
 
@@ -59,24 +86,24 @@ class UniversityOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     name: str
-    name_en: Optional[str] = None
-    name_pl: Optional[str] = None
+    name_en: str | None = None
+    name_pl: str | None = None
     city: str = ""
     region: str = ""
     country: str = "Poland"
-    description: Optional[str] = None
-    image_url: Optional[str] = None
-    banner_url: Optional[str] = None
+    description: str | None = None
+    image_url: NormalizedPath = None
+    banner_url: NormalizedPath = None
     is_approved: bool = True
-    created_at: Optional[datetime] = None
+    created_at: datetime | None = None
 
 
 class FacultyOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     name: str
-    description: Optional[str] = None
-    image_url: Optional[str] = None
+    description: str | None = None
+    image_url: NormalizedPath = None
     university_id: int
     is_approved: bool = True
 
@@ -85,7 +112,7 @@ class FieldOfStudyOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     name: str
-    degree_level: Optional[str] = None
+    degree_level: str | None = None
     faculty_id: int
     is_approved: bool = True
 
@@ -94,8 +121,8 @@ class SubjectOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     name: str
-    semester: Optional[int] = None
-    academic_year: Optional[str] = None
+    semester: int | None = None
+    academic_year: str | None = None
     field_of_study_id: int
     is_approved: bool = True
 
@@ -103,7 +130,7 @@ class SubjectOut(BaseModel):
 class SubjectCreate(BaseModel):
     name: str
     semester: int
-    academic_year: Optional[str] = None
+    academic_year: str | None = None
     field_of_study_id: int
 
 
@@ -119,19 +146,24 @@ class FieldOfStudyCreate(BaseModel):
 
 class ReviewCreate(BaseModel):
     rating: int = Field(ge=1, le=5)
-    content: Optional[str] = None
-    note_id: Optional[int] = None
-    university_id: Optional[int] = None
-    user_id: Optional[int] = None
+    content: str | None = None
+    note_id: int | None = None
+    university_id: int | None = None
+
+    @model_validator(mode="after")
+    def _exactly_one_target(self) -> "ReviewCreate":
+        if (self.note_id is None) == (self.university_id is None):
+            raise ValueError("Provide exactly one of note_id or university_id")
+        return self
 
 
 class ReviewOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     rating: int
-    content: Optional[str] = None
-    created_at: Optional[datetime] = None
-    user: Optional[PublicUserOut] = None
+    content: str | None = None
+    created_at: datetime | None = None
+    user: PublicUserOut | None = None
 
 
 class CommentCreate(BaseModel):
@@ -142,8 +174,8 @@ class CommentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     content: str
-    created_at: Optional[datetime] = None
-    user: Optional[PublicUserOut] = None
+    created_at: datetime | None = None
+    user: PublicUserOut | None = None
 
 
 # -----------------------------------------------------------------------------
@@ -151,23 +183,28 @@ class CommentOut(BaseModel):
 # -----------------------------------------------------------------------------
 
 class NoteFileOut(BaseModel):
+    """Attachments are private: clients get the authenticated download URL, not the storage path."""
     model_config = ConfigDict(from_attributes=True)
     id: int
     note_id: int
-    file_url: str
     file_type: str
     file_name: str
-    created_at: Optional[datetime] = None
+    created_at: datetime | None = None
+
+    @computed_field  # type: ignore[prop-decorator]  # pydantic's documented pattern
+    @property
+    def download_url(self) -> str:
+        return f"/notes/{self.note_id}/download/{self.id}"
 
 
 class NoteImageOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     note_id: int
-    image_url: str
-    caption: Optional[str] = None
+    image_url: NormalizedPath
+    caption: str | None = None
     position: int = 0
-    created_at: Optional[datetime] = None
+    created_at: datetime | None = None
 
 
 class TagOut(BaseModel):
@@ -181,43 +218,43 @@ class TagCreate(BaseModel):
 
 
 class NoteTagsUpdate(BaseModel):
-    tag_ids: List[int] = []
+    tag_ids: list[int] = []
 
 
 class NoteOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
-    title: Optional[str] = None
-    content: Optional[str] = None
+    title: str | None = None
+    content: str | None = None
     score: float = 0.0
     avg_rating: float = 0.0
     rating_count: int = 0
-    file_url: Optional[str] = None
-    image_url: Optional[str] = None
-    video_url: Optional[str] = None
-    link_url: Optional[str] = None
-    created_at: Optional[datetime] = None
+    file_url: NormalizedPath = None
+    image_url: NormalizedPath = None
+    video_url: str | None = None
+    link_url: str | None = None
+    created_at: datetime | None = None
     university_id: int = 0
-    subject_id: Optional[int] = None
-    user_id: Optional[int] = None
+    subject_id: int | None = None
+    user_id: int | None = None
     is_approved: bool = True
     view_count: int = 0
     download_count: int = 0
-    author: Optional[PublicUserOut] = None
-    subject: Optional[SubjectOut] = None
-    images: List[NoteImageOut] = []
-    files: List[NoteFileOut] = []
-    tags: List[TagOut] = []
+    author: PublicUserOut | None = None
+    subject: SubjectOut | None = None
+    images: list[NoteImageOut] = []
+    files: list[NoteFileOut] = []
+    tags: list[TagOut] = []
 
 
 class NoteHistoryOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     note_id: int
-    title: Optional[str] = None
-    content: Optional[str] = None
-    edited_at: Optional[datetime] = None
-    edited_by: Optional[int] = None
+    title: str | None = None
+    content: str | None = None
+    edited_at: datetime | None = None
+    edited_by: int | None = None
 
 
 # -----------------------------------------------------------------------------
@@ -231,17 +268,17 @@ class ImageRequestOut(BaseModel):
     new_image_url: str
     status: str
     submitted_by_id: int
-    created_at: Optional[datetime] = None
-    university_name: Optional[str] = None
+    created_at: datetime | None = None
+    university_name: str | None = None
 
 
 class PendingItemsResponse(BaseModel):
-    notes: List[NoteOut] = []
-    universities: List[UniversityOut] = []
-    faculties: List[FacultyOut] = []
-    fields: List[FieldOfStudyOut] = []
-    subjects: List[SubjectOut] = []
-    image_requests: List[ImageRequestOut] = []
+    notes: list[NoteOut] = []
+    universities: list[UniversityOut] = []
+    faculties: list[FacultyOut] = []
+    fields: list[FieldOfStudyOut] = []
+    subjects: list[SubjectOut] = []
+    image_requests: list[ImageRequestOut] = []
 
 
 class VoteResponse(BaseModel):
@@ -255,12 +292,6 @@ class FavoriteResponse(BaseModel):
     is_favorited: bool
 
 
-class UserDashboard(BaseModel):
-    my_notes: List[NoteOut] = []
-    my_favorites: List[NoteOut] = []
-    pending_submissions: dict = {}
-
-
 class Token(BaseModel):
     access_token: str
     token_type: str
@@ -272,14 +303,14 @@ class NotificationOut(BaseModel):
     user_id: int
     type: str
     message: str
-    related_id: Optional[int] = None
-    read_at: Optional[datetime] = None
-    created_at: Optional[datetime] = None
+    related_id: int | None = None
+    read_at: datetime | None = None
+    created_at: datetime | None = None
 
 
 class ReportCreate(BaseModel):
-    note_id: Optional[int] = None
-    reported_user_id: Optional[int] = None
+    note_id: int | None = None
+    reported_user_id: int | None = None
     reason: str = Field(max_length=100)
 
 
@@ -287,16 +318,16 @@ class ReportOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     reporter_id: int
-    note_id: Optional[int] = None
-    reported_user_id: Optional[int] = None
+    note_id: int | None = None
+    reported_user_id: int | None = None
     reason: str
     status: str
-    created_at: Optional[datetime] = None
+    created_at: datetime | None = None
 
 
 class FeedbackCreate(BaseModel):
     rating: int = Field(ge=1, le=5)
-    comment: Optional[str] = Field(default=None, max_length=2000)
+    comment: str | None = Field(default=None, max_length=2000)
 
 
 class FeedbackOut(BaseModel):
@@ -304,17 +335,59 @@ class FeedbackOut(BaseModel):
     id: int
     user_id: int
     rating: int
-    comment: Optional[str] = None
-    created_at: Optional[datetime] = None
+    comment: str | None = None
+    created_at: datetime | None = None
 
 
 class BanUserBody(BaseModel):
     banned: bool = False
 
 
+class NoteSort(str, Enum):
+    date = "date"
+    score = "score"
+    views = "views"
+
+
+class NoteFilters(BaseModel):
+    """Query parameters of GET /notes."""
+    university_id: int | None = None
+    subject_id: int | None = None
+    semester: int | None = None
+    # The frontend sends tag ids as a single comma-separated value: tag_ids=1,2,3
+    tag_ids: list[int] = []
+    date_from: datetime | None = None
+    date_to: datetime | None = None
+    search: str | None = None
+    sort: NoteSort = NoteSort.date
+    page: int = Field(default=1, ge=1)
+    page_size: int = Field(default=20, ge=1, le=100)
+
+    @field_validator("tag_ids", mode="before")
+    @classmethod
+    def _split_tag_ids(cls, value: object) -> object:
+        if value is None:
+            return []
+        raw = [value] if isinstance(value, str) else value
+        if not isinstance(raw, list):
+            return value
+        return [part.strip() for item in raw for part in str(item).split(",") if part.strip()]
+
+    @field_validator("search")
+    @classmethod
+    def _blank_search_to_none(cls, value: str | None) -> str | None:
+        return value.strip() or None if value else None
+
+
+class PageParams(BaseModel):
+    """limit/offset query parameters; the total goes into the X-Total-Count header."""
+    limit: int = Field(default=50, ge=1, le=100)
+    offset: int = Field(default=0, ge=0)
+
+
 class PaginatedNotesResponse(BaseModel):
     """Paginated response for notes listing."""
-    items: List[NoteOut] = []
+    items: list[NoteOut] = []
     total: int = 0
     page: int = 1
     page_size: int = 20
@@ -326,4 +399,4 @@ class ForgotPasswordRequest(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     token: str
-    new_password: str
+    new_password: Password

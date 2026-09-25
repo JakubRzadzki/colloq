@@ -93,8 +93,13 @@ def test_h4_rejects_disallowed_file_type(client: TestClient, admin_headers: dict
     assert resp.status_code == 400
 
 
-def test_c3_vote_and_review_write_separate_fields(client: TestClient, admin_headers: dict, university_id: int):
-    """Voting changes score (not avg_rating); reviewing changes avg_rating (not score)."""
+def test_c3_vote_and_review_write_separate_fields(
+    client: TestClient, admin_headers: dict, regular_headers: dict, university_id: int
+):
+    """Voting changes score (not avg_rating); reviewing changes avg_rating (not score).
+
+    The vote and review come from another user, since authors cannot rate their own notes.
+    """
     created = client.post(
         "/notes",
         data={"title": "Scored", "content": "Body", "university_id": university_id},
@@ -103,14 +108,14 @@ def test_c3_vote_and_review_write_separate_fields(client: TestClient, admin_head
     note_id = created.json()["id"]
 
     # Vote: score goes up, avg_rating untouched
-    client.post(f"/notes/{note_id}/vote", headers=admin_headers)
+    client.post(f"/notes/{note_id}/vote", headers=regular_headers)
     after_vote = client.get(f"/notes/{note_id}").json()
     assert after_vote["score"] == 1.0
     assert after_vote["avg_rating"] == 0.0
     assert after_vote["rating_count"] == 0
 
     # Review: avg_rating goes up, score untouched
-    client.post("/reviews", json={"rating": 4, "note_id": note_id}, headers=admin_headers)
+    client.post("/reviews", json={"rating": 4, "note_id": note_id}, headers=regular_headers)
     after_review = client.get(f"/notes/{note_id}").json()
     assert after_review["avg_rating"] == 4.0
     assert after_review["rating_count"] == 1

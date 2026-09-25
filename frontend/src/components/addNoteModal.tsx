@@ -60,17 +60,19 @@ export function AddNoteModal({ universityId: propUniversityId, isOpen, onClose }
 
   const fieldMutation = useMutation({
     mutationFn: (name: string) => createFieldOfStudy({ name, degree_level: 'Bachelor', faculty_id: facultyId! }),
-    onSuccess: () => {
+    onSuccess: (field) => {
         queryClient.invalidateQueries({ queryKey: ['fields', facultyId] });
         setNewFieldName('');
+        if (!field.is_approved) setError("Kierunek wysłany do akceptacji. Będzie można go wybrać po zatwierdzeniu przez administratora.");
     }
   });
 
   const subjectMutation = useMutation({
     mutationFn: (name: string) => createSubject({ name, semester: 1, field_of_study_id: fieldId! }),
-    onSuccess: () => {
+    onSuccess: (subject) => {
         queryClient.invalidateQueries({ queryKey: ['subjects', fieldId] });
         setNewSubjectName('');
+        if (!subject.is_approved) setError("Przedmiot wysłany do akceptacji. Będzie można go wybrać po zatwierdzeniu przez administratora.");
     }
   });
 

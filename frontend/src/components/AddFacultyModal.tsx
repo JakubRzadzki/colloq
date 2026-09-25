@@ -24,10 +24,12 @@ export function AddFacultyModal({ isOpen, onClose, universityId, universityName 
 
   const mutation = useMutation({
     mutationFn: createFaculty,
-    onSuccess: () => {
+    onSuccess: (faculty) => {
       queryClient.invalidateQueries({ queryKey: ['faculties', universityId] });
       onClose();
-      alert('Wydział dodany pomyślnie! ✅');
+      alert(faculty.is_approved
+        ? 'Wydział dodany pomyślnie! ✅'
+        : 'Wydział wysłany do akceptacji. Pojawi się na liście po zatwierdzeniu przez administratora.');
     },
     onError: (err: unknown) => {
       const e = err as { response?: { status?: number; data?: { detail?: string | Array<{ msg: string }> } }; message?: string };

@@ -4,9 +4,10 @@ import { Check, X, Shield, FileText, Image as ImageIcon, Building2, AlertCircle,
 import {
   getPendingItems, approveItem, rejectItem, approveImageRequest, rejectImageRequest,
   getAllUsers, getNotes, getReports, getFeedback, updateReportStatus, resolveUrl,
-  banUser as apiBanUser, deleteNote, updateUniversity, getUniversities, adminUpdateUniversity,
+  banUser as apiBanUser, deleteNote, getUniversities, adminUpdateUniversity, adminDeleteUniversity,
+  getErrorMessage,
 } from '../utils/api';
-import type { ReportItem, FeedbackItem } from '../utils/api';
+import type { ReportItem, FeedbackItem, UniversityUpdateData } from '../utils/api';
 import { Link } from 'react-router-dom';
 import type { TFunction } from '../utils/i18n';
 import type { User, Note, University, Faculty, FieldOfStudy, Subject, ImageRequest } from '../utils/types';
@@ -61,6 +62,14 @@ export function AdminPage({ t }: { t: TFunction }) {
     mutationFn: (noteId: number) => deleteNote(noteId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'notes'] });
+    },
+  });
+
+  const deleteUniversityMutation = useMutation({
+    mutationFn: (universityId: number) => adminDeleteUniversity(universityId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'universities'] });
+      queryClient.invalidateQueries({ queryKey: ['universities'] });
     },
   });
 
@@ -238,7 +247,7 @@ export function AdminPage({ t }: { t: TFunction }) {
         {activeTab === 'universities' && (
           allUniversities?.length === 0 ? <EmptyState msg="Brak uczelni." /> :
           allUniversities?.map((uni: University) => (
-            <UniversityEditRow key={uni.id} university={uni} onDelete={() => deleteNoteMutation.mutate(uni.id)} />
+            <UniversityEditRow key={uni.id} university={uni} onDelete={() => deleteUniversityMutation.mutate(uni.id)} />
           ))
         )}
 
@@ -396,6 +405,7 @@ interface UniversityEditRowProps {
   onDelete: () => void;
 }
 const UniversityEditRow = ({ university, onDelete }: UniversityEditRowProps) => {
+  const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(university.name);
   const [city, setCity] = useState(university.city);
@@ -408,14 +418,21 @@ const UniversityEditRow = ({ university, onDelete }: UniversityEditRowProps) => 
 
   const handleSave = async () => {
     setSaving(true);
-    const data: { description?: string; banner?: File } = {};
-    if (description !== university.description) data.description = description;
+    const data: UniversityUpdateData = {};
+    if (name !== university.name) data.name = name;
+    if (city !== university.city) data.city = city;
+    if (region !== (university.region || '')) data.region = region;
+    if (country !== (university.country || 'Poland')) data.country = country;
+    if (description !== (university.description || '')) data.description = description;
+    if (imageFile) data.image = imageFile;
     if (bannerFile) data.banner = bannerFile;
     try {
       await adminUpdateUniversity(university.id, data);
+      queryClient.invalidateQueries({ queryKey: ['admin', 'universities'] });
+      queryClient.invalidateQueries({ queryKey: ['universities'] });
       setEditing(false);
     } catch (err) {
-      console.error(err);
+      alert(getErrorMessage(err, 'Nie udało się zapisać zmian.'));
     } finally {
       setSaving(false);
     }

@@ -7,13 +7,12 @@ from sqlalchemy import pool
 
 from alembic import context
 
-# Dodajemy backend/ do ścieżki Pythona, aby móc zaimportować `app`
+# Make backend/ importable so `app` can be imported when alembic runs from anywhere.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.core.config import settings
 from app.core.database import Base
-# IMPORTUJEMY WSZYSTKIE MODELE, by Alembic wiedział z czego generować tabele
-import app.models 
+import app.models  # noqa: F401  (registers all models on Base.metadata)
 
 config = context.config
 
@@ -34,7 +33,7 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 def run_migrations_online() -> None:
-    # Wczytujemy URL bazy danych bezpośrednio z ustawień naszej aplikacji
+    # Same DATABASE_URL as the application, instead of the value in alembic.ini.
     configuration = config.get_section(config.config_ini_section)
     if configuration is None:
         configuration = {}

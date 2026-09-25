@@ -91,7 +91,7 @@
 ### Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) & Docker Compose  
-  *Or:* Python 3.9+, Node.js 18+, PostgreSQL 14+
+  *Or:* Python 3.11+, Node.js 22+, PostgreSQL 14+
 
 ### Docker (Recommended)
 
@@ -112,7 +112,24 @@ docker-compose up -d --build
 | **Backend API** | http://localhost:8000 |
 | **API Docs** | http://localhost:8000/docs |
 
-The database seeds automatically with sample data on first startup.
+The database seeds automatically with reference data (Politechnika Krakowska with
+its faculties, fields of study and subjects) on startup.
+
+### Admin accounts
+
+No admin account with a known password is ever created automatically.
+
+- **Development:** set `ENV=dev`, `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` in `.env`;
+  the startup seed then creates that single admin account (only if it does not exist yet).
+- **Production** (`ENV=prod`, the default): create an admin from the backend container or venv:
+
+  ```bash
+  cd backend
+  python -m app.cli create-admin --email you@example.com   # prompts for the password
+  # non-interactive: ADMIN_PASSWORD=... python -m app.cli create-admin --email you@example.com
+  ```
+
+  Running it for an existing email promotes that user to admin and resets their password.
 
 ### Manual Setup
 
@@ -161,7 +178,7 @@ VITE_API_URL=http://localhost:8000
 
 ```bash
 cd backend
-pip install -r requirements.txt
+pip install -r requirements.txt -r requirements-dev.txt
 # Tests require a running PostgreSQL database named `colloq_test`, e.g.:
 #   docker run -d --name colloq-test-db \
 #     -e POSTGRES_USER=colloq_user -e POSTGRES_PASSWORD=colloq_password \
@@ -172,6 +189,36 @@ TESTING=1 pytest tests/ -v
 Tests run against a PostgreSQL `colloq_test` database (connection configured in
 `tests/conftest.py`). Set `TESTING=1` to disable rate limiting during the run.
 Covers auth, notes, universities, and admin flows.
+
+### Behind a reverse proxy
+
+Rate limits are keyed by client IP. The Docker image starts uvicorn with `--proxy-headers`
+and trusts `X-Forwarded-For` only from the addresses in `FORWARDED_ALLOW_IPS`
+(default `127.0.0.1`). Set it to your proxy's address (e.g. the nginx container IP or subnet),
+otherwise every request looks like it comes from the proxy and all users share one limit.
+Never set it to `*` when the API is reachable directly, as clients could then spoof their IP.
+
+Rate-limit counters are kept in process memory by default (`RATE_LIMIT_STORAGE_URI=memory://`).
+When running several uvicorn workers or containers, point them at a shared Redis
+(`RATE_LIMIT_STORAGE_URI=redis://redis:6379/0`, requires `pip install redis`), otherwise each
+process enforces its own limit.
+
+### File storage
+
+- **Images** (university logos and banners, faculty logos, avatars, note images) are stored in
+  `UPLOAD_DIR` and served publicly under `/uploads`.
+- **Note attachments** are stored in `PRIVATE_UPLOAD_DIR`, which is never mounted. They are only
+  available through `GET /notes/{id}/download/{file_id}`, which requires login and applies the
+  same visibility rules as the note itself (`?inline=true` serves a preview without counting a
+  download). Keep `PRIVATE_UPLOAD_DIR` outside `UPLOAD_DIR`.
+- When upgrading an existing installation, move previously uploaded attachments out of the
+  public directory once (the script is idempotent, `--dry-run` only reports):
+
+  ```bash
+  cd backend
+  python -m app.scripts.move_note_attachments --dry-run
+  python -m app.scripts.move_note_attachments
+  ```
 
 ---
 
@@ -184,7 +231,6 @@ colloq/
 │   │   ├── main.py            # FastAPI app entry point
 │   │   ├── models.py          # SQLAlchemy ORM models
 │   │   ├── schemas.py         # Pydantic schemas
-│   │   ├── migrate.py         # Database migrations
 │   │   ├── seed.py            # Initial data seeder
 │   │   ├── core/
 │   │   │   ├── config.py      # Settings from env

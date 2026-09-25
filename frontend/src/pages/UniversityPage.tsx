@@ -21,7 +21,7 @@ import {
 import {
   resolveUrl,
   getUniversity, getFaculties, getFields, getSubjects, getNotes, getMyFavorites, getUniversityReviews, getTags,
-  requestUniversityImageChange, voteNote, toggleFavorite, addReview,
+  requestUniversityImageChange, voteNote, toggleFavorite, addReview, getErrorMessage,
   createFieldOfStudy, createSubject,
   type University, type Faculty, type FieldOfStudy, type Subject,
 } from '../utils/api';
@@ -40,6 +40,7 @@ const ReviewForm: React.FC<{ universityId: number; onSuccess: () => void }> = ({
   const addReviewMutation = useMutation({
     mutationFn: addReview,
     onSuccess: () => { setContent(''); onSuccess(); },
+    onError: (err) => alert(getErrorMessage(err, 'Nie udało się dodać opinii.')),
   });
 
   return (
@@ -96,11 +97,12 @@ const FieldAccordion: React.FC<{ field: FieldOfStudy }> = ({ field }) => {
 
   const addMutation = useMutation({
     mutationFn: () => createSubject({ name: subName.trim(), semester: subSem, field_of_study_id: field.id }),
-    onSuccess: () => {
+    onSuccess: (subject) => {
       setSubName('');
       setSubSem(1);
       setShowAdd(false);
       qc.invalidateQueries({ queryKey: ['subjects', field.id] });
+      if (!subject.is_approved) alert('Przedmiot wysłany do akceptacji. Pojawi się na liście po zatwierdzeniu przez administratora.');
     },
   });
 
@@ -202,10 +204,11 @@ const FacultyAccordion: React.FC<{ faculty: Faculty }> = ({ faculty }) => {
 
   const addMutation = useMutation({
     mutationFn: () => createFieldOfStudy({ name: fieldName.trim(), degree_level: degreeLevel, faculty_id: faculty.id }),
-    onSuccess: () => {
+    onSuccess: (field) => {
       setFieldName('');
       setShowAdd(false);
       qc.invalidateQueries({ queryKey: ['fields', faculty.id] });
+      if (!field.is_approved) alert('Kierunek wysłany do akceptacji. Pojawi się na liście po zatwierdzeniu przez administratora.');
     },
   });
 

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock } from 'lucide-react';
-import { register } from '../utils/api';
+import { getErrorMessage, register } from '../utils/api';
 import { Captcha } from '../components/Captcha';
 import type { TFunction } from '../utils/i18n';
 
@@ -27,8 +27,7 @@ export function RegisterPage({ t }: { t: TFunction }) {
       alert('Rejestracja udana! Możesz się teraz zalogować.');
       navigate('/login');
     } catch (err: unknown) {
-      const e = err as { response?: { data?: { detail?: string } } };
-      setError(e.response?.data?.detail || 'Rejestracja nieudana. Sprawdź dane.');
+      setError(getErrorMessage(err, 'Rejestracja nieudana. Sprawdź dane.'));
     } finally {
       setLoading(false);
     }
