@@ -8,16 +8,14 @@ import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import joinedload
 from sqlalchemy import desc, func
 
 from app.core.config import settings
-from app.core.database import get_db
 
-from app.core.security import get_current_user
 from app.models import (
     User,
     University,
@@ -39,6 +37,7 @@ from app.seed import run_seed
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.core.rate_limit import limiter
+from app.core.deps import CurrentUser, DbSession
 
 logger = logging.getLogger(__name__)
 
@@ -111,14 +110,14 @@ def health():
 
 
 @app.get("/home")
-def get_home(db: Session = Depends(get_db)):
+def get_home(db: DbSession):
     """Single endpoint for home: stats, leaderboard, activity feed, recent notes, universities."""
     from app.services.home_service import get_home_data
     return get_home_data(db)
 
 
 @app.get("/notifications", response_model=list)
-def get_notifications(current_user: User = Depends(get_current_user), db: Session = Depends(get_db), unread_only: bool = False):
+def get_notifications(current_user: CurrentUser, db: DbSession, unread_only: bool = False):
     """List current user notifications."""
     q = db.query(Notification).filter(Notification.user_id == current_user.id)
     if unread_only:
@@ -127,7 +126,7 @@ def get_notifications(current_user: User = Depends(get_current_user), db: Sessio
 
 
 @app.patch("/notifications/{notification_id}/read")
-def mark_notification_read(notification_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def mark_notification_read(notification_id: int, current_user: CurrentUser, db: DbSession):
     """Mark a notification as read."""
     n = db.query(Notification).filter(Notification.id == notification_id, Notification.user_id == current_user.id).first()
     if not n:
@@ -138,7 +137,7 @@ def mark_notification_read(notification_id: int, current_user: User = Depends(ge
 
 
 @app.patch("/notifications/read-all")
-def mark_all_notifications_read(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def mark_all_notifications_read(current_user: CurrentUser, db: DbSession):
     """Mark all notifications as read."""
     db.query(Notification).filter(Notification.user_id == current_user.id, Notification.read_at.is_(None)).update({Notification.read_at: datetime.now(timezone.utc)})
     db.commit()
@@ -146,7 +145,7 @@ def mark_all_notifications_read(current_user: User = Depends(get_current_user), 
 
 
 @app.post("/reports", response_model=ReportOut)
-def create_report(payload: ReportCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def create_report(payload: ReportCreate, current_user: CurrentUser, db: DbSession):
     """Report a note or user."""
     if not payload.note_id and not payload.reported_user_id:
         raise HTTPException(status_code=400, detail="Provide note_id or reported_user_id")
@@ -162,7 +161,7 @@ def create_report(payload: ReportCreate, current_user: User = Depends(get_curren
 
 
 @app.post("/feedback", response_model=FeedbackOut)
-def submit_feedback(payload: FeedbackCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def submit_feedback(payload: FeedbackCreate, current_user: CurrentUser, db: DbSession):
     """Submit user feedback (1-5 rating + optional comment)."""
     f = Feedback(user_id=current_user.id, rating=payload.rating, comment=payload.comment)
     db.add(f)
@@ -172,7 +171,7 @@ def submit_feedback(payload: FeedbackCreate, current_user: User = Depends(get_cu
 
 
 @app.get("/search/global")
-def global_search(q: str = "", db: Session = Depends(get_db)):
+def global_search(db: DbSession, q: str = ""):
     """Search across notes, universities, fields of study, and subjects."""
     if not q.strip():
         return {"notes": [], "universities": [], "fields": [], "subjects": []}

@@ -1,12 +1,11 @@
 """User profile and favorites."""
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from sqlalchemy.orm import Session, joinedload, selectinload
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from sqlalchemy.orm import joinedload, selectinload
 from sqlalchemy import desc
 
-from app.core.database import get_db
-from app.core.security import get_current_user
+from app.core.deps import CurrentUser, DbSession
 from app.models import User, Note, UserFavorite, Review, Comment
 from app.schemas import UserOut, PublicUserOut, NoteOut
 from app.services.file_manager import save_upload, normalize_stored_path, DIR_AVATARS
@@ -15,7 +14,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 
 @router.get("/me", response_model=UserOut)
-def get_me(current_user: User = Depends(get_current_user)):
+def get_me(current_user: CurrentUser):
     """Get current authenticated user."""
     out = UserOut.model_validate(current_user)
     if out.avatar_url:
@@ -25,11 +24,11 @@ def get_me(current_user: User = Depends(get_current_user)):
 
 @router.put("/me", response_model=UserOut)
 def update_me(
+    current_user: CurrentUser,
+    db: DbSession,
     nickname: Optional[str] = Form(None),
     bio: Optional[str] = Form(None),
     avatar: Optional[UploadFile] = File(None),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
 ):
     """Update current user profile, including avatar upload."""
     if nickname is not None:
@@ -47,7 +46,7 @@ def update_me(
 
 
 @router.get("/{user_id}", response_model=PublicUserOut)
-def get_user(user_id: int, db: Session = Depends(get_db)):
+def get_user(user_id: int, db: DbSession):
     """Get public user profile by ID (no email)."""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -60,8 +59,8 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
 
 @router.get("/me/favorites", response_model=List[NoteOut])
 def get_my_favorites(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: CurrentUser,
+    db: DbSession,
 ):
     """List current user's favorite notes."""
     notes = (
@@ -82,8 +81,8 @@ def get_my_favorites(
 
 @router.get("/me/dashboard")
 def get_my_dashboard(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: CurrentUser,
+    db: DbSession,
 ):
     """User dashboard with stats, notes, favorites, and pending submissions."""
     from sqlalchemy import func as sqlfunc

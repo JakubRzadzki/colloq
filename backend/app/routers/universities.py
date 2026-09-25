@@ -1,12 +1,11 @@
 """Universities, faculties, fields, subjects CRUD and image handling. File cleanup on delete."""
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from sqlalchemy.orm import Session, joinedload
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from sqlalchemy.orm import joinedload
 from sqlalchemy import desc, func
 
-from app.core.database import get_db
-from app.core.security import get_current_user, get_current_user_optional, get_current_active_admin
+from app.core.deps import AdminUser, CurrentUser, DbSession, OptionalUser
 from app.models import University, Faculty, FieldOfStudy, Subject, User, Review
 from app.schemas import (
     UniversityOut,
@@ -43,14 +42,14 @@ def _uni_out(uni: University) -> UniversityOut:
 
 @router.post("/universities", response_model=UniversityOut)
 def create_university(
+    current_user: CurrentUser,
+    db: DbSession,
     name: str = Form(...),
     city: str = Form(...),
     region: str = Form(""),
     country: str = Form("Poland"),
     description: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
 ):
     """Create a new university entry."""
     image_url = DEFAULT_UNIVERSITY_IMAGE
@@ -73,8 +72,8 @@ def create_university(
 
 @router.get("/universities", response_model=List[UniversityOut])
 def get_universities(
+    db: DbSession,
     region: Optional[str] = None,
-    db: Session = Depends(get_db),
 ):
     """List all approved universities. Optional region filter."""
     q = db.query(University).filter(University.is_approved == True)
@@ -87,8 +86,8 @@ def get_universities(
 @router.get("/universities/{uni_id}", response_model=UniversityOut)
 def get_university(
     uni_id: int,
-    current_user: Optional[User] = Depends(get_current_user_optional),
-    db: Session = Depends(get_db),
+    current_user: OptionalUser,
+    db: DbSession,
 ):
     """Get a single university by ID. Unapproved universities are visible to admins only."""
     uni = db.query(University).filter(University.id == uni_id).first()
@@ -100,10 +99,10 @@ def get_university(
 @router.put("/universities/{uni_id}", response_model=UniversityOut)
 def update_university(
     uni_id: int,
+    current_user: AdminUser,
+    db: DbSession,
     description: Optional[str] = Form(None),
     banner: Optional[UploadFile] = File(None),
-    current_user: User = Depends(get_current_active_admin),
-    db: Session = Depends(get_db),
 ):
     """Update university details (admin only)."""
     uni = db.query(University).filter(University.id == uni_id).first()
@@ -119,7 +118,7 @@ def update_university(
 
 
 @router.get("/universities/{uni_id}/faculties", response_model=List[FacultyOut])
-def get_faculties(uni_id: int, db: Session = Depends(get_db)):
+def get_faculties(uni_id: int, db: DbSession):
     """List approved faculties for a university."""
     faculties = db.query(Faculty).filter(Faculty.university_id == uni_id, Faculty.is_approved == True).all()  # noqa: E712
     result = []
@@ -133,12 +132,12 @@ def get_faculties(uni_id: int, db: Session = Depends(get_db)):
 
 @router.post("/faculties", response_model=FacultyOut)
 def create_faculty(
+    current_user: CurrentUser,
+    db: DbSession,
     name: str = Form(...),
     description: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
     university_id: int = Form(...),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
 ):
     """Create a faculty."""
     if not db.query(University).filter(University.id == university_id).first():
@@ -163,7 +162,7 @@ def create_faculty(
 
 
 @router.get("/faculties/{fac_id}/fields", response_model=List[FieldOfStudyOut])
-def get_fields(fac_id: int, db: Session = Depends(get_db)):
+def get_fields(fac_id: int, db: DbSession):
     """List approved fields of study for a faculty."""
     return db.query(FieldOfStudy).filter(FieldOfStudy.faculty_id == fac_id, FieldOfStudy.is_approved == True).all()  # noqa: E712
 
@@ -171,8 +170,8 @@ def get_fields(fac_id: int, db: Session = Depends(get_db)):
 @router.post("/fields", response_model=FieldOfStudyOut)
 def create_field(
     data: FieldOfStudyCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: CurrentUser,
+    db: DbSession,
 ):
     """Create a field of study."""
     if not db.query(Faculty).filter(Faculty.id == data.faculty_id).first():
@@ -191,9 +190,9 @@ def create_field(
 
 @router.get("/fields/{field_id}/subjects", response_model=List[SubjectOut])
 def get_subjects(
-    field_id: int, 
+    field_id: int,
+    db: DbSession,
     semester: Optional[int] = None,
-    db: Session = Depends(get_db)
 ):
     """List approved subjects for a field. Supports optional semester filtering."""
     q = db.query(Subject).filter(Subject.field_of_study_id == field_id, Subject.is_approved == True)  # noqa: E712
@@ -205,8 +204,8 @@ def get_subjects(
 @router.post("/subjects", response_model=SubjectOut)
 def create_subject(
     data: SubjectCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: CurrentUser,
+    db: DbSession,
 ):
     """Create a subject."""
     if not db.query(FieldOfStudy).filter(FieldOfStudy.id == data.field_of_study_id).first():
@@ -225,7 +224,7 @@ def create_subject(
 
 
 @router.get("/universities/{uni_id}/reviews", response_model=List[ReviewOut])
-def get_university_reviews(uni_id: int, db: Session = Depends(get_db)):
+def get_university_reviews(uni_id: int, db: DbSession):
     """List reviews for a university."""
     return db.query(Review).options(
         joinedload(Review.user),
@@ -235,9 +234,9 @@ def get_university_reviews(uni_id: int, db: Session = Depends(get_db)):
 @router.post("/universities/{uni_id}/image_request")
 def request_image_change(
     uni_id: int,
+    current_user: CurrentUser,
+    db: DbSession,
     image: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
 ):
     """Submit an image change request for a university."""
     from app.models import ImageRequest

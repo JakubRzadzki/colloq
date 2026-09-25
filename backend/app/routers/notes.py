@@ -1,12 +1,12 @@
 """Notes CRUD, comments, voting (atomic), favorites, tags. File cleanup on delete."""
 from typing import List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
-from sqlalchemy.orm import Session, joinedload, selectinload
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
+from sqlalchemy.orm import joinedload, selectinload
 from sqlalchemy import desc, or_
 
-from app.core.database import get_db, SessionLocal
-from app.core.security import get_current_user, get_current_user_optional
+from app.core.database import SessionLocal
+from app.core.deps import CurrentUser, DbSession, OptionalUser
 from app.models import (
     User,
     Note,
@@ -85,6 +85,8 @@ def _increment_view_count(note_id: int) -> None:
 
 @router.post("/notes", response_model=NoteOut)
 def create_note(
+    current_user: CurrentUser,
+    db: DbSession,
     title: str = Form(None),
     content: Optional[str] = Form(None),
     university_id: int = Form(...),
@@ -92,8 +94,6 @@ def create_note(
     image: Optional[UploadFile] = File(None),
     images: List[UploadFile] = File(default=[]),
     files: List[UploadFile] = File(default=[]),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
 ):
     """Create a note with optional images and up to 10 file attachments."""
     if len(files) > MAX_FILES_PER_NOTE:
@@ -139,6 +139,7 @@ def create_note(
 
 @router.get("/notes")
 def get_notes(
+    db: DbSession,
     university_id: Optional[int] = None,
     subject_id: Optional[int] = None,
     semester: Optional[int] = None,
@@ -149,7 +150,6 @@ def get_notes(
     sort: Optional[str] = None,
     page: int = 1,
     page_size: int = 20,
-    db: Session = Depends(get_db),
 ):
     """List notes with filters, search, and pagination."""
     page = max(1, page)
@@ -214,8 +214,8 @@ def get_notes(
 def get_note(
     note_id: int,
     background_tasks: BackgroundTasks,
-    current_user: Optional[User] = Depends(get_current_user_optional),
-    db: Session = Depends(get_db),
+    current_user: OptionalUser,
+    db: DbSession,
 ):
     """Get a note by ID; increment view count asynchronously."""
     note = db.query(Note).options(
@@ -234,13 +234,13 @@ def get_note(
 @router.put("/notes/{note_id}", response_model=NoteOut)
 def update_note(
     note_id: int,
+    current_user: CurrentUser,
+    db: DbSession,
     title: Optional[str] = Form(None),
     content: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
     images: List[UploadFile] = File(default=[]),
     files: List[UploadFile] = File(default=[]),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
 ):
     """Update a note (owner only). Saves previous version to history."""
     note = db.query(Note).options(selectinload(Note.images), selectinload(Note.files)).filter(Note.id == note_id).first()
@@ -281,8 +281,8 @@ def update_note(
 @router.get("/notes/{note_id}/history", response_model=List[NoteHistoryOut])
 def get_note_history(
     note_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: CurrentUser,
+    db: DbSession,
 ):
     """Get version history for a note (owner or admin)."""
     note = db.query(Note).filter(Note.id == note_id).first()
@@ -299,8 +299,8 @@ def get_note_history(
 @router.delete("/notes/{note_id}")
 def delete_note(
     note_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: CurrentUser,
+    db: DbSession,
 ):
     """Delete a note (owner or admin). Removes DB record and all files from disk."""
     note = db.query(Note).options(selectinload(Note.images), selectinload(Note.files)).filter(Note.id == note_id).first()
@@ -325,8 +325,8 @@ def delete_note(
 def download_note_file(
     note_id: int,
     file_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: CurrentUser,
+    db: DbSession,
 ):
     """Download a specific file from a note (requires login). Increments download counter."""
     from fastapi.responses import FileResponse
@@ -364,8 +364,8 @@ def download_note_file(
 @router.post("/notes/{note_id}/vote", response_model=VoteResponse)
 def vote_note(
     note_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: CurrentUser,
+    db: DbSession,
 ):
     """Toggle upvote on a note. Vote again to remove your vote."""
     note = db.query(Note).filter(Note.id == note_id).first()
@@ -411,8 +411,8 @@ def vote_note(
 @router.post("/notes/{note_id}/favorite", response_model=FavoriteResponse)
 def toggle_favorite(
     note_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: CurrentUser,
+    db: DbSession,
 ):
     """Toggle favorite for current user."""
     note = db.query(Note).filter(Note.id == note_id).first()
@@ -434,8 +434,8 @@ def toggle_favorite(
 @router.get("/notes/{note_id}/comments", response_model=List[CommentOut])
 def get_comments(
     note_id: int,
-    current_user: Optional[User] = Depends(get_current_user_optional),
-    db: Session = Depends(get_db),
+    current_user: OptionalUser,
+    db: DbSession,
 ):
     """List comments for a note."""
     note = db.query(Note).filter(Note.id == note_id).first()
@@ -450,8 +450,8 @@ def get_comments(
 def add_comment(
     note_id: int,
     payload: CommentCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: CurrentUser,
+    db: DbSession,
 ):
     """Add a comment to a note."""
     note = db.query(Note).filter(Note.id == note_id).first()
@@ -470,8 +470,8 @@ def add_comment(
 @router.post("/reviews", response_model=ReviewOut)
 def add_review(
     review: ReviewCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: CurrentUser,
+    db: DbSession,
 ):
     """Add a review to a note or university."""
     new_review = Review(
@@ -499,7 +499,7 @@ def add_review(
 
 
 @router.get("/tags", response_model=List[TagOut])
-def list_tags(db: Session = Depends(get_db)):
+def list_tags(db: DbSession):
     """List all tags."""
     return db.query(Tag).order_by(Tag.name).all()
 
@@ -507,8 +507,8 @@ def list_tags(db: Session = Depends(get_db)):
 @router.post("/tags", response_model=TagOut)
 def create_tag(
     payload: TagCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: CurrentUser,
+    db: DbSession,
 ):
     """Create a tag."""
     name = (payload.name or "").strip()
@@ -528,8 +528,8 @@ def create_tag(
 def set_note_tags(
     note_id: int,
     payload: NoteTagsUpdate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: CurrentUser,
+    db: DbSession,
 ):
     """Set tags for a note (owner or admin). Body: { \"tag_ids\": [1, 2, 3] }."""
     tag_ids = payload.tag_ids

@@ -1,13 +1,12 @@
 """Authentication: login and registration."""
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy.orm import Session
 
-from app.core.database import get_db
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.models import User
 from app.schemas import RegisterRequest, Token, UserOut
 from app.core.rate_limit import limiter
+from app.core.deps import DbSession
 from fastapi import Request
 
 router = APIRouter(tags=["auth"])
@@ -17,8 +16,8 @@ router = APIRouter(tags=["auth"])
 @limiter.limit("5/minute")
 def login(
     request: Request,
+    db: DbSession,
     form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db),
 ):
     """Authenticate user and return JWT token."""
     user = db.query(User).filter(User.email == form_data.username).first()
@@ -30,7 +29,7 @@ def login(
 
 @router.post("/register", response_model=UserOut)
 @limiter.limit("5/minute")
-def register(request: Request, payload: RegisterRequest, db: Session = Depends(get_db)):
+def register(request: Request, payload: RegisterRequest, db: DbSession):
     """Register a new user account."""
     user_data = payload.user
     

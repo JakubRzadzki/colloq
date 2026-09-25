@@ -2,11 +2,10 @@
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile  # noqa: F401 File, UploadFile
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import joinedload
 from sqlalchemy import desc
 
-from app.core.database import get_db
-from app.core.security import get_current_active_admin
+from app.core.deps import AdminUser, DbSession
 from app.models import (
     User,
     University,
@@ -34,8 +33,8 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 @router.get("/pending_items", response_model=PendingItemsResponse)
 def get_pending_items(
-    current_user: User = Depends(get_current_active_admin),
-    db: Session = Depends(get_db),
+    current_user: AdminUser,
+    db: DbSession,
 ):
     """List all pending items for admin review."""
     notes = db.query(Note).options(
@@ -79,8 +78,8 @@ def get_pending_items(
 
 @router.get("/users", response_model=List[UserOut])
 def admin_get_users(
-    current_user: User = Depends(get_current_active_admin),
-    db: Session = Depends(get_db),
+    current_user: AdminUser,
+    db: DbSession,
 ):
     """List all users (admin only)."""
     return db.query(User).order_by(User.created_at.desc()).all()
@@ -90,8 +89,8 @@ def admin_get_users(
 def admin_ban_user(
     user_id: int,
     body: BanUserBody,
-    current_user: User = Depends(get_current_active_admin),
-    db: Session = Depends(get_db),
+    current_user: AdminUser,
+    db: DbSession,
 ):
     """Ban or unban a user. Cannot ban self or another admin."""
     banned = body.banned
@@ -111,8 +110,8 @@ def admin_ban_user(
 def approve_item(
     item_type: str,
     item_id: int,
-    current_user: User = Depends(get_current_active_admin),
-    db: Session = Depends(get_db),
+    current_user: AdminUser,
+    db: DbSession,
 ):
     """Approve a pending item."""
     from app.models import Notification
@@ -140,8 +139,8 @@ def approve_item(
 def reject_item(
     item_type: str,
     item_id: int,
-    current_user: User = Depends(get_current_active_admin),
-    db: Session = Depends(get_db),
+    current_user: AdminUser,
+    db: DbSession,
 ):
     """Reject and delete a pending item. Deletes associated files from disk."""
     model_map = {
@@ -179,8 +178,8 @@ def reject_item(
 
 @router.get("/reports", response_model=List[ReportOut])
 def admin_list_reports(
-    current_user: User = Depends(get_current_active_admin),
-    db: Session = Depends(get_db),
+    current_user: AdminUser,
+    db: DbSession,
     status_filter: Optional[str] = None,
 ):
     """List all reports (admin only)."""
@@ -194,8 +193,8 @@ def admin_list_reports(
 def admin_update_report(
     report_id: int,
     status: str,
-    current_user: User = Depends(get_current_active_admin),
-    db: Session = Depends(get_db),
+    current_user: AdminUser,
+    db: DbSession,
 ):
     """Set report status to resolved or dismissed."""
     if status not in ("resolved", "dismissed"):
@@ -210,8 +209,8 @@ def admin_update_report(
 
 @router.get("/feedback", response_model=List[FeedbackOut])
 def admin_list_feedback(
-    current_user: User = Depends(get_current_active_admin),
-    db: Session = Depends(get_db),
+    current_user: AdminUser,
+    db: DbSession,
 ):
     """List all user feedback (admin only)."""
     return db.query(Feedback).order_by(desc(Feedback.created_at)).all()
@@ -220,8 +219,8 @@ def admin_list_feedback(
 @router.post("/approve_image_request/{req_id}")
 def approve_image_request(
     req_id: int,
-    current_user: User = Depends(get_current_active_admin),
-    db: Session = Depends(get_db),
+    current_user: AdminUser,
+    db: DbSession,
 ):
     """Approve an image change request for a university."""
     req = db.query(ImageRequest).filter(ImageRequest.id == req_id).first()
@@ -238,8 +237,8 @@ def approve_image_request(
 @router.post("/reject_image_request/{req_id}")
 def reject_image_request(
     req_id: int,
-    current_user: User = Depends(get_current_active_admin),
-    db: Session = Depends(get_db),
+    current_user: AdminUser,
+    db: DbSession,
 ):
     """Reject an image change request. Optionally delete the uploaded file."""
     req = db.query(ImageRequest).filter(ImageRequest.id == req_id).first()
@@ -254,9 +253,9 @@ def reject_image_request(
 @router.patch("/universities/{uni_id}/image")
 def admin_update_university_image(
     uni_id: int,
+    current_user: AdminUser,
+    db: DbSession,
     image: UploadFile = File(...),
-    current_user: User = Depends(get_current_active_admin),
-    db: Session = Depends(get_db),
 ):
     """Directly update university image (admin only)."""
     from app.services.file_manager import save_upload, normalize_stored_path
@@ -276,6 +275,8 @@ def admin_update_university_image(
 @router.put("/universities/{uni_id}")
 def admin_update_university(
     uni_id: int,
+    current_user: AdminUser,
+    db: DbSession,
     name: Optional[str] = Form(None),
     city: Optional[str] = Form(None),
     region: Optional[str] = Form(None),
@@ -283,8 +284,6 @@ def admin_update_university(
     description: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
     banner: Optional[UploadFile] = File(None),
-    current_user: User = Depends(get_current_active_admin),
-    db: Session = Depends(get_db),
 ):
     """Update university details (admin only)."""
     from app.services.file_manager import save_upload, normalize_stored_path

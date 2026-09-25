@@ -4,13 +4,13 @@ import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.database import get_db
 from app.core.rate_limit import limiter
 from app.core.security import get_password_hash
+from app.core.deps import DbSession
 from app.models import User, PasswordResetToken
 from app.schemas import ForgotPasswordRequest, ResetPasswordRequest
 
@@ -50,7 +50,7 @@ def create_reset_token(db: Session, user: User) -> str:
 def forgot_password(
     request: Request,
     payload: ForgotPasswordRequest,
-    db: Session = Depends(get_db),
+    db: DbSession,
 ):
     """Request a password reset link. Always returns success to prevent email enumeration."""
     user = db.query(User).filter(User.email == payload.email).first()
@@ -68,7 +68,7 @@ def forgot_password(
 def reset_password(
     request: Request,
     payload: ResetPasswordRequest,
-    db: Session = Depends(get_db),
+    db: DbSession,
 ):
     """Reset password using a valid reset token."""
     if len(payload.new_password) < 8:
