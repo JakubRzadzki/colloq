@@ -289,6 +289,22 @@ export const getFields = async (id: number): Promise<FieldOfStudy[]> =>
 export const getSubjects = async (id: number): Promise<Subject[]> =>
   (await api.get(`/fields/${id}/subjects`)).data;
 
+const PAGE_LIMIT = 100;
+
+/**
+ * Fetch every page of a limit/offset list endpoint. The API returns at most
+ * 100 items per request and the total in the X-Total-Count header.
+ */
+const getAllPages = async <T>(url: string, params: Record<string, string | number> = {}): Promise<T[]> => {
+  const items: T[] = [];
+  for (;;) {
+    const res = await api.get<T[]>(url, { params: { ...params, limit: PAGE_LIMIT, offset: items.length } });
+    items.push(...res.data);
+    const total = Number(res.headers['x-total-count'] ?? items.length);
+    if (res.data.length === 0 || items.length >= total) return items;
+  }
+};
+
 /**
  * Fetch a private note attachment with the user's token.
  * `inline` asks for the real media type and does not count as a download (previews).
@@ -485,7 +501,7 @@ export const addReview = async (data: ReviewCreateData) =>
 
 /** Get comments for a note. */
 export const getNoteComments = async (id: number): Promise<Comment[]> =>
-  (await api.get(`/notes/${id}/comments`)).data;
+  getAllPages<Comment>(`/notes/${id}/comments`);
 
 /** Add a comment to a note. */
 export const addComment = async (id: number, content: string) =>
@@ -608,8 +624,7 @@ export const getPendingItems = async (): Promise<PendingItems> =>
   (await api.get('/admin/pending_items')).data;
 
 /** Get all users (admin only). */
-export const getAllUsers = async (): Promise<User[]> =>
-  (await api.get('/admin/users')).data;
+export const getAllUsers = async (): Promise<User[]> => getAllPages<User>('/admin/users');
 
 /** Ban or unban user (admin only). */
 export const banUser = async (userId: number, banned: boolean) =>
@@ -650,10 +665,8 @@ export interface ReportItem {
 }
 
 /** List reports (admin only). */
-export const getReports = async (status?: string): Promise<ReportItem[]> => {
-  const q = status ? `?status_filter=${status}` : '';
-  return (await api.get(`/admin/reports${q}`)).data;
-};
+export const getReports = async (status?: string): Promise<ReportItem[]> =>
+  getAllPages<ReportItem>('/admin/reports', status ? { status_filter: status } : {});
 
 /** Update report status (admin only). */
 export const updateReportStatus = async (reportId: number, status: 'resolved' | 'dismissed') =>
@@ -669,8 +682,7 @@ export interface FeedbackItem {
 }
 
 /** List feedback (admin only). */
-export const getFeedback = async (): Promise<FeedbackItem[]> =>
-  (await api.get('/admin/feedback')).data;
+export const getFeedback = async (): Promise<FeedbackItem[]> => getAllPages<FeedbackItem>('/admin/feedback');
 
 /** University update payload (admin) */
 export interface UniversityUpdateData {
