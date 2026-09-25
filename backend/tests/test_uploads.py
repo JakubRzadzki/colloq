@@ -42,3 +42,14 @@ def test_note_attachment_over_size_limit_is_rejected(client, admin_headers, univ
     )
 
     assert resp.status_code == 400
+
+
+def test_create_university_with_disallowed_image_returns_400(client, admin_headers):
+    resp = client.post(
+        "/universities",
+        data={"name": "Bad Image Uni", "city": "City"},
+        files={"image": ("logo.html", b"<script>alert(1)</script>", "text/html")},
+        headers=admin_headers,
+    )
+
+    assert resp.status_code == 400

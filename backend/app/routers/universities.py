@@ -55,27 +55,20 @@ async def create_university(
     """Create a new university entry."""
     image_url = DEFAULT_UNIVERSITY_IMAGE
     if image and image.filename:
-        try:
-            image_url = save_upload(image, DIR_UNIVERSITIES)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to save image: {str(e)}")
-    try:
-        university = University(
-            name=name.strip(),
-            city=city.strip(),
-            region=(region or "").strip(),
-            country=(country or "Poland").strip(),
-            description=description.strip() if (description and isinstance(description, str)) else None,
-            image_url=image_url,
-            is_approved=current_user.is_admin,  # Regular users' submissions require admin approval
-        )
-        db.add(university)
-        db.commit()
-        db.refresh(university)
-        return _uni_out(university)
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to create university: {str(e)}")
+        image_url = save_upload(image, DIR_UNIVERSITIES)
+    university = University(
+        name=name.strip(),
+        city=city.strip(),
+        region=(region or "").strip(),
+        country=(country or "Poland").strip(),
+        description=description.strip() if (description and isinstance(description, str)) else None,
+        image_url=image_url,
+        is_approved=current_user.is_admin,  # Regular users' submissions require admin approval
+    )
+    db.add(university)
+    db.commit()
+    db.refresh(university)
+    return _uni_out(university)
 
 
 @router.get("/universities", response_model=List[UniversityOut])
