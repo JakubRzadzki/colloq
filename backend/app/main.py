@@ -52,7 +52,7 @@ async def lifespan(app: FastAPI):
     migrations here. On startup we validate config and seed default data.
     Both are skipped while running the test suite.
     """
-    if not os.getenv("TESTING"):
+    if not settings.TESTING:
         settings.validate_secret_key()
         try:
             run_seed()
@@ -67,14 +67,7 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:4173",
-        "http://frontend:5173",
-    ] + settings.ALLOWED_ORIGINS,
+    allow_origins=settings.allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

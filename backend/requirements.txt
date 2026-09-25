@@ -2,12 +2,12 @@ fastapi==0.141.1
 uvicorn[standard]==0.24.0
 sqlalchemy==2.0.23
 pydantic[email]==2.13.5
+pydantic-settings==2.15.0
 # PyJWT — without cryptography/Rust (python-jose required Rust on Python 3.14)
 PyJWT==2.8.0
 passlib[bcrypt]==1.7.4
 bcrypt>=3.2.0,<5
 python-multipart==0.0.32
-python-dotenv==1.0.0
 # PostgreSQL for production; SQLite used for local dev and tests
 psycopg2-binary>=2.9.9
 alembic>=1.13.0
