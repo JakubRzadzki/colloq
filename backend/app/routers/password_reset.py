@@ -13,6 +13,7 @@ from app.core.security import get_password_hash
 from app.core.deps import DbSession
 from app.models import User, PasswordResetToken
 from app.schemas import ForgotPasswordRequest, ResetPasswordRequest
+from app.services.auth_service import find_user_by_email
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ def forgot_password(
     db: DbSession,
 ):
     """Request a password reset link. Always returns success to prevent email enumeration."""
-    user = db.query(User).filter(User.email == payload.email).first()
+    user = find_user_by_email(db, payload.email)
     if user:
         token = create_reset_token(db, user)
         # TODO: send the reset link by email.
@@ -71,9 +72,6 @@ def reset_password(
     db: DbSession,
 ):
     """Reset password using a valid reset token."""
-    if len(payload.new_password) < 8:
-        raise HTTPException(status_code=400, detail="Password must be at least 8 characters long")
-
     reset_token = db.query(PasswordResetToken).filter(
         PasswordResetToken.token == _hash_token(payload.token),
         PasswordResetToken.used == False,  # noqa: E712

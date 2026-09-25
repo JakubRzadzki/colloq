@@ -48,6 +48,22 @@ const api = axios.create({
   timeout: 30000,
 });
 
+/**
+ * Human-readable message from an API error. FastAPI returns `detail` as a string
+ * for handled errors and as a list of field errors for validation failures (422).
+ */
+export const getErrorMessage = (err: unknown, fallback: string): string => {
+  const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((d) => (typeof d?.msg === 'string' ? d.msg.replace(/^Value error, /, '') : ''))
+      .filter(Boolean);
+    if (messages.length) return messages.join('; ');
+  }
+  return fallback;
+};
+
 // Global response interceptor for error handling
 api.interceptors.response.use(
   (response) => response,

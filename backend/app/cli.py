@@ -22,16 +22,7 @@ from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
 from app.core.security import get_password_hash
 from app.models import User
-
-MIN_PASSWORD_LENGTH = 8
-MAX_PASSWORD_BYTES = 72  # bcrypt ignores everything past 72 bytes
-
-
-def validate_password(password: str) -> None:
-    if len(password) < MIN_PASSWORD_LENGTH:
-        raise ValueError(f"Password must be at least {MIN_PASSWORD_LENGTH} characters long")
-    if len(password.encode()) > MAX_PASSWORD_BYTES:
-        raise ValueError(f"Password must be at most {MAX_PASSWORD_BYTES} bytes long")
+from app.schemas import validate_password
 
 
 def create_admin(db: Session, email: str, password: str) -> tuple[User, bool]:

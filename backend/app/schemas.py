@@ -13,6 +13,20 @@ from app.services.file_manager import normalize_stored_path
 # Stored upload paths are returned with forward slashes; external URLs pass through unchanged.
 NormalizedPath = Annotated[Optional[str], AfterValidator(normalize_stored_path)]
 
+MIN_PASSWORD_LENGTH = 8
+MAX_PASSWORD_BYTES = 72  # bcrypt silently ignores everything after 72 bytes
+
+
+def validate_password(value: str) -> str:
+    if len(value) < MIN_PASSWORD_LENGTH:
+        raise ValueError(f"Password must be at least {MIN_PASSWORD_LENGTH} characters long")
+    if len(value.encode()) > MAX_PASSWORD_BYTES:
+        raise ValueError(f"Password must be at most {MAX_PASSWORD_BYTES} bytes long")
+    return value
+
+
+Password = Annotated[str, AfterValidator(validate_password)]
+
 
 # -----------------------------------------------------------------------------
 # User (defined first; referenced by ReviewOut, CommentOut, NoteOut)
@@ -20,7 +34,7 @@ NormalizedPath = Annotated[Optional[str], AfterValidator(normalize_stored_path)]
 
 class UserCreate(BaseModel):
     email: EmailStr
-    password: str
+    password: Password
     university_id: Optional[int] = None
 
 
@@ -359,4 +373,4 @@ class ForgotPasswordRequest(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     token: str
-    new_password: str
+    new_password: Password

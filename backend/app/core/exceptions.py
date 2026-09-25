@@ -22,3 +22,7 @@ class PermissionDeniedError(DomainError):
 
 class ConflictError(DomainError):
     status_code = 409
+
+
+class AuthenticationError(DomainError):
+    status_code = 401

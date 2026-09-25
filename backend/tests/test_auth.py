@@ -77,7 +77,7 @@ def test_login_invalid_credentials(client: TestClient):
 
 
 def test_register_short_password(client: TestClient):
-    """Password shorter than 8 characters should be rejected."""
+    """Password shorter than 8 characters should be rejected by schema validation (422)."""
     response = client.post(
         "/register",
         json={
@@ -88,7 +88,7 @@ def test_register_short_password(client: TestClient):
             }
         },
     )
-    assert response.status_code == 400
+    assert response.status_code == 422
 
 
 def test_get_me(client: TestClient):

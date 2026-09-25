@@ -8,6 +8,7 @@ from app.core.database import get_db
 from app.core.security import get_current_active_admin, get_current_user, get_current_user_optional
 from app.models import User
 from app.repositories.note_repository import NoteRepository
+from app.services.auth_service import AuthService
 from app.services.note_service import NoteService
 from app.services.review_service import ReviewService
 from app.services.storage import LocalFileStorage, get_storage
@@ -27,5 +28,10 @@ def get_review_service(db: DbSession) -> ReviewService:
     return ReviewService(db)
 
 
+def get_auth_service(db: DbSession) -> AuthService:
+    return AuthService(db)
+
+
 NoteServiceDep = Annotated[NoteService, Depends(get_note_service)]
 ReviewServiceDep = Annotated[ReviewService, Depends(get_review_service)]
+AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
