@@ -35,6 +35,14 @@ def setup_test_db():
     yield
     Base.metadata.drop_all(bind=engine)
 
+@pytest.fixture(autouse=True)
+def isolated_upload_dir(tmp_path, monkeypatch):
+    """Keep files written by tests out of the real uploads directory."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "UPLOAD_DIR", str(tmp_path / "uploads"))
+
+
 @pytest.fixture(scope="function")
 def db_session() -> Generator[Session, None, None]:
     """Szybkie czyszczenie danych: odpala wszystko w transakcji, która na koniec robi ROLLBACK"""
