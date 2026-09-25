@@ -8,8 +8,7 @@ pydantic[email]==2.13.5
 pydantic-settings==2.15.0
 # PyJWT — without cryptography/Rust (python-jose required Rust on Python 3.14)
 PyJWT==2.8.0
-passlib[bcrypt]==1.7.4
-bcrypt>=3.2.0,<5
+bcrypt==4.3.0
 python-multipart==0.0.32
 psycopg2-binary>=2.9.9
 alembic>=1.13.0

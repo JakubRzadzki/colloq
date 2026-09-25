@@ -5,10 +5,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+import bcrypt
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from passlib.context import CryptContext
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -16,17 +16,21 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.models import User
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
 oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/token", auto_error=False)
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    """Check a password against a bcrypt hash (also those created earlier by passlib)."""
+    try:
+        return bcrypt.checkpw(plain.encode(), hashed.encode())
+    except ValueError:
+        # Malformed hash, or a password over bcrypt's 72-byte limit: treat as a mismatch.
+        return False
 
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
 def create_access_token(data: dict) -> str:
